@@ -1,0 +1,174 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Cdiff src/share/vm/opto/node.hpp</title>
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/opto/node.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+<hr /><span class="oldmarker">*** 49,58 ****</span>
+<span class="newmarker">--- 49,60 ----</span>
+  class CallJavaNode;
+  class CallLeafNode;
+  class CallNode;
+  class CallRuntimeNode;
+  class CallStaticJavaNode;
+<span class="new">+ class CastDerivedNode;</span>
+<span class="new">+ class CastPPNode;</span>
+  class CatchNode;
+  class CatchProjNode;
+  class CheckCastPPNode;
+  class ClearArrayNode;
+  class CmpNode;
+<hr /><span class="oldmarker">*** 96,106 ****</span>
+  class MachProjNode;
+  class MachReturnNode;
+  class MachSafePointNode;
+  class MachSpillCopyNode;
+  class MachTempNode;
+<span class="removed">- class MachMergeNode;</span>
+  class Matcher;
+  class MemBarNode;
+  class MemBarStoreStoreNode;
+  class MemNode;
+  class MergeMemNode;
+<span class="newmarker">--- 98,107 ----</span>
+<hr /><span class="oldmarker">*** 590,604 ****</span>
+          DEFINE_CLASS_ID(MachNullCheck,  MachBranch, 2)
+        DEFINE_CLASS_ID(MachSpillCopy,    Mach, 2)
+        DEFINE_CLASS_ID(MachTemp,         Mach, 3)
+        DEFINE_CLASS_ID(MachConstantBase, Mach, 4)
+        DEFINE_CLASS_ID(MachConstant,     Mach, 5)
+<span class="removed">-       DEFINE_CLASS_ID(MachMerge,        Mach, 6)</span>
+  
+      DEFINE_CLASS_ID(Type,  Node, 2)
+        DEFINE_CLASS_ID(Phi,   Type, 0)
+        DEFINE_CLASS_ID(ConstraintCast, Type, 1)
+        DEFINE_CLASS_ID(CheckCastPP, Type, 2)
+        DEFINE_CLASS_ID(CMove, Type, 3)
+        DEFINE_CLASS_ID(SafePointScalarObject, Type, 4)
+        DEFINE_CLASS_ID(DecodeNarrowPtr, Type, 5)
+          DEFINE_CLASS_ID(DecodeN, DecodeNarrowPtr, 0)
+<span class="newmarker">--- 591,606 ----</span>
+          DEFINE_CLASS_ID(MachNullCheck,  MachBranch, 2)
+        DEFINE_CLASS_ID(MachSpillCopy,    Mach, 2)
+        DEFINE_CLASS_ID(MachTemp,         Mach, 3)
+        DEFINE_CLASS_ID(MachConstantBase, Mach, 4)
+        DEFINE_CLASS_ID(MachConstant,     Mach, 5)
+  
+      DEFINE_CLASS_ID(Type,  Node, 2)
+        DEFINE_CLASS_ID(Phi,   Type, 0)
+        DEFINE_CLASS_ID(ConstraintCast, Type, 1)
+<span class="new">+         DEFINE_CLASS_ID(CastPP, ConstraintCast, 0)</span>
+<span class="new">+           DEFINE_CLASS_ID(CastDerived, CastPP, 0)</span>
+        DEFINE_CLASS_ID(CheckCastPP, Type, 2)
+        DEFINE_CLASS_ID(CMove, Type, 3)
+        DEFINE_CLASS_ID(SafePointScalarObject, Type, 4)
+        DEFINE_CLASS_ID(DecodeNarrowPtr, Type, 5)
+          DEFINE_CLASS_ID(DecodeN, DecodeNarrowPtr, 0)
+<hr /><span class="oldmarker">*** 716,725 ****</span>
+<span class="newmarker">--- 718,728 ----</span>
+    DEFINE_CLASS_QUERY(CallDynamicJava)
+    DEFINE_CLASS_QUERY(CallJava)
+    DEFINE_CLASS_QUERY(CallLeaf)
+    DEFINE_CLASS_QUERY(CallRuntime)
+    DEFINE_CLASS_QUERY(CallStaticJava)
+<span class="new">+   DEFINE_CLASS_QUERY(CastDerived)</span>
+    DEFINE_CLASS_QUERY(Catch)
+    DEFINE_CLASS_QUERY(CatchProj)
+    DEFINE_CLASS_QUERY(CheckCastPP)
+    DEFINE_CLASS_QUERY(ConstraintCast)
+    DEFINE_CLASS_QUERY(ClearArray)
+<hr /><span class="oldmarker">*** 761,771 ****</span>
+    DEFINE_CLASS_QUERY(MachProj)
+    DEFINE_CLASS_QUERY(MachReturn)
+    DEFINE_CLASS_QUERY(MachSafePoint)
+    DEFINE_CLASS_QUERY(MachSpillCopy)
+    DEFINE_CLASS_QUERY(MachTemp)
+<span class="removed">-   DEFINE_CLASS_QUERY(MachMerge)</span>
+    DEFINE_CLASS_QUERY(Mem)
+    DEFINE_CLASS_QUERY(MemBar)
+    DEFINE_CLASS_QUERY(MemBarStoreStore)
+    DEFINE_CLASS_QUERY(MergeMem)
+    DEFINE_CLASS_QUERY(Mul)
+<span class="newmarker">--- 764,773 ----</span>
+</pre></body></html>
+

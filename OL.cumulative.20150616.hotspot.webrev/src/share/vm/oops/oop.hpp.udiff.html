@@ -1,0 +1,263 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/oops/oop.hpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/oops/oop.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -75,12 +75,12 @@</span>
+   void set_mark(volatile markOop m)      { _mark = m;   }
+ 
+   void    release_set_mark(markOop m);
+   markOop cas_set_mark(markOop new_mark, markOop old_mark);
+ 
+<span class="removed">-  // Used only to re-initialize the mark word (e.g., of promoted</span>
+<span class="removed">-  // objects during a GC) -- requires a valid klass pointer</span>
+<span class="new">+  // Used only to re-initialize the markword (e.g., of promoted</span>
+<span class="new">+  // objects during a GC); requires a valid klass pointer</span>
+   void init_mark();
+ 
+   Klass* klass() const;
+   Klass* klass_or_null() const volatile;
+   Klass** klass_addr();
+</pre><hr /><pre>
+<span class="newmarker">@@ -273,66 +273,103 @@</span>
+ 
+   // verification operations
+   void verify_on(outputStream* st);
+   void verify();
+ 
+<span class="removed">-  // locking operations</span>
+<span class="removed">-  bool is_locked()   const;</span>
+<span class="removed">-  bool is_unlocked() const;</span>
+<span class="removed">-  bool has_bias_pattern() const;</span>
+<span class="removed">-</span>
+   // asserts
+   bool is_oop(bool ignore_mark_word = false) const;
+   bool is_oop_or_null(bool ignore_mark_word = false) const;
+ #ifndef PRODUCT
+   bool is_unlocked_oop() const;
+ #endif
+ 
+<span class="removed">-  // garbage collection</span>
+<span class="new">+  // Locking operations</span>
+<span class="new">+  bool is_locked() const;</span>
+<span class="new">+  bool is_unlocked() const;</span>
+<span class="new">+  bool has_bias_pattern() const;</span>
+<span class="new">+</span>
+<span class="new">+  // The mark is forwarded to stack when the object is locked; in this case</span>
+<span class="new">+  // it is said that the mark is displaced.</span>
+<span class="new">+  bool has_displaced_mark() const;</span>
+<span class="new">+  markOop displaced_mark() const;</span>
+<span class="new">+  void set_displaced_mark(markOop m);</span>
+<span class="new">+</span>
+<span class="new">+  // Garbage collection support</span>
+   bool is_gc_marked() const;
+<span class="removed">-  // Apply "MarkSweep::mark_and_push" to (the address of) every non-NULL</span>
+<span class="removed">-  // reference field in "this".</span>
+<span class="removed">-  void follow_contents(void);</span>
+<span class="new">+  bool is_scavengable() const;</span>
+<span class="new">+</span>
+<span class="new">+  // Mark-Sweep GCs</span>
+<span class="new">+  // Apply MarkSweep::mark_and_push() to (the address of) every reference</span>
+<span class="new">+  // field in this object</span>
+<span class="new">+  void follow_contents();</span>
+<span class="new">+</span>
+<span class="new">+  // Adjust all pointers in this object to point at their forwarded locations</span>
+<span class="new">+  // and return the size of this object</span>
+<span class="new">+  int adjust_pointers();</span>
+ 
+ #if INCLUDE_ALL_GCS
+<span class="removed">-  // Parallel Scavenge</span>
+<span class="new">+  // Parallel Scavenge GC</span>
+   void push_contents(PSPromotionManager* pm);
+ 
+<span class="removed">-  // Parallel Old</span>
+<span class="removed">-  void update_contents(ParCompactionManager* cm);</span>
+<span class="removed">-</span>
+<span class="new">+  // Parallel Old GC</span>
+   void follow_contents(ParCompactionManager* cm);
+<span class="new">+  void update_contents(ParCompactionManager* cm);</span>
+ #endif // INCLUDE_ALL_GCS
+ 
+<span class="removed">-  bool is_scavengable() const;</span>
+<span class="removed">-</span>
+<span class="removed">-  // Forward pointer operations for scavenge</span>
+<span class="new">+  // Forwarding pointer operations for Mark-Sweep and Scavenge</span>
+   bool is_forwarded() const;
+<span class="removed">-</span>
+   void forward_to(oop p);
+   bool cas_forward_to(oop p, markOop compare);
+<span class="removed">-</span>
+ #if INCLUDE_ALL_GCS
+<span class="removed">-  // Like "forward_to", but inserts the forwarding pointer atomically.</span>
+<span class="new">+  // Like forward_to(), but inserts the forwarding pointer atomically.</span>
+   // Exactly one thread succeeds in inserting the forwarding pointer, and
+<span class="removed">-  // this call returns "NULL" for that thread; any other thread has the</span>
+<span class="removed">-  // value of the forwarding pointer returned and does not modify "this".</span>
+<span class="new">+  // this call returns NULL for that thread; any other thread has the value</span>
+<span class="new">+  // of the forwarding pointer returned and does not modify this object.</span>
+   oop forward_to_atomic(oop p);
+ #endif // INCLUDE_ALL_GCS
+<span class="removed">-</span>
+   oop forwardee() const;
+ 
+<span class="removed">-  // Age of object during scavenge</span>
+<span class="new">+  // Age of object used by Scavenge</span>
+   uint age() const;
+   void incr_age();
+ 
+<span class="removed">-  // Adjust all pointers in this object to point at it's forwarded location and</span>
+<span class="removed">-  // return the size of this oop.  This is used by the MarkSweep collector.</span>
+<span class="removed">-  int adjust_pointers();</span>
+<span class="removed">-</span>
+<span class="removed">-  // mark-sweep support</span>
+<span class="removed">-  void follow_body(int begin, int end);</span>
+<span class="new">+  // ObjectLayout support</span>
+<span class="new">+  // Operations with the flag whether the object is contained</span>
+<span class="new">+  bool is_contained() const;</span>
+<span class="new">+  static bool is_contained(markOop mark);</span>
+<span class="new">+  void set_contained();</span>
+<span class="new">+  void clear_contained();</span>
+<span class="new">+</span>
+<span class="new">+  // Operations with the flag whether the object is a container</span>
+<span class="new">+  bool is_container() const;</span>
+<span class="new">+  static bool is_container(markOop mark, Klass* klass);</span>
+<span class="new">+</span>
+<span class="new">+  // Manipulations with the object's mark that preserve the current values of</span>
+<span class="new">+  // its "contained" and "container" properties</span>
+<span class="new">+  void convert_to_marked();</span>
+<span class="new">+  void convert_to_unmarked();</span>
+<span class="new">+  void restore_mark(markOop saved_value);</span>
+<span class="new">+</span>
+<span class="new">+  // Operations with the relative container offset (RCO) object corresponding</span>
+<span class="new">+  // to this object (which must be contained). The only mission of the RCO</span>
+<span class="new">+  // object is to store the offset of this object from its immediate container.</span>
+<span class="new">+  // RCO objects are transparently created by the VM for every contained object</span>
+<span class="new">+  // (including contained containers) at the time of their construction. They</span>
+<span class="new">+  // look like "prepadding" objects taking several words just before the</span>
+<span class="new">+  // corresponding contained objects.</span>
+<span class="new">+  jlong relative_container_offset() const;</span>
+<span class="new">+  void set_relative_container_offset(jlong offset);</span>
+<span class="new">+</span>
+<span class="new">+  // Return the immediate container of this object (which must be contained)</span>
+<span class="new">+  oop container() const;</span>
+<span class="new">+</span>
+<span class="new">+  // Return the outermost container of this object (which must be contained)</span>
+<span class="new">+  oop outermost_container();</span>
+<span class="new">+</span>
+<span class="new">+  // Return the outermost GC-marked container of this object (which must be</span>
+<span class="new">+  // contained and also GC-marked)</span>
+<span class="new">+  oop outermost_alive_container();</span>
+ 
+   // Fast access to barrier set
+   static BarrierSet* bs()            { return _bs; }
+   static void set_bs(BarrierSet* bs) { _bs = bs; }
+ 
+</pre><hr /><pre>
+<span class="newmarker">@@ -363,15 +400,10 @@</span>
+   intptr_t slow_identity_hash();
+ 
+   // Alternate hashing code if string table is rehashed
+   unsigned int new_hash(juint seed);
+ 
+<span class="removed">-  // marks are forwarded to stack when object is locked</span>
+<span class="removed">-  bool     has_displaced_mark() const;</span>
+<span class="removed">-  markOop  displaced_mark() const;</span>
+<span class="removed">-  void     set_displaced_mark(markOop m);</span>
+<span class="removed">-</span>
+   // for code generation
+   static int mark_offset_in_bytes()    { return offset_of(oopDesc, _mark); }
+   static int klass_offset_in_bytes()   { return offset_of(oopDesc, _metadata._klass); }
+   static int klass_gap_offset_in_bytes();
+ };
+</pre></body></html>
+

@@ -1,0 +1,305 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/gc_implementation/parallelScavenge </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 288     start = end - _array_chunk_size;
+ 289     assert(start &gt; 0, "invariant");
+ 290     arrayOop(old)-&gt;set_length(start);
+ 291     push_depth(mask_chunked_array_oop(old));
+ 292     TASKQUEUE_STATS_ONLY(++_masked_pushes);
+ 293   } else {
+ 294     // this is the final chunk for this array
+ 295     start = 0;
+ 296     int const actual_length = arrayOop(obj)-&gt;length();
+ 297     arrayOop(old)-&gt;set_length(actual_length);
+ 298   }
+ 299 
+ 300   if (UseCompressedOops) {
+ 301     process_array_chunk_work&lt;narrowOop&gt;(obj, start, end);
+ 302   } else {
+ 303     process_array_chunk_work&lt;oop&gt;(obj, start, end);
+ 304   }
+ 305 }
+ 306 
+ 307 oop PSPromotionManager::oop_promotion_failed(oop obj, markOop obj_mark) {
+<span class="changed"> 308   assert(_old_gen_is_full || PromotionFailureALot, "Sanity");</span>
+ 309 
+<span class="changed"> 310   // Attempt to CAS in the header.</span>
+<span class="changed"> 311   // This tests if the header is still the same as when</span>
+<span class="changed"> 312   // this started.  If it is the same (i.e., no forwarding</span>
+<span class="changed"> 313   // pointer has been installed), then this thread owns</span>
+<span class="changed"> 314   // it.</span>
+ 315   if (obj-&gt;cas_forward_to(obj, obj_mark)) {
+ 316     // We won any races, we "own" this object.
+<span class="changed"> 317     assert(obj == obj-&gt;forwardee(), "Sanity");</span>
+<span class="changed"> 318 </span>
+<span class="changed"> 319     _promotion_failed_info.register_copy_failure(obj-&gt;size());</span>
+<span class="changed"> 320 </span>
+<span class="changed"> 321     obj-&gt;push_contents(this);</span>
+ 322 
+ 323     // Save the mark if needed
+ 324     PSScavenge::oop_promotion_failed(obj, obj_mark);
+<span class="removed"> 325   }  else {</span>
+<span class="removed"> 326     // We lost, someone else "owns" this object</span>
+<span class="removed"> 327     guarantee(obj-&gt;is_forwarded(), "Object must be forwarded if the cas failed.");</span>
+ 328 
+<span class="changed"> 329     // No unallocation to worry about.</span>
+<span class="changed"> 330     obj = obj-&gt;forwardee();</span>
+
+
+
+ 331   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 332 
+ 333 #ifndef PRODUCT
+ 334   if (TraceScavenge) {
+<span class="changed"> 335     gclog_or_tty-&gt;print_cr("{%s %s 0x%x (%d)}",</span>
+<span class="changed"> 336                            "promotion-failure",</span>
+<span class="changed"> 337                            obj-&gt;klass()-&gt;internal_name(),</span>
+<span class="changed"> 338                            (void *)obj, obj-&gt;size());</span>
+
+
+
+
+
+
+
+ 339 
+
+
+
+
+
+
+
+
+
+ 340   }
+<span class="removed"> 341 #endif</span>
+ 342 
+ 343   return obj;
+ 344 }
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 288     start = end - _array_chunk_size;
+ 289     assert(start &gt; 0, "invariant");
+ 290     arrayOop(old)-&gt;set_length(start);
+ 291     push_depth(mask_chunked_array_oop(old));
+ 292     TASKQUEUE_STATS_ONLY(++_masked_pushes);
+ 293   } else {
+ 294     // this is the final chunk for this array
+ 295     start = 0;
+ 296     int const actual_length = arrayOop(obj)-&gt;length();
+ 297     arrayOop(old)-&gt;set_length(actual_length);
+ 298   }
+ 299 
+ 300   if (UseCompressedOops) {
+ 301     process_array_chunk_work&lt;narrowOop&gt;(obj, start, end);
+ 302   } else {
+ 303     process_array_chunk_work&lt;oop&gt;(obj, start, end);
+ 304   }
+ 305 }
+ 306 
+ 307 oop PSPromotionManager::oop_promotion_failed(oop obj, markOop obj_mark) {
+<span class="changed"> 308   assert(_old_gen_is_full || PromotionFailureALot, "sanity");</span>
+ 309 
+<span class="changed"> 310   // This attempt to CAS in the header tests if the header is still the same as</span>
+<span class="changed"> 311   // when this started. If it is the same (i.e., no forwarding pointer has been</span>
+<span class="changed"> 312   // installed), then this thread owns it.</span>
+
+
+ 313   if (obj-&gt;cas_forward_to(obj, obj_mark)) {
+ 314     // We won any races, we "own" this object.
+<span class="changed"> 315     assert(obj == obj-&gt;forwardee(), "sanity");</span>
+
+
+
+
+ 316 
+ 317     // Save the mark if needed
+ 318     PSScavenge::oop_promotion_failed(obj, obj_mark);
+
+
+
+ 319 
+<span class="changed"> 320 #ifndef PRODUCT</span>
+<span class="changed"> 321     if (TraceScavenge) {</span>
+<span class="changed"> 322       ResourceMark rm;</span>
+<span class="changed"> 323       gclog_or_tty-&gt;print_cr("{%s %s 0x%p (%d)}", "promotion-failure",</span>
+<span class="changed"> 324           obj-&gt;klass()-&gt;internal_name(), (void*) obj, obj-&gt;size());</span>
+ 325     }
+<span class="new"> 326 #endif // PRODUCT</span>
+<span class="new"> 327 </span>
+<span class="new"> 328     size_t obj_size = obj-&gt;size();</span>
+<span class="new"> 329 </span>
+<span class="new"> 330     if (oopDesc::is_container(obj_mark, obj-&gt;klass())) {</span>
+<span class="new"> 331       // At this point obj is always an outermost container.</span>
+<span class="new"> 332       assert(!oopDesc::is_contained(obj_mark),</span>
+<span class="new"> 333           "object must be an outermost container");</span>
+<span class="new"> 334 </span>
+<span class="new"> 335       obj_size = org_ObjectLayout_AbstractStructuredArray::</span>
+<span class="new"> 336           footprint_with_contained_objects(obj) &gt;&gt; LogHeapWordSize;</span>
+<span class="new"> 337 </span>
+<span class="new"> 338       // The thread that "owns" a container also "owns" all its contained</span>
+<span class="new"> 339       // objects. We need to forward all of them to themselves. For this</span>
+<span class="new"> 340       // we simply need to iterate through all Java objects between</span>
+<span class="new"> 341       // ((HeapWord*) obj) + obj-&gt;size() and ((HeapWord*) obj) + obj_size</span>
+<span class="new"> 342       // and forward every object to the corresponding new location.</span>
+<span class="new"> 343       // (See PSPromotionManager::copy_to_survivor_space() for a detailed</span>
+<span class="new"> 344       // explanation.) For installing forwarding pointers we can use</span>
+<span class="new"> 345       // the non MT safe oopDesc::forward_to(), since no other thread can</span>
+<span class="new"> 346       // interfere with us.</span>
+<span class="new"> 347       HeapWord* src = ((HeapWord*) obj) + obj-&gt;size();</span>
+<span class="new"> 348       HeapWord* src_end = ((HeapWord*) obj) + obj_size;</span>
+<span class="new"> 349       while (src &lt; src_end) {</span>
+<span class="new"> 350         markOop src_mark = ((oop) src)-&gt;mark();</span>
+<span class="new"> 351         ((oop) src)-&gt;forward_to((oop) src);</span>
+<span class="new"> 352 </span>
+<span class="new"> 353         // Save the mark if needed</span>
+<span class="new"> 354         PSScavenge::oop_promotion_failed(((oop) src), src_mark);</span>
+ 355 
+ 356 #ifndef PRODUCT
+ 357         if (TraceScavenge) {
+<span class="changed"> 358           ResourceMark rm;</span>
+<span class="changed"> 359           oop o = (oop) src;</span>
+<span class="changed"> 360           gclog_or_tty-&gt;print_cr("{%s %s 0x%p (%d)}", "promotion-failure",</span>
+<span class="changed"> 361               o-&gt;klass()-&gt;internal_name(), (void*) src, o-&gt;size());</span>
+<span class="changed"> 362         }</span>
+<span class="changed"> 363 #endif // PRODUCT</span>
+<span class="changed"> 364 </span>
+<span class="changed"> 365         src += ((oop) src)-&gt;size();</span>
+<span class="changed"> 366       }</span>
+<span class="changed"> 367       assert(src == src_end, "sanity");</span>
+<span class="changed"> 368     }</span>
+ 369 
+<span class="new"> 370     _promotion_failed_info.register_copy_failure(obj_size);</span>
+<span class="new"> 371 </span>
+<span class="new"> 372     obj-&gt;push_contents(this);</span>
+<span class="new"> 373   } else {</span>
+<span class="new"> 374     // We lost, someone else "owns" this object.</span>
+<span class="new"> 375     guarantee(obj-&gt;is_forwarded(), "object must be forwarded if CAS failed");</span>
+<span class="new"> 376 </span>
+<span class="new"> 377     // There is no unallocation to worry about.</span>
+<span class="new"> 378     obj = obj-&gt;forwardee();</span>
+ 379   }
+
+ 380 
+ 381   return obj;
+ 382 }
+</pre></td>
+</tr></table>
+</body></html>

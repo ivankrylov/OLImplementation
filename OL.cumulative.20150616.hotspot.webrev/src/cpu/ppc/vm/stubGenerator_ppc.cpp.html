@@ -1,0 +1,2200 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>New src/cpu/ppc/vm/stubGenerator_ppc.cpp</title>
+<body id="SUNWwebrev">
+<pre>
+   1 /*
+   2  * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+   3  * Copyright 2012, 2014 SAP AG. All rights reserved.
+   4  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   5  *
+   6  * This code is free software; you can redistribute it and/or modify it
+   7  * under the terms of the GNU General Public License version 2 only, as
+   8  * published by the Free Software Foundation.
+   9  *
+  10  * This code is distributed in the hope that it will be useful, but WITHOUT
+  11  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  12  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  13  * version 2 for more details (a copy is included in the LICENSE file that
+  14  * accompanied this code).
+  15  *
+  16  * You should have received a copy of the GNU General Public License version
+  17  * 2 along with this work; if not, write to the Free Software Foundation,
+  18  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  19  *
+  20  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  21  * or visit www.oracle.com if you need additional information or have any
+  22  * questions.
+  23  *
+  24  */
+  25 
+  26 #include "precompiled.hpp"
+  27 #include "asm/macroAssembler.inline.hpp"
+  28 #include "interpreter/interpreter.hpp"
+  29 #include "nativeInst_ppc.hpp"
+  30 #include "oops/instanceOop.hpp"
+  31 #include "oops/method.hpp"
+  32 #include "oops/objArrayKlass.hpp"
+  33 #include "oops/oop.inline.hpp"
+  34 #include "prims/methodHandles.hpp"
+  35 #include "runtime/frame.inline.hpp"
+  36 #include "runtime/handles.inline.hpp"
+  37 #include "runtime/sharedRuntime.hpp"
+  38 #include "runtime/stubCodeGenerator.hpp"
+  39 #include "runtime/stubRoutines.hpp"
+  40 #include "utilities/top.hpp"
+  41 #include "runtime/thread.inline.hpp"
+  42 
+  43 #define __ _masm-&gt;
+  44 
+  45 #ifdef PRODUCT
+  46 #define BLOCK_COMMENT(str) // nothing
+  47 #else
+  48 #define BLOCK_COMMENT(str) __ block_comment(str)
+  49 #endif
+  50 
+  51 class StubGenerator: public StubCodeGenerator {
+  52  private:
+  53 
+  54   // Call stubs are used to call Java from C
+  55   //
+  56   // Arguments:
+  57   //
+  58   //   R3  - call wrapper address     : address
+  59   //   R4  - result                   : intptr_t*
+  60   //   R5  - result type              : BasicType
+  61   //   R6  - method                   : Method
+  62   //   R7  - frame mgr entry point    : address
+  63   //   R8  - parameter block          : intptr_t*
+  64   //   R9  - parameter count in words : int
+  65   //   R10 - thread                   : Thread*
+  66   //
+  67   address generate_call_stub(address&amp; return_address) {
+  68     // Setup a new c frame, copy java arguments, call frame manager or
+  69     // native_entry, and process result.
+  70 
+  71     StubCodeMark mark(this, "StubRoutines", "call_stub");
+  72 
+  73     address start = __ function_entry();
+  74 
+  75     // some sanity checks
+  76     assert((sizeof(frame::abi_minframe) % 16) == 0,           "unaligned");
+  77     assert((sizeof(frame::abi_reg_args) % 16) == 0,           "unaligned");
+  78     assert((sizeof(frame::spill_nonvolatiles) % 16) == 0,     "unaligned");
+  79     assert((sizeof(frame::parent_ijava_frame_abi) % 16) == 0, "unaligned");
+  80     assert((sizeof(frame::entry_frame_locals) % 16) == 0,     "unaligned");
+  81 
+  82     Register r_arg_call_wrapper_addr        = R3;
+  83     Register r_arg_result_addr              = R4;
+  84     Register r_arg_result_type              = R5;
+  85     Register r_arg_method                   = R6;
+  86     Register r_arg_entry                    = R7;
+  87     Register r_arg_thread                   = R10;
+  88 
+  89     Register r_temp                         = R24;
+  90     Register r_top_of_arguments_addr        = R25;
+  91     Register r_entryframe_fp                = R26;
+  92 
+  93     {
+  94       // Stack on entry to call_stub:
+  95       //
+  96       //      F1      [C_FRAME]
+  97       //              ...
+  98 
+  99       Register r_arg_argument_addr          = R8;
+ 100       Register r_arg_argument_count         = R9;
+ 101       Register r_frame_alignment_in_bytes   = R27;
+ 102       Register r_argument_addr              = R28;
+ 103       Register r_argumentcopy_addr          = R29;
+ 104       Register r_argument_size_in_bytes     = R30;
+ 105       Register r_frame_size                 = R23;
+ 106 
+ 107       Label arguments_copied;
+ 108 
+ 109       // Save LR/CR to caller's C_FRAME.
+ 110       __ save_LR_CR(R0);
+ 111 
+ 112       // Zero extend arg_argument_count.
+ 113       __ clrldi(r_arg_argument_count, r_arg_argument_count, 32);
+ 114 
+ 115       // Save non-volatiles GPRs to ENTRY_FRAME (not yet pushed, but it's safe).
+ 116       __ save_nonvolatile_gprs(R1_SP, _spill_nonvolatiles_neg(r14));
+ 117 
+ 118       // Keep copy of our frame pointer (caller's SP).
+ 119       __ mr(r_entryframe_fp, R1_SP);
+ 120 
+ 121       BLOCK_COMMENT("Push ENTRY_FRAME including arguments");
+ 122       // Push ENTRY_FRAME including arguments:
+ 123       //
+ 124       //      F0      [TOP_IJAVA_FRAME_ABI]
+ 125       //              alignment (optional)
+ 126       //              [outgoing Java arguments]
+ 127       //              [ENTRY_FRAME_LOCALS]
+ 128       //      F1      [C_FRAME]
+ 129       //              ...
+ 130 
+ 131       // calculate frame size
+ 132 
+ 133       // unaligned size of arguments
+ 134       __ sldi(r_argument_size_in_bytes,
+ 135                   r_arg_argument_count, Interpreter::logStackElementSize);
+ 136       // arguments alignment (max 1 slot)
+ 137       // FIXME: use round_to() here
+ 138       __ andi_(r_frame_alignment_in_bytes, r_arg_argument_count, 1);
+ 139       __ sldi(r_frame_alignment_in_bytes,
+ 140               r_frame_alignment_in_bytes, Interpreter::logStackElementSize);
+ 141 
+ 142       // size = unaligned size of arguments + top abi's size
+ 143       __ addi(r_frame_size, r_argument_size_in_bytes,
+ 144               frame::top_ijava_frame_abi_size);
+ 145       // size += arguments alignment
+ 146       __ add(r_frame_size,
+ 147              r_frame_size, r_frame_alignment_in_bytes);
+ 148       // size += size of call_stub locals
+ 149       __ addi(r_frame_size,
+ 150               r_frame_size, frame::entry_frame_locals_size);
+ 151 
+ 152       // push ENTRY_FRAME
+ 153       __ push_frame(r_frame_size, r_temp);
+ 154 
+ 155       // initialize call_stub locals (step 1)
+ 156       __ std(r_arg_call_wrapper_addr,
+ 157              _entry_frame_locals_neg(call_wrapper_address), r_entryframe_fp);
+ 158       __ std(r_arg_result_addr,
+ 159              _entry_frame_locals_neg(result_address), r_entryframe_fp);
+ 160       __ std(r_arg_result_type,
+ 161              _entry_frame_locals_neg(result_type), r_entryframe_fp);
+ 162       // we will save arguments_tos_address later
+ 163 
+ 164 
+ 165       BLOCK_COMMENT("Copy Java arguments");
+ 166       // copy Java arguments
+ 167 
+ 168       // Calculate top_of_arguments_addr which will be R17_tos (not prepushed) later.
+ 169       // FIXME: why not simply use SP+frame::top_ijava_frame_size?
+ 170       __ addi(r_top_of_arguments_addr,
+ 171               R1_SP, frame::top_ijava_frame_abi_size);
+ 172       __ add(r_top_of_arguments_addr,
+ 173              r_top_of_arguments_addr, r_frame_alignment_in_bytes);
+ 174 
+ 175       // any arguments to copy?
+ 176       __ cmpdi(CCR0, r_arg_argument_count, 0);
+ 177       __ beq(CCR0, arguments_copied);
+ 178 
+ 179       // prepare loop and copy arguments in reverse order
+ 180       {
+ 181         // init CTR with arg_argument_count
+ 182         __ mtctr(r_arg_argument_count);
+ 183 
+ 184         // let r_argumentcopy_addr point to last outgoing Java arguments P
+ 185         __ mr(r_argumentcopy_addr, r_top_of_arguments_addr);
+ 186 
+ 187         // let r_argument_addr point to last incoming java argument
+ 188         __ add(r_argument_addr,
+ 189                    r_arg_argument_addr, r_argument_size_in_bytes);
+ 190         __ addi(r_argument_addr, r_argument_addr, -BytesPerWord);
+ 191 
+ 192         // now loop while CTR &gt; 0 and copy arguments
+ 193         {
+ 194           Label next_argument;
+ 195           __ bind(next_argument);
+ 196 
+ 197           __ ld(r_temp, 0, r_argument_addr);
+ 198           // argument_addr--;
+ 199           __ addi(r_argument_addr, r_argument_addr, -BytesPerWord);
+ 200           __ std(r_temp, 0, r_argumentcopy_addr);
+ 201           // argumentcopy_addr++;
+ 202           __ addi(r_argumentcopy_addr, r_argumentcopy_addr, BytesPerWord);
+ 203 
+ 204           __ bdnz(next_argument);
+ 205         }
+ 206       }
+ 207 
+ 208       // Arguments copied, continue.
+ 209       __ bind(arguments_copied);
+ 210     }
+ 211 
+ 212     {
+ 213       BLOCK_COMMENT("Call frame manager or native entry.");
+ 214       // Call frame manager or native entry.
+ 215       Register r_new_arg_entry = R14;
+ 216       assert_different_registers(r_new_arg_entry, r_top_of_arguments_addr,
+ 217                                  r_arg_method, r_arg_thread);
+ 218 
+ 219       __ mr(r_new_arg_entry, r_arg_entry);
+ 220 
+ 221       // Register state on entry to frame manager / native entry:
+ 222       //
+ 223       //   tos         -  intptr_t*    sender tos (prepushed) Lesp = (SP) + copied_arguments_offset - 8
+ 224       //   R19_method  -  Method
+ 225       //   R16_thread  -  JavaThread*
+ 226 
+ 227       // Tos must point to last argument - element_size.
+ 228 #ifdef CC_INTERP
+ 229       const Register tos = R17_tos;
+ 230 #else
+ 231       const Register tos = R15_esp;
+ 232 #endif
+ 233       __ addi(tos, r_top_of_arguments_addr, -Interpreter::stackElementSize);
+ 234 
+ 235       // initialize call_stub locals (step 2)
+ 236       // now save tos as arguments_tos_address
+ 237       __ std(tos, _entry_frame_locals_neg(arguments_tos_address), r_entryframe_fp);
+ 238 
+ 239       // load argument registers for call
+ 240       __ mr(R19_method, r_arg_method);
+ 241       __ mr(R16_thread, r_arg_thread);
+ 242       assert(tos != r_arg_method, "trashed r_arg_method");
+ 243       assert(tos != r_arg_thread &amp;&amp; R19_method != r_arg_thread, "trashed r_arg_thread");
+ 244 
+ 245       // Set R15_prev_state to 0 for simplifying checks in callee.
+ 246 #ifdef CC_INTERP
+ 247       __ li(R15_prev_state, 0);
+ 248 #else
+ 249       __ load_const_optimized(R25_templateTableBase, (address)Interpreter::dispatch_table((TosState)0), R11_scratch1);
+ 250 #endif
+ 251       // Stack on entry to frame manager / native entry:
+ 252       //
+ 253       //      F0      [TOP_IJAVA_FRAME_ABI]
+ 254       //              alignment (optional)
+ 255       //              [outgoing Java arguments]
+ 256       //              [ENTRY_FRAME_LOCALS]
+ 257       //      F1      [C_FRAME]
+ 258       //              ...
+ 259       //
+ 260 
+ 261       // global toc register
+ 262       __ load_const(R29, MacroAssembler::global_toc(), R11_scratch1);
+ 263 
+ 264       // Load narrow oop base.
+ 265       __ reinit_heapbase(R30, R11_scratch1);
+ 266 
+ 267       // Remember the senderSP so we interpreter can pop c2i arguments off of the stack
+ 268       // when called via a c2i.
+ 269 
+ 270       // Pass initial_caller_sp to framemanager.
+ 271       __ mr(R21_tmp1, R1_SP);
+ 272 
+ 273       // Do a light-weight C-call here, r_new_arg_entry holds the address
+ 274       // of the interpreter entry point (frame manager or native entry)
+ 275       // and save runtime-value of LR in return_address.
+ 276       assert(r_new_arg_entry != tos &amp;&amp; r_new_arg_entry != R19_method &amp;&amp; r_new_arg_entry != R16_thread,
+ 277              "trashed r_new_arg_entry");
+ 278       return_address = __ call_stub(r_new_arg_entry);
+ 279     }
+ 280 
+ 281     {
+ 282       BLOCK_COMMENT("Returned from frame manager or native entry.");
+ 283       // Returned from frame manager or native entry.
+ 284       // Now pop frame, process result, and return to caller.
+ 285 
+ 286       // Stack on exit from frame manager / native entry:
+ 287       //
+ 288       //      F0      [ABI]
+ 289       //              ...
+ 290       //              [ENTRY_FRAME_LOCALS]
+ 291       //      F1      [C_FRAME]
+ 292       //              ...
+ 293       //
+ 294       // Just pop the topmost frame ...
+ 295       //
+ 296 
+ 297       Label ret_is_object;
+ 298       Label ret_is_long;
+ 299       Label ret_is_float;
+ 300       Label ret_is_double;
+ 301 
+ 302       Register r_entryframe_fp = R30;
+ 303       Register r_lr            = R7_ARG5;
+ 304       Register r_cr            = R8_ARG6;
+ 305 
+ 306       // Reload some volatile registers which we've spilled before the call
+ 307       // to frame manager / native entry.
+ 308       // Access all locals via frame pointer, because we know nothing about
+ 309       // the topmost frame's size.
+ 310       __ ld(r_entryframe_fp, _abi(callers_sp), R1_SP);
+ 311       assert_different_registers(r_entryframe_fp, R3_RET, r_arg_result_addr, r_arg_result_type, r_cr, r_lr);
+ 312       __ ld(r_arg_result_addr,
+ 313             _entry_frame_locals_neg(result_address), r_entryframe_fp);
+ 314       __ ld(r_arg_result_type,
+ 315             _entry_frame_locals_neg(result_type), r_entryframe_fp);
+ 316       __ ld(r_cr, _abi(cr), r_entryframe_fp);
+ 317       __ ld(r_lr, _abi(lr), r_entryframe_fp);
+ 318 
+ 319       // pop frame and restore non-volatiles, LR and CR
+ 320       __ mr(R1_SP, r_entryframe_fp);
+ 321       __ mtcr(r_cr);
+ 322       __ mtlr(r_lr);
+ 323 
+ 324       // Store result depending on type. Everything that is not
+ 325       // T_OBJECT, T_LONG, T_FLOAT, or T_DOUBLE is treated as T_INT.
+ 326       __ cmpwi(CCR0, r_arg_result_type, T_OBJECT);
+ 327       __ cmpwi(CCR1, r_arg_result_type, T_LONG);
+ 328       __ cmpwi(CCR5, r_arg_result_type, T_FLOAT);
+ 329       __ cmpwi(CCR6, r_arg_result_type, T_DOUBLE);
+ 330 
+ 331       // restore non-volatile registers
+ 332       __ restore_nonvolatile_gprs(R1_SP, _spill_nonvolatiles_neg(r14));
+ 333 
+ 334 
+ 335       // Stack on exit from call_stub:
+ 336       //
+ 337       //      0       [C_FRAME]
+ 338       //              ...
+ 339       //
+ 340       //  no call_stub frames left.
+ 341 
+ 342       // All non-volatiles have been restored at this point!!
+ 343       assert(R3_RET == R3, "R3_RET should be R3");
+ 344 
+ 345       __ beq(CCR0, ret_is_object);
+ 346       __ beq(CCR1, ret_is_long);
+ 347       __ beq(CCR5, ret_is_float);
+ 348       __ beq(CCR6, ret_is_double);
+ 349 
+ 350       // default:
+ 351       __ stw(R3_RET, 0, r_arg_result_addr);
+ 352       __ blr(); // return to caller
+ 353 
+ 354       // case T_OBJECT:
+ 355       __ bind(ret_is_object);
+ 356       __ std(R3_RET, 0, r_arg_result_addr);
+ 357       __ blr(); // return to caller
+ 358 
+ 359       // case T_LONG:
+ 360       __ bind(ret_is_long);
+ 361       __ std(R3_RET, 0, r_arg_result_addr);
+ 362       __ blr(); // return to caller
+ 363 
+ 364       // case T_FLOAT:
+ 365       __ bind(ret_is_float);
+ 366       __ stfs(F1_RET, 0, r_arg_result_addr);
+ 367       __ blr(); // return to caller
+ 368 
+ 369       // case T_DOUBLE:
+ 370       __ bind(ret_is_double);
+ 371       __ stfd(F1_RET, 0, r_arg_result_addr);
+ 372       __ blr(); // return to caller
+ 373     }
+ 374 
+ 375     return start;
+ 376   }
+ 377 
+ 378   // Return point for a Java call if there's an exception thrown in
+ 379   // Java code.  The exception is caught and transformed into a
+ 380   // pending exception stored in JavaThread that can be tested from
+ 381   // within the VM.
+ 382   //
+ 383   address generate_catch_exception() {
+ 384     StubCodeMark mark(this, "StubRoutines", "catch_exception");
+ 385 
+ 386     address start = __ pc();
+ 387 
+ 388     // Registers alive
+ 389     //
+ 390     //  R16_thread
+ 391     //  R3_ARG1 - address of pending exception
+ 392     //  R4_ARG2 - return address in call stub
+ 393 
+ 394     const Register exception_file = R21_tmp1;
+ 395     const Register exception_line = R22_tmp2;
+ 396 
+ 397     __ load_const(exception_file, (void*)__FILE__);
+ 398     __ load_const(exception_line, (void*)__LINE__);
+ 399 
+ 400     __ std(R3_ARG1, thread_(pending_exception));
+ 401     // store into `char *'
+ 402     __ std(exception_file, thread_(exception_file));
+ 403     // store into `int'
+ 404     __ stw(exception_line, thread_(exception_line));
+ 405 
+ 406     // complete return to VM
+ 407     assert(StubRoutines::_call_stub_return_address != NULL, "must have been generated before");
+ 408 
+ 409     __ mtlr(R4_ARG2);
+ 410     // continue in call stub
+ 411     __ blr();
+ 412 
+ 413     return start;
+ 414   }
+ 415 
+ 416   // Continuation point for runtime calls returning with a pending
+ 417   // exception.  The pending exception check happened in the runtime
+ 418   // or native call stub.  The pending exception in Thread is
+ 419   // converted into a Java-level exception.
+ 420   //
+ 421   address generate_forward_exception() {
+ 422     StubCodeMark mark(this, "StubRoutines", "forward_exception");
+ 423     address start = __ pc();
+ 424 
+ 425 #if !defined(PRODUCT)
+ 426     if (VerifyOops) {
+ 427       // Get pending exception oop.
+ 428       __ ld(R3_ARG1,
+ 429                 in_bytes(Thread::pending_exception_offset()),
+ 430                 R16_thread);
+ 431       // Make sure that this code is only executed if there is a pending exception.
+ 432       {
+ 433         Label L;
+ 434         __ cmpdi(CCR0, R3_ARG1, 0);
+ 435         __ bne(CCR0, L);
+ 436         __ stop("StubRoutines::forward exception: no pending exception (1)");
+ 437         __ bind(L);
+ 438       }
+ 439       __ verify_oop(R3_ARG1, "StubRoutines::forward exception: not an oop");
+ 440     }
+ 441 #endif
+ 442 
+ 443     // Save LR/CR and copy exception pc (LR) into R4_ARG2.
+ 444     __ save_LR_CR(R4_ARG2);
+ 445     __ push_frame_reg_args(0, R0);
+ 446     // Find exception handler.
+ 447     __ call_VM_leaf(CAST_FROM_FN_PTR(address,
+ 448                      SharedRuntime::exception_handler_for_return_address),
+ 449                     R16_thread,
+ 450                     R4_ARG2);
+ 451     // Copy handler's address.
+ 452     __ mtctr(R3_RET);
+ 453     __ pop_frame();
+ 454     __ restore_LR_CR(R0);
+ 455 
+ 456     // Set up the arguments for the exception handler:
+ 457     //  - R3_ARG1: exception oop
+ 458     //  - R4_ARG2: exception pc.
+ 459 
+ 460     // Load pending exception oop.
+ 461     __ ld(R3_ARG1,
+ 462               in_bytes(Thread::pending_exception_offset()),
+ 463               R16_thread);
+ 464 
+ 465     // The exception pc is the return address in the caller.
+ 466     // Must load it into R4_ARG2.
+ 467     __ mflr(R4_ARG2);
+ 468 
+ 469 #ifdef ASSERT
+ 470     // Make sure exception is set.
+ 471     {
+ 472       Label L;
+ 473       __ cmpdi(CCR0, R3_ARG1, 0);
+ 474       __ bne(CCR0, L);
+ 475       __ stop("StubRoutines::forward exception: no pending exception (2)");
+ 476       __ bind(L);
+ 477     }
+ 478 #endif
+ 479 
+ 480     // Clear the pending exception.
+ 481     __ li(R0, 0);
+ 482     __ std(R0,
+ 483                in_bytes(Thread::pending_exception_offset()),
+ 484                R16_thread);
+ 485     // Jump to exception handler.
+ 486     __ bctr();
+ 487 
+ 488     return start;
+ 489   }
+ 490 
+ 491 #undef __
+ 492 #define __ masm-&gt;
+ 493   // Continuation point for throwing of implicit exceptions that are
+ 494   // not handled in the current activation. Fabricates an exception
+ 495   // oop and initiates normal exception dispatching in this
+ 496   // frame. Only callee-saved registers are preserved (through the
+ 497   // normal register window / RegisterMap handling).  If the compiler
+ 498   // needs all registers to be preserved between the fault point and
+ 499   // the exception handler then it must assume responsibility for that
+ 500   // in AbstractCompiler::continuation_for_implicit_null_exception or
+ 501   // continuation_for_implicit_division_by_zero_exception. All other
+ 502   // implicit exceptions (e.g., NullPointerException or
+ 503   // AbstractMethodError on entry) are either at call sites or
+ 504   // otherwise assume that stack unwinding will be initiated, so
+ 505   // caller saved registers were assumed volatile in the compiler.
+ 506   //
+ 507   // Note that we generate only this stub into a RuntimeStub, because
+ 508   // it needs to be properly traversed and ignored during GC, so we
+ 509   // change the meaning of the "__" macro within this method.
+ 510   //
+ 511   // Note: the routine set_pc_not_at_call_for_caller in
+ 512   // SharedRuntime.cpp requires that this code be generated into a
+ 513   // RuntimeStub.
+ 514   address generate_throw_exception(const char* name, address runtime_entry, bool restore_saved_exception_pc,
+ 515                                    Register arg1 = noreg, Register arg2 = noreg) {
+ 516     CodeBuffer code(name, 1024 DEBUG_ONLY(+ 512), 0);
+ 517     MacroAssembler* masm = new MacroAssembler(&amp;code);
+ 518 
+ 519     OopMapSet* oop_maps  = new OopMapSet();
+ 520     int frame_size_in_bytes = frame::abi_reg_args_size;
+ 521     OopMap* map = new OopMap(frame_size_in_bytes / sizeof(jint), 0);
+ 522 
+ 523     StubCodeMark mark(this, "StubRoutines", "throw_exception");
+ 524 
+ 525     address start = __ pc();
+ 526 
+ 527     __ save_LR_CR(R11_scratch1);
+ 528 
+ 529     // Push a frame.
+ 530     __ push_frame_reg_args(0, R11_scratch1);
+ 531 
+ 532     address frame_complete_pc = __ pc();
+ 533 
+ 534     if (restore_saved_exception_pc) {
+ 535       __ unimplemented("StubGenerator::throw_exception with restore_saved_exception_pc", 74);
+ 536     }
+ 537 
+ 538     // Note that we always have a runtime stub frame on the top of
+ 539     // stack by this point. Remember the offset of the instruction
+ 540     // whose address will be moved to R11_scratch1.
+ 541     address gc_map_pc = __ get_PC_trash_LR(R11_scratch1);
+ 542 
+ 543     __ set_last_Java_frame(/*sp*/R1_SP, /*pc*/R11_scratch1);
+ 544 
+ 545     __ mr(R3_ARG1, R16_thread);
+ 546     if (arg1 != noreg) {
+ 547       __ mr(R4_ARG2, arg1);
+ 548     }
+ 549     if (arg2 != noreg) {
+ 550       __ mr(R5_ARG3, arg2);
+ 551     }
+ 552 #if defined(ABI_ELFv2)
+ 553     __ call_c(runtime_entry, relocInfo::none);
+ 554 #else
+ 555     __ call_c(CAST_FROM_FN_PTR(FunctionDescriptor*, runtime_entry), relocInfo::none);
+ 556 #endif
+ 557 
+ 558     // Set an oopmap for the call site.
+ 559     oop_maps-&gt;add_gc_map((int)(gc_map_pc - start), map);
+ 560 
+ 561     __ reset_last_Java_frame();
+ 562 
+ 563 #ifdef ASSERT
+ 564     // Make sure that this code is only executed if there is a pending
+ 565     // exception.
+ 566     {
+ 567       Label L;
+ 568       __ ld(R0,
+ 569                 in_bytes(Thread::pending_exception_offset()),
+ 570                 R16_thread);
+ 571       __ cmpdi(CCR0, R0, 0);
+ 572       __ bne(CCR0, L);
+ 573       __ stop("StubRoutines::throw_exception: no pending exception");
+ 574       __ bind(L);
+ 575     }
+ 576 #endif
+ 577 
+ 578     // Pop frame.
+ 579     __ pop_frame();
+ 580 
+ 581     __ restore_LR_CR(R11_scratch1);
+ 582 
+ 583     __ load_const(R11_scratch1, StubRoutines::forward_exception_entry());
+ 584     __ mtctr(R11_scratch1);
+ 585     __ bctr();
+ 586 
+ 587     // Create runtime stub with OopMap.
+ 588     RuntimeStub* stub =
+ 589       RuntimeStub::new_runtime_stub(name, &amp;code,
+ 590                                     /*frame_complete=*/ (int)(frame_complete_pc - start),
+ 591                                     frame_size_in_bytes/wordSize,
+ 592                                     oop_maps,
+ 593                                     false);
+ 594     return stub-&gt;entry_point();
+ 595   }
+ 596 #undef __
+ 597 #define __ _masm-&gt;
+ 598 
+ 599   //  Generate G1 pre-write barrier for array.
+ 600   //
+ 601   //  Input:
+ 602   //     from     - register containing src address (only needed for spilling)
+ 603   //     to       - register containing starting address
+ 604   //     count    - register containing element count
+ 605   //     tmp      - scratch register
+ 606   //
+ 607   //  Kills:
+ 608   //     nothing
+ 609   //
+ 610   void gen_write_ref_array_pre_barrier(Register from, Register to, Register count, bool dest_uninitialized, Register Rtmp1) {
+ 611     BarrierSet* const bs = Universe::heap()-&gt;barrier_set();
+ 612     switch (bs-&gt;kind()) {
+ 613       case BarrierSet::G1SATBCT:
+ 614       case BarrierSet::G1SATBCTLogging:
+ 615         // With G1, don't generate the call if we statically know that the target in uninitialized
+ 616         if (!dest_uninitialized) {
+ 617           const int spill_slots = 4 * wordSize;
+ 618           const int frame_size  = frame::abi_reg_args_size + spill_slots;
+ 619           Label filtered;
+ 620 
+ 621           // Is marking active?
+ 622           if (in_bytes(PtrQueue::byte_width_of_active()) == 4) {
+ 623             __ lwz(Rtmp1, in_bytes(JavaThread::satb_mark_queue_offset() + PtrQueue::byte_offset_of_active()), R16_thread);
+ 624           } else {
+ 625             guarantee(in_bytes(PtrQueue::byte_width_of_active()) == 1, "Assumption");
+ 626             __ lbz(Rtmp1, in_bytes(JavaThread::satb_mark_queue_offset() + PtrQueue::byte_offset_of_active()), R16_thread);
+ 627           }
+ 628           __ cmpdi(CCR0, Rtmp1, 0);
+ 629           __ beq(CCR0, filtered);
+ 630 
+ 631           __ save_LR_CR(R0);
+ 632           __ push_frame_reg_args(spill_slots, R0);
+ 633           __ std(from,  frame_size - 1 * wordSize, R1_SP);
+ 634           __ std(to,    frame_size - 2 * wordSize, R1_SP);
+ 635           __ std(count, frame_size - 3 * wordSize, R1_SP);
+ 636 
+ 637           __ call_VM_leaf(CAST_FROM_FN_PTR(address, BarrierSet::static_write_ref_array_pre), to, count);
+ 638 
+ 639           __ ld(from,  frame_size - 1 * wordSize, R1_SP);
+ 640           __ ld(to,    frame_size - 2 * wordSize, R1_SP);
+ 641           __ ld(count, frame_size - 3 * wordSize, R1_SP);
+ 642           __ pop_frame();
+ 643           __ restore_LR_CR(R0);
+ 644 
+ 645           __ bind(filtered);
+ 646         }
+ 647         break;
+ 648       case BarrierSet::CardTableModRef:
+ 649       case BarrierSet::CardTableExtension:
+ 650       case BarrierSet::ModRef:
+ 651         break;
+ 652       default:
+ 653         ShouldNotReachHere();
+ 654     }
+ 655   }
+ 656 
+ 657   //  Generate CMS/G1 post-write barrier for array.
+ 658   //
+ 659   //  Input:
+ 660   //     addr     - register containing starting address
+ 661   //     count    - register containing element count
+ 662   //     tmp      - scratch register
+ 663   //
+ 664   //  The input registers and R0 are overwritten.
+ 665   //
+ 666   void gen_write_ref_array_post_barrier(Register addr, Register count, Register tmp, bool branchToEnd) {
+ 667     BarrierSet* const bs = Universe::heap()-&gt;barrier_set();
+ 668 
+ 669     switch (bs-&gt;kind()) {
+ 670       case BarrierSet::G1SATBCT:
+ 671       case BarrierSet::G1SATBCTLogging:
+ 672         {
+ 673           if (branchToEnd) {
+ 674             __ save_LR_CR(R0);
+ 675             // We need this frame only to spill LR.
+ 676             __ push_frame_reg_args(0, R0);
+ 677             __ call_VM_leaf(CAST_FROM_FN_PTR(address, BarrierSet::static_write_ref_array_post), addr, count);
+ 678             __ pop_frame();
+ 679             __ restore_LR_CR(R0);
+ 680           } else {
+ 681             // Tail call: fake call from stub caller by branching without linking.
+ 682             address entry_point = (address)CAST_FROM_FN_PTR(address, BarrierSet::static_write_ref_array_post);
+ 683             __ mr_if_needed(R3_ARG1, addr);
+ 684             __ mr_if_needed(R4_ARG2, count);
+ 685             __ load_const(R11, entry_point, R0);
+ 686             __ call_c_and_return_to_caller(R11);
+ 687           }
+ 688         }
+ 689         break;
+ 690       case BarrierSet::CardTableModRef:
+ 691       case BarrierSet::CardTableExtension:
+ 692         {
+ 693           Label Lskip_loop, Lstore_loop;
+ 694           if (UseConcMarkSweepGC) {
+ 695             // TODO PPC port: contribute optimization / requires shared changes
+ 696             __ release();
+ 697           }
+ 698 
+ 699           CardTableModRefBS* const ct = (CardTableModRefBS*)bs;
+ 700           assert(sizeof(*ct-&gt;byte_map_base) == sizeof(jbyte), "adjust this code");
+ 701           assert_different_registers(addr, count, tmp);
+ 702 
+ 703           __ sldi(count, count, LogBytesPerHeapOop);
+ 704           __ addi(count, count, -BytesPerHeapOop);
+ 705           __ add(count, addr, count);
+ 706           // Use two shifts to clear out those low order two bits! (Cannot opt. into 1.)
+ 707           __ srdi(addr, addr, CardTableModRefBS::card_shift);
+ 708           __ srdi(count, count, CardTableModRefBS::card_shift);
+ 709           __ subf(count, addr, count);
+ 710           assert_different_registers(R0, addr, count, tmp);
+ 711           __ load_const(tmp, (address)ct-&gt;byte_map_base);
+ 712           __ addic_(count, count, 1);
+ 713           __ beq(CCR0, Lskip_loop);
+ 714           __ li(R0, 0);
+ 715           __ mtctr(count);
+ 716           // Byte store loop
+ 717           __ bind(Lstore_loop);
+ 718           __ stbx(R0, tmp, addr);
+ 719           __ addi(addr, addr, 1);
+ 720           __ bdnz(Lstore_loop);
+ 721           __ bind(Lskip_loop);
+ 722 
+ 723           if (!branchToEnd) __ blr();
+ 724         }
+ 725       break;
+ 726       case BarrierSet::ModRef:
+ 727         if (!branchToEnd) __ blr();
+ 728         break;
+ 729       default:
+ 730         ShouldNotReachHere();
+ 731     }
+ 732   }
+ 733 
+ 734   // Support for void zero_words_aligned8(HeapWord* to, size_t count)
+ 735   //
+ 736   // Arguments:
+ 737   //   to:
+ 738   //   count:
+ 739   //
+ 740   // Destroys:
+ 741   //
+ 742   address generate_zero_words_aligned8() {
+ 743     StubCodeMark mark(this, "StubRoutines", "zero_words_aligned8");
+ 744 
+ 745     // Implemented as in ClearArray.
+ 746     address start = __ function_entry();
+ 747 
+ 748     Register base_ptr_reg   = R3_ARG1; // tohw (needs to be 8b aligned)
+ 749     Register cnt_dwords_reg = R4_ARG2; // count (in dwords)
+ 750     Register tmp1_reg       = R5_ARG3;
+ 751     Register tmp2_reg       = R6_ARG4;
+ 752     Register zero_reg       = R7_ARG5;
+ 753 
+ 754     // Procedure for large arrays (uses data cache block zero instruction).
+ 755     Label dwloop, fast, fastloop, restloop, lastdword, done;
+ 756     int cl_size=VM_Version::get_cache_line_size(), cl_dwords=cl_size&gt;&gt;3, cl_dwordaddr_bits=exact_log2(cl_dwords);
+ 757     int min_dcbz=2; // Needs to be positive, apply dcbz only to at least min_dcbz cache lines.
+ 758 
+ 759     // Clear up to 128byte boundary if long enough, dword_cnt=(16-(base&gt;&gt;3))%16.
+ 760     __ dcbtst(base_ptr_reg);                    // Indicate write access to first cache line ...
+ 761     __ andi(tmp2_reg, cnt_dwords_reg, 1);       // to check if number of dwords is even.
+ 762     __ srdi_(tmp1_reg, cnt_dwords_reg, 1);      // number of double dwords
+ 763     __ load_const_optimized(zero_reg, 0L);      // Use as zero register.
+ 764 
+ 765     __ cmpdi(CCR1, tmp2_reg, 0);                // cnt_dwords even?
+ 766     __ beq(CCR0, lastdword);                    // size &lt;= 1
+ 767     __ mtctr(tmp1_reg);                         // Speculatively preload counter for rest loop (&gt;0).
+ 768     __ cmpdi(CCR0, cnt_dwords_reg, (min_dcbz+1)*cl_dwords-1); // Big enough to ensure &gt;=min_dcbz cache lines are included?
+ 769     __ neg(tmp1_reg, base_ptr_reg);             // bit 0..58: bogus, bit 57..60: (16-(base&gt;&gt;3))%16, bit 61..63: 000
+ 770 
+ 771     __ blt(CCR0, restloop);                     // Too small. (&lt;31=(2*cl_dwords)-1 is sufficient, but bigger performs better.)
+ 772     __ rldicl_(tmp1_reg, tmp1_reg, 64-3, 64-cl_dwordaddr_bits); // Extract number of dwords to 128byte boundary=(16-(base&gt;&gt;3))%16.
+ 773 
+ 774     __ beq(CCR0, fast);                         // already 128byte aligned
+ 775     __ mtctr(tmp1_reg);                         // Set ctr to hit 128byte boundary (0&lt;ctr&lt;cnt).
+ 776     __ subf(cnt_dwords_reg, tmp1_reg, cnt_dwords_reg); // rest (&gt;0 since size&gt;=256-8)
+ 777 
+ 778     // Clear in first cache line dword-by-dword if not already 128byte aligned.
+ 779     __ bind(dwloop);
+ 780       __ std(zero_reg, 0, base_ptr_reg);        // Clear 8byte aligned block.
+ 781       __ addi(base_ptr_reg, base_ptr_reg, 8);
+ 782     __ bdnz(dwloop);
+ 783 
+ 784     // clear 128byte blocks
+ 785     __ bind(fast);
+ 786     __ srdi(tmp1_reg, cnt_dwords_reg, cl_dwordaddr_bits); // loop count for 128byte loop (&gt;0 since size&gt;=256-8)
+ 787     __ andi(tmp2_reg, cnt_dwords_reg, 1);       // to check if rest even
+ 788 
+ 789     __ mtctr(tmp1_reg);                         // load counter
+ 790     __ cmpdi(CCR1, tmp2_reg, 0);                // rest even?
+ 791     __ rldicl_(tmp1_reg, cnt_dwords_reg, 63, 65-cl_dwordaddr_bits); // rest in double dwords
+ 792 
+ 793     __ bind(fastloop);
+ 794       __ dcbz(base_ptr_reg);                    // Clear 128byte aligned block.
+ 795       __ addi(base_ptr_reg, base_ptr_reg, cl_size);
+ 796     __ bdnz(fastloop);
+ 797 
+ 798     //__ dcbtst(base_ptr_reg);                  // Indicate write access to last cache line.
+ 799     __ beq(CCR0, lastdword);                    // rest&lt;=1
+ 800     __ mtctr(tmp1_reg);                         // load counter
+ 801 
+ 802     // Clear rest.
+ 803     __ bind(restloop);
+ 804       __ std(zero_reg, 0, base_ptr_reg);        // Clear 8byte aligned block.
+ 805       __ std(zero_reg, 8, base_ptr_reg);        // Clear 8byte aligned block.
+ 806       __ addi(base_ptr_reg, base_ptr_reg, 16);
+ 807     __ bdnz(restloop);
+ 808 
+ 809     __ bind(lastdword);
+ 810     __ beq(CCR1, done);
+ 811     __ std(zero_reg, 0, base_ptr_reg);
+ 812     __ bind(done);
+ 813     __ blr();                                   // return
+ 814 
+ 815     return start;
+ 816   }
+ 817 
+ 818   // The following routine generates a subroutine to throw an asynchronous
+ 819   // UnknownError when an unsafe access gets a fault that could not be
+ 820   // reasonably prevented by the programmer.  (Example: SIGBUS/OBJERR.)
+ 821   //
+ 822   address generate_handler_for_unsafe_access() {
+ 823     StubCodeMark mark(this, "StubRoutines", "handler_for_unsafe_access");
+ 824     address start = __ function_entry();
+ 825     __ unimplemented("StubRoutines::handler_for_unsafe_access", 93);
+ 826     return start;
+ 827   }
+ 828 
+ 829 #if !defined(PRODUCT)
+ 830   // Wrapper which calls oopDesc::is_oop_or_null()
+ 831   // Only called by MacroAssembler::verify_oop
+ 832   static void verify_oop_helper(const char* message, oop o) {
+ 833     if (!o-&gt;is_oop_or_null()) {
+ 834       fatal(message);
+ 835     }
+ 836     ++ StubRoutines::_verify_oop_count;
+ 837   }
+ 838 #endif
+ 839 
+ 840   // Return address of code to be called from code generated by
+ 841   // MacroAssembler::verify_oop.
+ 842   //
+ 843   // Don't generate, rather use C++ code.
+ 844   address generate_verify_oop() {
+ 845     StubCodeMark mark(this, "StubRoutines", "verify_oop");
+ 846 
+ 847     // this is actually a `FunctionDescriptor*'.
+ 848     address start = 0;
+ 849 
+ 850 #if !defined(PRODUCT)
+ 851     start = CAST_FROM_FN_PTR(address, verify_oop_helper);
+ 852 #endif
+ 853 
+ 854     return start;
+ 855   }
+ 856 
+ 857   // Fairer handling of safepoints for native methods.
+ 858   //
+ 859   // Generate code which reads from the polling page. This special handling is needed as the
+ 860   // linux-ppc64 kernel before 2.6.6 doesn't set si_addr on some segfaults in 64bit mode
+ 861   // (cf. http://www.kernel.org/pub/linux/kernel/v2.6/ChangeLog-2.6.6), especially when we try
+ 862   // to read from the safepoint polling page.
+ 863   address generate_load_from_poll() {
+ 864     StubCodeMark mark(this, "StubRoutines", "generate_load_from_poll");
+ 865     address start = __ function_entry();
+ 866     __ unimplemented("StubRoutines::verify_oop", 95);  // TODO PPC port
+ 867     return start;
+ 868   }
+ 869 
+ 870   // -XX:+OptimizeFill : convert fill/copy loops into intrinsic
+ 871   //
+ 872   // The code is implemented(ported from sparc) as we believe it benefits JVM98, however
+ 873   // tracing(-XX:+TraceOptimizeFill) shows the intrinsic replacement doesn't happen at all!
+ 874   //
+ 875   // Source code in function is_range_check_if() shows that OptimizeFill relaxed the condition
+ 876   // for turning on loop predication optimization, and hence the behavior of "array range check"
+ 877   // and "loop invariant check" could be influenced, which potentially boosted JVM98.
+ 878   //
+ 879   // Generate stub for disjoint short fill. If "aligned" is true, the
+ 880   // "to" address is assumed to be heapword aligned.
+ 881   //
+ 882   // Arguments for generated stub:
+ 883   //   to:    R3_ARG1
+ 884   //   value: R4_ARG2
+ 885   //   count: R5_ARG3 treated as signed
+ 886   //
+ 887   address generate_fill(BasicType t, bool aligned, const char* name) {
+ 888     StubCodeMark mark(this, "StubRoutines", name);
+ 889     address start = __ function_entry();
+ 890 
+ 891     const Register to    = R3_ARG1;   // source array address
+ 892     const Register value = R4_ARG2;   // fill value
+ 893     const Register count = R5_ARG3;   // elements count
+ 894     const Register temp  = R6_ARG4;   // temp register
+ 895 
+ 896     //assert_clean_int(count, O3);    // Make sure 'count' is clean int.
+ 897 
+ 898     Label L_exit, L_skip_align1, L_skip_align2, L_fill_byte;
+ 899     Label L_fill_2_bytes, L_fill_4_bytes, L_fill_elements, L_fill_32_bytes;
+ 900 
+ 901     int shift = -1;
+ 902     switch (t) {
+ 903        case T_BYTE:
+ 904         shift = 2;
+ 905         // Clone bytes (zero extend not needed because store instructions below ignore high order bytes).
+ 906         __ rldimi(value, value, 8, 48);     // 8 bit -&gt; 16 bit
+ 907         __ cmpdi(CCR0, count, 2&lt;&lt;shift);    // Short arrays (&lt; 8 bytes) fill by element.
+ 908         __ blt(CCR0, L_fill_elements);
+ 909         __ rldimi(value, value, 16, 32);    // 16 bit -&gt; 32 bit
+ 910         break;
+ 911        case T_SHORT:
+ 912         shift = 1;
+ 913         // Clone bytes (zero extend not needed because store instructions below ignore high order bytes).
+ 914         __ rldimi(value, value, 16, 32);    // 16 bit -&gt; 32 bit
+ 915         __ cmpdi(CCR0, count, 2&lt;&lt;shift);    // Short arrays (&lt; 8 bytes) fill by element.
+ 916         __ blt(CCR0, L_fill_elements);
+ 917         break;
+ 918       case T_INT:
+ 919         shift = 0;
+ 920         __ cmpdi(CCR0, count, 2&lt;&lt;shift);    // Short arrays (&lt; 8 bytes) fill by element.
+ 921         __ blt(CCR0, L_fill_4_bytes);
+ 922         break;
+ 923       default: ShouldNotReachHere();
+ 924     }
+ 925 
+ 926     if (!aligned &amp;&amp; (t == T_BYTE || t == T_SHORT)) {
+ 927       // Align source address at 4 bytes address boundary.
+ 928       if (t == T_BYTE) {
+ 929         // One byte misalignment happens only for byte arrays.
+ 930         __ andi_(temp, to, 1);
+ 931         __ beq(CCR0, L_skip_align1);
+ 932         __ stb(value, 0, to);
+ 933         __ addi(to, to, 1);
+ 934         __ addi(count, count, -1);
+ 935         __ bind(L_skip_align1);
+ 936       }
+ 937       // Two bytes misalignment happens only for byte and short (char) arrays.
+ 938       __ andi_(temp, to, 2);
+ 939       __ beq(CCR0, L_skip_align2);
+ 940       __ sth(value, 0, to);
+ 941       __ addi(to, to, 2);
+ 942       __ addi(count, count, -(1 &lt;&lt; (shift - 1)));
+ 943       __ bind(L_skip_align2);
+ 944     }
+ 945 
+ 946     if (!aligned) {
+ 947       // Align to 8 bytes, we know we are 4 byte aligned to start.
+ 948       __ andi_(temp, to, 7);
+ 949       __ beq(CCR0, L_fill_32_bytes);
+ 950       __ stw(value, 0, to);
+ 951       __ addi(to, to, 4);
+ 952       __ addi(count, count, -(1 &lt;&lt; shift));
+ 953       __ bind(L_fill_32_bytes);
+ 954     }
+ 955 
+ 956     __ li(temp, 8&lt;&lt;shift);                  // Prepare for 32 byte loop.
+ 957     // Clone bytes int-&gt;long as above.
+ 958     __ rldimi(value, value, 32, 0);         // 32 bit -&gt; 64 bit
+ 959 
+ 960     Label L_check_fill_8_bytes;
+ 961     // Fill 32-byte chunks.
+ 962     __ subf_(count, temp, count);
+ 963     __ blt(CCR0, L_check_fill_8_bytes);
+ 964 
+ 965     Label L_fill_32_bytes_loop;
+ 966     __ align(32);
+ 967     __ bind(L_fill_32_bytes_loop);
+ 968 
+ 969     __ std(value, 0, to);
+ 970     __ std(value, 8, to);
+ 971     __ subf_(count, temp, count);           // Update count.
+ 972     __ std(value, 16, to);
+ 973     __ std(value, 24, to);
+ 974 
+ 975     __ addi(to, to, 32);
+ 976     __ bge(CCR0, L_fill_32_bytes_loop);
+ 977 
+ 978     __ bind(L_check_fill_8_bytes);
+ 979     __ add_(count, temp, count);
+ 980     __ beq(CCR0, L_exit);
+ 981     __ addic_(count, count, -(2 &lt;&lt; shift));
+ 982     __ blt(CCR0, L_fill_4_bytes);
+ 983 
+ 984     //
+ 985     // Length is too short, just fill 8 bytes at a time.
+ 986     //
+ 987     Label L_fill_8_bytes_loop;
+ 988     __ bind(L_fill_8_bytes_loop);
+ 989     __ std(value, 0, to);
+ 990     __ addic_(count, count, -(2 &lt;&lt; shift));
+ 991     __ addi(to, to, 8);
+ 992     __ bge(CCR0, L_fill_8_bytes_loop);
+ 993 
+ 994     // Fill trailing 4 bytes.
+ 995     __ bind(L_fill_4_bytes);
+ 996     __ andi_(temp, count, 1&lt;&lt;shift);
+ 997     __ beq(CCR0, L_fill_2_bytes);
+ 998 
+ 999     __ stw(value, 0, to);
+1000     if (t == T_BYTE || t == T_SHORT) {
+1001       __ addi(to, to, 4);
+1002       // Fill trailing 2 bytes.
+1003       __ bind(L_fill_2_bytes);
+1004       __ andi_(temp, count, 1&lt;&lt;(shift-1));
+1005       __ beq(CCR0, L_fill_byte);
+1006       __ sth(value, 0, to);
+1007       if (t == T_BYTE) {
+1008         __ addi(to, to, 2);
+1009         // Fill trailing byte.
+1010         __ bind(L_fill_byte);
+1011         __ andi_(count, count, 1);
+1012         __ beq(CCR0, L_exit);
+1013         __ stb(value, 0, to);
+1014       } else {
+1015         __ bind(L_fill_byte);
+1016       }
+1017     } else {
+1018       __ bind(L_fill_2_bytes);
+1019     }
+1020     __ bind(L_exit);
+1021     __ blr();
+1022 
+1023     // Handle copies less than 8 bytes. Int is handled elsewhere.
+1024     if (t == T_BYTE) {
+1025       __ bind(L_fill_elements);
+1026       Label L_fill_2, L_fill_4;
+1027       __ andi_(temp, count, 1);
+1028       __ beq(CCR0, L_fill_2);
+1029       __ stb(value, 0, to);
+1030       __ addi(to, to, 1);
+1031       __ bind(L_fill_2);
+1032       __ andi_(temp, count, 2);
+1033       __ beq(CCR0, L_fill_4);
+1034       __ stb(value, 0, to);
+1035       __ stb(value, 0, to);
+1036       __ addi(to, to, 2);
+1037       __ bind(L_fill_4);
+1038       __ andi_(temp, count, 4);
+1039       __ beq(CCR0, L_exit);
+1040       __ stb(value, 0, to);
+1041       __ stb(value, 1, to);
+1042       __ stb(value, 2, to);
+1043       __ stb(value, 3, to);
+1044       __ blr();
+1045     }
+1046 
+1047     if (t == T_SHORT) {
+1048       Label L_fill_2;
+1049       __ bind(L_fill_elements);
+1050       __ andi_(temp, count, 1);
+1051       __ beq(CCR0, L_fill_2);
+1052       __ sth(value, 0, to);
+1053       __ addi(to, to, 2);
+1054       __ bind(L_fill_2);
+1055       __ andi_(temp, count, 2);
+1056       __ beq(CCR0, L_exit);
+1057       __ sth(value, 0, to);
+1058       __ sth(value, 2, to);
+1059       __ blr();
+1060     }
+1061     return start;
+1062   }
+1063 
+1064 
+1065   // Generate overlap test for array copy stubs.
+1066   //
+1067   // Input:
+1068   //   R3_ARG1    -  from
+1069   //   R4_ARG2    -  to
+1070   //   R5_ARG3    -  element count
+1071   //
+1072   void array_overlap_test(address no_overlap_target, int log2_elem_size) {
+1073     Register tmp1 = R6_ARG4;
+1074     Register tmp2 = R7_ARG5;
+1075 
+1076     Label l_overlap;
+1077 #ifdef ASSERT
+1078     __ srdi_(tmp2, R5_ARG3, 31);
+1079     __ asm_assert_eq("missing zero extend", 0xAFFE);
+1080 #endif
+1081 
+1082     __ subf(tmp1, R3_ARG1, R4_ARG2); // distance in bytes
+1083     __ sldi(tmp2, R5_ARG3, log2_elem_size); // size in bytes
+1084     __ cmpld(CCR0, R3_ARG1, R4_ARG2); // Use unsigned comparison!
+1085     __ cmpld(CCR1, tmp1, tmp2);
+1086     __ crand(/*CCR0 lt*/0, /*CCR1 lt*/4+0, /*CCR0 lt*/0);
+1087     __ blt(CCR0, l_overlap); // Src before dst and distance smaller than size.
+1088 
+1089     // need to copy forwards
+1090     if (__ is_within_range_of_b(no_overlap_target, __ pc())) {
+1091       __ b(no_overlap_target);
+1092     } else {
+1093       __ load_const(tmp1, no_overlap_target, tmp2);
+1094       __ mtctr(tmp1);
+1095       __ bctr();
+1096     }
+1097 
+1098     __ bind(l_overlap);
+1099     // need to copy backwards
+1100   }
+1101 
+1102   // The guideline in the implementations of generate_disjoint_xxx_copy
+1103   // (xxx=byte,short,int,long,oop) is to copy as many elements as possible with
+1104   // single instructions, but to avoid alignment interrupts (see subsequent
+1105   // comment). Furthermore, we try to minimize misaligned access, even
+1106   // though they cause no alignment interrupt.
+1107   //
+1108   // In Big-Endian mode, the PowerPC architecture requires implementations to
+1109   // handle automatically misaligned integer halfword and word accesses,
+1110   // word-aligned integer doubleword accesses, and word-aligned floating-point
+1111   // accesses. Other accesses may or may not generate an Alignment interrupt
+1112   // depending on the implementation.
+1113   // Alignment interrupt handling may require on the order of hundreds of cycles,
+1114   // so every effort should be made to avoid misaligned memory values.
+1115   //
+1116   //
+1117   // Generate stub for disjoint byte copy.  If "aligned" is true, the
+1118   // "from" and "to" addresses are assumed to be heapword aligned.
+1119   //
+1120   // Arguments for generated stub:
+1121   //      from:  R3_ARG1
+1122   //      to:    R4_ARG2
+1123   //      count: R5_ARG3 treated as signed
+1124   //
+1125   address generate_disjoint_byte_copy(bool aligned, const char * name) {
+1126     StubCodeMark mark(this, "StubRoutines", name);
+1127     address start = __ function_entry();
+1128 
+1129     Register tmp1 = R6_ARG4;
+1130     Register tmp2 = R7_ARG5;
+1131     Register tmp3 = R8_ARG6;
+1132     Register tmp4 = R9_ARG7;
+1133 
+1134 
+1135     Label l_1, l_2, l_3, l_4, l_5, l_6, l_7, l_8, l_9;
+1136     // Don't try anything fancy if arrays don't have many elements.
+1137     __ li(tmp3, 0);
+1138     __ cmpwi(CCR0, R5_ARG3, 17);
+1139     __ ble(CCR0, l_6); // copy 4 at a time
+1140 
+1141     if (!aligned) {
+1142       __ xorr(tmp1, R3_ARG1, R4_ARG2);
+1143       __ andi_(tmp1, tmp1, 3);
+1144       __ bne(CCR0, l_6); // If arrays don't have the same alignment mod 4, do 4 element copy.
+1145 
+1146       // Copy elements if necessary to align to 4 bytes.
+1147       __ neg(tmp1, R3_ARG1); // Compute distance to alignment boundary.
+1148       __ andi_(tmp1, tmp1, 3);
+1149       __ beq(CCR0, l_2);
+1150 
+1151       __ subf(R5_ARG3, tmp1, R5_ARG3);
+1152       __ bind(l_9);
+1153       __ lbz(tmp2, 0, R3_ARG1);
+1154       __ addic_(tmp1, tmp1, -1);
+1155       __ stb(tmp2, 0, R4_ARG2);
+1156       __ addi(R3_ARG1, R3_ARG1, 1);
+1157       __ addi(R4_ARG2, R4_ARG2, 1);
+1158       __ bne(CCR0, l_9);
+1159 
+1160       __ bind(l_2);
+1161     }
+1162 
+1163     // copy 8 elements at a time
+1164     __ xorr(tmp2, R3_ARG1, R4_ARG2); // skip if src &amp; dest have differing alignment mod 8
+1165     __ andi_(tmp1, tmp2, 7);
+1166     __ bne(CCR0, l_7); // not same alignment -&gt; to or from is aligned -&gt; copy 8
+1167 
+1168     // copy a 2-element word if necessary to align to 8 bytes
+1169     __ andi_(R0, R3_ARG1, 7);
+1170     __ beq(CCR0, l_7);
+1171 
+1172     __ lwzx(tmp2, R3_ARG1, tmp3);
+1173     __ addi(R5_ARG3, R5_ARG3, -4);
+1174     __ stwx(tmp2, R4_ARG2, tmp3);
+1175     { // FasterArrayCopy
+1176       __ addi(R3_ARG1, R3_ARG1, 4);
+1177       __ addi(R4_ARG2, R4_ARG2, 4);
+1178     }
+1179     __ bind(l_7);
+1180 
+1181     { // FasterArrayCopy
+1182       __ cmpwi(CCR0, R5_ARG3, 31);
+1183       __ ble(CCR0, l_6); // copy 2 at a time if less than 32 elements remain
+1184 
+1185       __ srdi(tmp1, R5_ARG3, 5);
+1186       __ andi_(R5_ARG3, R5_ARG3, 31);
+1187       __ mtctr(tmp1);
+1188 
+1189       __ bind(l_8);
+1190       // Use unrolled version for mass copying (copy 32 elements a time)
+1191       // Load feeding store gets zero latency on Power6, however not on Power5.
+1192       // Therefore, the following sequence is made for the good of both.
+1193       __ ld(tmp1, 0, R3_ARG1);
+1194       __ ld(tmp2, 8, R3_ARG1);
+1195       __ ld(tmp3, 16, R3_ARG1);
+1196       __ ld(tmp4, 24, R3_ARG1);
+1197       __ std(tmp1, 0, R4_ARG2);
+1198       __ std(tmp2, 8, R4_ARG2);
+1199       __ std(tmp3, 16, R4_ARG2);
+1200       __ std(tmp4, 24, R4_ARG2);
+1201       __ addi(R3_ARG1, R3_ARG1, 32);
+1202       __ addi(R4_ARG2, R4_ARG2, 32);
+1203       __ bdnz(l_8);
+1204     }
+1205 
+1206     __ bind(l_6);
+1207 
+1208     // copy 4 elements at a time
+1209     __ cmpwi(CCR0, R5_ARG3, 4);
+1210     __ blt(CCR0, l_1);
+1211     __ srdi(tmp1, R5_ARG3, 2);
+1212     __ mtctr(tmp1); // is &gt; 0
+1213     __ andi_(R5_ARG3, R5_ARG3, 3);
+1214 
+1215     { // FasterArrayCopy
+1216       __ addi(R3_ARG1, R3_ARG1, -4);
+1217       __ addi(R4_ARG2, R4_ARG2, -4);
+1218       __ bind(l_3);
+1219       __ lwzu(tmp2, 4, R3_ARG1);
+1220       __ stwu(tmp2, 4, R4_ARG2);
+1221       __ bdnz(l_3);
+1222       __ addi(R3_ARG1, R3_ARG1, 4);
+1223       __ addi(R4_ARG2, R4_ARG2, 4);
+1224     }
+1225 
+1226     // do single element copy
+1227     __ bind(l_1);
+1228     __ cmpwi(CCR0, R5_ARG3, 0);
+1229     __ beq(CCR0, l_4);
+1230 
+1231     { // FasterArrayCopy
+1232       __ mtctr(R5_ARG3);
+1233       __ addi(R3_ARG1, R3_ARG1, -1);
+1234       __ addi(R4_ARG2, R4_ARG2, -1);
+1235 
+1236       __ bind(l_5);
+1237       __ lbzu(tmp2, 1, R3_ARG1);
+1238       __ stbu(tmp2, 1, R4_ARG2);
+1239       __ bdnz(l_5);
+1240     }
+1241 
+1242     __ bind(l_4);
+1243     __ blr();
+1244 
+1245     return start;
+1246   }
+1247 
+1248   // Generate stub for conjoint byte copy.  If "aligned" is true, the
+1249   // "from" and "to" addresses are assumed to be heapword aligned.
+1250   //
+1251   // Arguments for generated stub:
+1252   //      from:  R3_ARG1
+1253   //      to:    R4_ARG2
+1254   //      count: R5_ARG3 treated as signed
+1255   //
+1256   address generate_conjoint_byte_copy(bool aligned, const char * name) {
+1257     StubCodeMark mark(this, "StubRoutines", name);
+1258     address start = __ function_entry();
+1259 
+1260     Register tmp1 = R6_ARG4;
+1261     Register tmp2 = R7_ARG5;
+1262     Register tmp3 = R8_ARG6;
+1263 
+1264 #if defined(ABI_ELFv2)
+1265      address nooverlap_target = aligned ?
+1266        StubRoutines::arrayof_jbyte_disjoint_arraycopy() :
+1267        StubRoutines::jbyte_disjoint_arraycopy();
+1268 #else
+1269     address nooverlap_target = aligned ?
+1270       ((FunctionDescriptor*)StubRoutines::arrayof_jbyte_disjoint_arraycopy())-&gt;entry() :
+1271       ((FunctionDescriptor*)StubRoutines::jbyte_disjoint_arraycopy())-&gt;entry();
+1272 #endif
+1273 
+1274     array_overlap_test(nooverlap_target, 0);
+1275     // Do reverse copy. We assume the case of actual overlap is rare enough
+1276     // that we don't have to optimize it.
+1277     Label l_1, l_2;
+1278 
+1279     __ b(l_2);
+1280     __ bind(l_1);
+1281     __ stbx(tmp1, R4_ARG2, R5_ARG3);
+1282     __ bind(l_2);
+1283     __ addic_(R5_ARG3, R5_ARG3, -1);
+1284     __ lbzx(tmp1, R3_ARG1, R5_ARG3);
+1285     __ bge(CCR0, l_1);
+1286 
+1287     __ blr();
+1288 
+1289     return start;
+1290   }
+1291 
+1292   // Generate stub for disjoint short copy.  If "aligned" is true, the
+1293   // "from" and "to" addresses are assumed to be heapword aligned.
+1294   //
+1295   // Arguments for generated stub:
+1296   //      from:  R3_ARG1
+1297   //      to:    R4_ARG2
+1298   //  elm.count: R5_ARG3 treated as signed
+1299   //
+1300   // Strategy for aligned==true:
+1301   //
+1302   //  If length &lt;= 9:
+1303   //     1. copy 2 elements at a time (l_6)
+1304   //     2. copy last element if original element count was odd (l_1)
+1305   //
+1306   //  If length &gt; 9:
+1307   //     1. copy 4 elements at a time until less than 4 elements are left (l_7)
+1308   //     2. copy 2 elements at a time until less than 2 elements are left (l_6)
+1309   //     3. copy last element if one was left in step 2. (l_1)
+1310   //
+1311   //
+1312   // Strategy for aligned==false:
+1313   //
+1314   //  If length &lt;= 9: same as aligned==true case, but NOTE: load/stores
+1315   //                  can be unaligned (see comment below)
+1316   //
+1317   //  If length &gt; 9:
+1318   //     1. continue with step 6. if the alignment of from and to mod 4
+1319   //        is different.
+1320   //     2. align from and to to 4 bytes by copying 1 element if necessary
+1321   //     3. at l_2 from and to are 4 byte aligned; continue with
+1322   //        5. if they cannot be aligned to 8 bytes because they have
+1323   //        got different alignment mod 8.
+1324   //     4. at this point we know that both, from and to, have the same
+1325   //        alignment mod 8, now copy one element if necessary to get
+1326   //        8 byte alignment of from and to.
+1327   //     5. copy 4 elements at a time until less than 4 elements are
+1328   //        left; depending on step 3. all load/stores are aligned or
+1329   //        either all loads or all stores are unaligned.
+1330   //     6. copy 2 elements at a time until less than 2 elements are
+1331   //        left (l_6); arriving here from step 1., there is a chance
+1332   //        that all accesses are unaligned.
+1333   //     7. copy last element if one was left in step 6. (l_1)
+1334   //
+1335   //  There are unaligned data accesses using integer load/store
+1336   //  instructions in this stub. POWER allows such accesses.
+1337   //
+1338   //  According to the manuals (PowerISA_V2.06_PUBLIC, Book II,
+1339   //  Chapter 2: Effect of Operand Placement on Performance) unaligned
+1340   //  integer load/stores have good performance. Only unaligned
+1341   //  floating point load/stores can have poor performance.
+1342   //
+1343   //  TODO:
+1344   //
+1345   //  1. check if aligning the backbranch target of loops is beneficial
+1346   //
+1347   address generate_disjoint_short_copy(bool aligned, const char * name) {
+1348     StubCodeMark mark(this, "StubRoutines", name);
+1349 
+1350     Register tmp1 = R6_ARG4;
+1351     Register tmp2 = R7_ARG5;
+1352     Register tmp3 = R8_ARG6;
+1353     Register tmp4 = R9_ARG7;
+1354 
+1355     address start = __ function_entry();
+1356 
+1357       Label l_1, l_2, l_3, l_4, l_5, l_6, l_7, l_8;
+1358     // don't try anything fancy if arrays don't have many elements
+1359     __ li(tmp3, 0);
+1360     __ cmpwi(CCR0, R5_ARG3, 9);
+1361     __ ble(CCR0, l_6); // copy 2 at a time
+1362 
+1363     if (!aligned) {
+1364       __ xorr(tmp1, R3_ARG1, R4_ARG2);
+1365       __ andi_(tmp1, tmp1, 3);
+1366       __ bne(CCR0, l_6); // if arrays don't have the same alignment mod 4, do 2 element copy
+1367 
+1368       // At this point it is guaranteed that both, from and to have the same alignment mod 4.
+1369 
+1370       // Copy 1 element if necessary to align to 4 bytes.
+1371       __ andi_(tmp1, R3_ARG1, 3);
+1372       __ beq(CCR0, l_2);
+1373 
+1374       __ lhz(tmp2, 0, R3_ARG1);
+1375       __ addi(R3_ARG1, R3_ARG1, 2);
+1376       __ sth(tmp2, 0, R4_ARG2);
+1377       __ addi(R4_ARG2, R4_ARG2, 2);
+1378       __ addi(R5_ARG3, R5_ARG3, -1);
+1379       __ bind(l_2);
+1380 
+1381       // At this point the positions of both, from and to, are at least 4 byte aligned.
+1382 
+1383       // Copy 4 elements at a time.
+1384       // Align to 8 bytes, but only if both, from and to, have same alignment mod 8.
+1385       __ xorr(tmp2, R3_ARG1, R4_ARG2);
+1386       __ andi_(tmp1, tmp2, 7);
+1387       __ bne(CCR0, l_7); // not same alignment mod 8 -&gt; copy 4, either from or to will be unaligned
+1388 
+1389       // Copy a 2-element word if necessary to align to 8 bytes.
+1390       __ andi_(R0, R3_ARG1, 7);
+1391       __ beq(CCR0, l_7);
+1392 
+1393       __ lwzx(tmp2, R3_ARG1, tmp3);
+1394       __ addi(R5_ARG3, R5_ARG3, -2);
+1395       __ stwx(tmp2, R4_ARG2, tmp3);
+1396       { // FasterArrayCopy
+1397         __ addi(R3_ARG1, R3_ARG1, 4);
+1398         __ addi(R4_ARG2, R4_ARG2, 4);
+1399       }
+1400     }
+1401 
+1402     __ bind(l_7);
+1403 
+1404     // Copy 4 elements at a time; either the loads or the stores can
+1405     // be unaligned if aligned == false.
+1406 
+1407     { // FasterArrayCopy
+1408       __ cmpwi(CCR0, R5_ARG3, 15);
+1409       __ ble(CCR0, l_6); // copy 2 at a time if less than 16 elements remain
+1410 
+1411       __ srdi(tmp1, R5_ARG3, 4);
+1412       __ andi_(R5_ARG3, R5_ARG3, 15);
+1413       __ mtctr(tmp1);
+1414 
+1415       __ bind(l_8);
+1416       // Use unrolled version for mass copying (copy 16 elements a time).
+1417       // Load feeding store gets zero latency on Power6, however not on Power5.
+1418       // Therefore, the following sequence is made for the good of both.
+1419       __ ld(tmp1, 0, R3_ARG1);
+1420       __ ld(tmp2, 8, R3_ARG1);
+1421       __ ld(tmp3, 16, R3_ARG1);
+1422       __ ld(tmp4, 24, R3_ARG1);
+1423       __ std(tmp1, 0, R4_ARG2);
+1424       __ std(tmp2, 8, R4_ARG2);
+1425       __ std(tmp3, 16, R4_ARG2);
+1426       __ std(tmp4, 24, R4_ARG2);
+1427       __ addi(R3_ARG1, R3_ARG1, 32);
+1428       __ addi(R4_ARG2, R4_ARG2, 32);
+1429       __ bdnz(l_8);
+1430     }
+1431     __ bind(l_6);
+1432 
+1433     // copy 2 elements at a time
+1434     { // FasterArrayCopy
+1435       __ cmpwi(CCR0, R5_ARG3, 2);
+1436       __ blt(CCR0, l_1);
+1437       __ srdi(tmp1, R5_ARG3, 1);
+1438       __ andi_(R5_ARG3, R5_ARG3, 1);
+1439 
+1440       __ addi(R3_ARG1, R3_ARG1, -4);
+1441       __ addi(R4_ARG2, R4_ARG2, -4);
+1442       __ mtctr(tmp1);
+1443 
+1444       __ bind(l_3);
+1445       __ lwzu(tmp2, 4, R3_ARG1);
+1446       __ stwu(tmp2, 4, R4_ARG2);
+1447       __ bdnz(l_3);
+1448 
+1449       __ addi(R3_ARG1, R3_ARG1, 4);
+1450       __ addi(R4_ARG2, R4_ARG2, 4);
+1451     }
+1452 
+1453     // do single element copy
+1454     __ bind(l_1);
+1455     __ cmpwi(CCR0, R5_ARG3, 0);
+1456     __ beq(CCR0, l_4);
+1457 
+1458     { // FasterArrayCopy
+1459       __ mtctr(R5_ARG3);
+1460       __ addi(R3_ARG1, R3_ARG1, -2);
+1461       __ addi(R4_ARG2, R4_ARG2, -2);
+1462 
+1463       __ bind(l_5);
+1464       __ lhzu(tmp2, 2, R3_ARG1);
+1465       __ sthu(tmp2, 2, R4_ARG2);
+1466       __ bdnz(l_5);
+1467     }
+1468     __ bind(l_4);
+1469     __ blr();
+1470 
+1471     return start;
+1472   }
+1473 
+1474   // Generate stub for conjoint short copy.  If "aligned" is true, the
+1475   // "from" and "to" addresses are assumed to be heapword aligned.
+1476   //
+1477   // Arguments for generated stub:
+1478   //      from:  R3_ARG1
+1479   //      to:    R4_ARG2
+1480   //      count: R5_ARG3 treated as signed
+1481   //
+1482   address generate_conjoint_short_copy(bool aligned, const char * name) {
+1483     StubCodeMark mark(this, "StubRoutines", name);
+1484     address start = __ function_entry();
+1485 
+1486     Register tmp1 = R6_ARG4;
+1487     Register tmp2 = R7_ARG5;
+1488     Register tmp3 = R8_ARG6;
+1489 
+1490 #if defined(ABI_ELFv2)
+1491     address nooverlap_target = aligned ?
+1492         StubRoutines::arrayof_jshort_disjoint_arraycopy() :
+1493         StubRoutines::jshort_disjoint_arraycopy();
+1494 #else
+1495     address nooverlap_target = aligned ?
+1496         ((FunctionDescriptor*)StubRoutines::arrayof_jshort_disjoint_arraycopy())-&gt;entry() :
+1497         ((FunctionDescriptor*)StubRoutines::jshort_disjoint_arraycopy())-&gt;entry();
+1498 #endif
+1499 
+1500     array_overlap_test(nooverlap_target, 1);
+1501 
+1502     Label l_1, l_2;
+1503     __ sldi(tmp1, R5_ARG3, 1);
+1504     __ b(l_2);
+1505     __ bind(l_1);
+1506     __ sthx(tmp2, R4_ARG2, tmp1);
+1507     __ bind(l_2);
+1508     __ addic_(tmp1, tmp1, -2);
+1509     __ lhzx(tmp2, R3_ARG1, tmp1);
+1510     __ bge(CCR0, l_1);
+1511 
+1512     __ blr();
+1513 
+1514     return start;
+1515   }
+1516 
+1517   // Generate core code for disjoint int copy (and oop copy on 32-bit).  If "aligned"
+1518   // is true, the "from" and "to" addresses are assumed to be heapword aligned.
+1519   //
+1520   // Arguments:
+1521   //      from:  R3_ARG1
+1522   //      to:    R4_ARG2
+1523   //      count: R5_ARG3 treated as signed
+1524   //
+1525   void generate_disjoint_int_copy_core(bool aligned) {
+1526     Register tmp1 = R6_ARG4;
+1527     Register tmp2 = R7_ARG5;
+1528     Register tmp3 = R8_ARG6;
+1529     Register tmp4 = R0;
+1530 
+1531     Label l_1, l_2, l_3, l_4, l_5, l_6;
+1532     // for short arrays, just do single element copy
+1533     __ li(tmp3, 0);
+1534     __ cmpwi(CCR0, R5_ARG3, 5);
+1535     __ ble(CCR0, l_2);
+1536 
+1537     if (!aligned) {
+1538         // check if arrays have same alignment mod 8.
+1539         __ xorr(tmp1, R3_ARG1, R4_ARG2);
+1540         __ andi_(R0, tmp1, 7);
+1541         // Not the same alignment, but ld and std just need to be 4 byte aligned.
+1542         __ bne(CCR0, l_4); // to OR from is 8 byte aligned -&gt; copy 2 at a time
+1543 
+1544         // copy 1 element to align to and from on an 8 byte boundary
+1545         __ andi_(R0, R3_ARG1, 7);
+1546         __ beq(CCR0, l_4);
+1547 
+1548         __ lwzx(tmp2, R3_ARG1, tmp3);
+1549         __ addi(R5_ARG3, R5_ARG3, -1);
+1550         __ stwx(tmp2, R4_ARG2, tmp3);
+1551         { // FasterArrayCopy
+1552           __ addi(R3_ARG1, R3_ARG1, 4);
+1553           __ addi(R4_ARG2, R4_ARG2, 4);
+1554         }
+1555         __ bind(l_4);
+1556       }
+1557 
+1558     { // FasterArrayCopy
+1559       __ cmpwi(CCR0, R5_ARG3, 7);
+1560       __ ble(CCR0, l_2); // copy 1 at a time if less than 8 elements remain
+1561 
+1562       __ srdi(tmp1, R5_ARG3, 3);
+1563       __ andi_(R5_ARG3, R5_ARG3, 7);
+1564       __ mtctr(tmp1);
+1565 
+1566       __ bind(l_6);
+1567       // Use unrolled version for mass copying (copy 8 elements a time).
+1568       // Load feeding store gets zero latency on power6, however not on power 5.
+1569       // Therefore, the following sequence is made for the good of both.
+1570       __ ld(tmp1, 0, R3_ARG1);
+1571       __ ld(tmp2, 8, R3_ARG1);
+1572       __ ld(tmp3, 16, R3_ARG1);
+1573       __ ld(tmp4, 24, R3_ARG1);
+1574       __ std(tmp1, 0, R4_ARG2);
+1575       __ std(tmp2, 8, R4_ARG2);
+1576       __ std(tmp3, 16, R4_ARG2);
+1577       __ std(tmp4, 24, R4_ARG2);
+1578       __ addi(R3_ARG1, R3_ARG1, 32);
+1579       __ addi(R4_ARG2, R4_ARG2, 32);
+1580       __ bdnz(l_6);
+1581     }
+1582 
+1583     // copy 1 element at a time
+1584     __ bind(l_2);
+1585     __ cmpwi(CCR0, R5_ARG3, 0);
+1586     __ beq(CCR0, l_1);
+1587 
+1588     { // FasterArrayCopy
+1589       __ mtctr(R5_ARG3);
+1590       __ addi(R3_ARG1, R3_ARG1, -4);
+1591       __ addi(R4_ARG2, R4_ARG2, -4);
+1592 
+1593       __ bind(l_3);
+1594       __ lwzu(tmp2, 4, R3_ARG1);
+1595       __ stwu(tmp2, 4, R4_ARG2);
+1596       __ bdnz(l_3);
+1597     }
+1598 
+1599     __ bind(l_1);
+1600     return;
+1601   }
+1602 
+1603   // Generate stub for disjoint int copy.  If "aligned" is true, the
+1604   // "from" and "to" addresses are assumed to be heapword aligned.
+1605   //
+1606   // Arguments for generated stub:
+1607   //      from:  R3_ARG1
+1608   //      to:    R4_ARG2
+1609   //      count: R5_ARG3 treated as signed
+1610   //
+1611   address generate_disjoint_int_copy(bool aligned, const char * name) {
+1612     StubCodeMark mark(this, "StubRoutines", name);
+1613     address start = __ function_entry();
+1614     generate_disjoint_int_copy_core(aligned);
+1615     __ blr();
+1616     return start;
+1617   }
+1618 
+1619   // Generate core code for conjoint int copy (and oop copy on
+1620   // 32-bit).  If "aligned" is true, the "from" and "to" addresses
+1621   // are assumed to be heapword aligned.
+1622   //
+1623   // Arguments:
+1624   //      from:  R3_ARG1
+1625   //      to:    R4_ARG2
+1626   //      count: R5_ARG3 treated as signed
+1627   //
+1628   void generate_conjoint_int_copy_core(bool aligned) {
+1629     // Do reverse copy.  We assume the case of actual overlap is rare enough
+1630     // that we don't have to optimize it.
+1631 
+1632     Label l_1, l_2, l_3, l_4, l_5, l_6;
+1633 
+1634     Register tmp1 = R6_ARG4;
+1635     Register tmp2 = R7_ARG5;
+1636     Register tmp3 = R8_ARG6;
+1637     Register tmp4 = R0;
+1638 
+1639     { // FasterArrayCopy
+1640       __ cmpwi(CCR0, R5_ARG3, 0);
+1641       __ beq(CCR0, l_6);
+1642 
+1643       __ sldi(R5_ARG3, R5_ARG3, 2);
+1644       __ add(R3_ARG1, R3_ARG1, R5_ARG3);
+1645       __ add(R4_ARG2, R4_ARG2, R5_ARG3);
+1646       __ srdi(R5_ARG3, R5_ARG3, 2);
+1647 
+1648       __ cmpwi(CCR0, R5_ARG3, 7);
+1649       __ ble(CCR0, l_5); // copy 1 at a time if less than 8 elements remain
+1650 
+1651       __ srdi(tmp1, R5_ARG3, 3);
+1652       __ andi(R5_ARG3, R5_ARG3, 7);
+1653       __ mtctr(tmp1);
+1654 
+1655       __ bind(l_4);
+1656       // Use unrolled version for mass copying (copy 4 elements a time).
+1657       // Load feeding store gets zero latency on Power6, however not on Power5.
+1658       // Therefore, the following sequence is made for the good of both.
+1659       __ addi(R3_ARG1, R3_ARG1, -32);
+1660       __ addi(R4_ARG2, R4_ARG2, -32);
+1661       __ ld(tmp4, 24, R3_ARG1);
+1662       __ ld(tmp3, 16, R3_ARG1);
+1663       __ ld(tmp2, 8, R3_ARG1);
+1664       __ ld(tmp1, 0, R3_ARG1);
+1665       __ std(tmp4, 24, R4_ARG2);
+1666       __ std(tmp3, 16, R4_ARG2);
+1667       __ std(tmp2, 8, R4_ARG2);
+1668       __ std(tmp1, 0, R4_ARG2);
+1669       __ bdnz(l_4);
+1670 
+1671       __ cmpwi(CCR0, R5_ARG3, 0);
+1672       __ beq(CCR0, l_6);
+1673 
+1674       __ bind(l_5);
+1675       __ mtctr(R5_ARG3);
+1676       __ bind(l_3);
+1677       __ lwz(R0, -4, R3_ARG1);
+1678       __ stw(R0, -4, R4_ARG2);
+1679       __ addi(R3_ARG1, R3_ARG1, -4);
+1680       __ addi(R4_ARG2, R4_ARG2, -4);
+1681       __ bdnz(l_3);
+1682 
+1683       __ bind(l_6);
+1684     }
+1685   }
+1686 
+1687   // Generate stub for conjoint int copy.  If "aligned" is true, the
+1688   // "from" and "to" addresses are assumed to be heapword aligned.
+1689   //
+1690   // Arguments for generated stub:
+1691   //      from:  R3_ARG1
+1692   //      to:    R4_ARG2
+1693   //      count: R5_ARG3 treated as signed
+1694   //
+1695   address generate_conjoint_int_copy(bool aligned, const char * name) {
+1696     StubCodeMark mark(this, "StubRoutines", name);
+1697     address start = __ function_entry();
+1698 
+1699 #if defined(ABI_ELFv2)
+1700     address nooverlap_target = aligned ?
+1701       StubRoutines::arrayof_jint_disjoint_arraycopy() :
+1702       StubRoutines::jint_disjoint_arraycopy();
+1703 #else
+1704     address nooverlap_target = aligned ?
+1705       ((FunctionDescriptor*)StubRoutines::arrayof_jint_disjoint_arraycopy())-&gt;entry() :
+1706       ((FunctionDescriptor*)StubRoutines::jint_disjoint_arraycopy())-&gt;entry();
+1707 #endif
+1708 
+1709     array_overlap_test(nooverlap_target, 2);
+1710 
+1711     generate_conjoint_int_copy_core(aligned);
+1712 
+1713     __ blr();
+1714 
+1715     return start;
+1716   }
+1717 
+1718   // Generate core code for disjoint long copy (and oop copy on
+1719   // 64-bit).  If "aligned" is true, the "from" and "to" addresses
+1720   // are assumed to be heapword aligned.
+1721   //
+1722   // Arguments:
+1723   //      from:  R3_ARG1
+1724   //      to:    R4_ARG2
+1725   //      count: R5_ARG3 treated as signed
+1726   //
+1727   void generate_disjoint_long_copy_core(bool aligned) {
+1728     Register tmp1 = R6_ARG4;
+1729     Register tmp2 = R7_ARG5;
+1730     Register tmp3 = R8_ARG6;
+1731     Register tmp4 = R0;
+1732 
+1733     Label l_1, l_2, l_3, l_4;
+1734 
+1735     { // FasterArrayCopy
+1736       __ cmpwi(CCR0, R5_ARG3, 3);
+1737       __ ble(CCR0, l_3); // copy 1 at a time if less than 4 elements remain
+1738 
+1739       __ srdi(tmp1, R5_ARG3, 2);
+1740       __ andi_(R5_ARG3, R5_ARG3, 3);
+1741       __ mtctr(tmp1);
+1742 
+1743       __ bind(l_4);
+1744       // Use unrolled version for mass copying (copy 4 elements a time).
+1745       // Load feeding store gets zero latency on Power6, however not on Power5.
+1746       // Therefore, the following sequence is made for the good of both.
+1747       __ ld(tmp1, 0, R3_ARG1);
+1748       __ ld(tmp2, 8, R3_ARG1);
+1749       __ ld(tmp3, 16, R3_ARG1);
+1750       __ ld(tmp4, 24, R3_ARG1);
+1751       __ std(tmp1, 0, R4_ARG2);
+1752       __ std(tmp2, 8, R4_ARG2);
+1753       __ std(tmp3, 16, R4_ARG2);
+1754       __ std(tmp4, 24, R4_ARG2);
+1755       __ addi(R3_ARG1, R3_ARG1, 32);
+1756       __ addi(R4_ARG2, R4_ARG2, 32);
+1757       __ bdnz(l_4);
+1758     }
+1759 
+1760     // copy 1 element at a time
+1761     __ bind(l_3);
+1762     __ cmpwi(CCR0, R5_ARG3, 0);
+1763     __ beq(CCR0, l_1);
+1764 
+1765     { // FasterArrayCopy
+1766       __ mtctr(R5_ARG3);
+1767       __ addi(R3_ARG1, R3_ARG1, -8);
+1768       __ addi(R4_ARG2, R4_ARG2, -8);
+1769 
+1770       __ bind(l_2);
+1771       __ ldu(R0, 8, R3_ARG1);
+1772       __ stdu(R0, 8, R4_ARG2);
+1773       __ bdnz(l_2);
+1774 
+1775     }
+1776     __ bind(l_1);
+1777   }
+1778 
+1779   // Generate stub for disjoint long copy.  If "aligned" is true, the
+1780   // "from" and "to" addresses are assumed to be heapword aligned.
+1781   //
+1782   // Arguments for generated stub:
+1783   //      from:  R3_ARG1
+1784   //      to:    R4_ARG2
+1785   //      count: R5_ARG3 treated as signed
+1786   //
+1787   address generate_disjoint_long_copy(bool aligned, const char * name) {
+1788     StubCodeMark mark(this, "StubRoutines", name);
+1789     address start = __ function_entry();
+1790     generate_disjoint_long_copy_core(aligned);
+1791     __ blr();
+1792 
+1793     return start;
+1794   }
+1795 
+1796   // Generate core code for conjoint long copy (and oop copy on
+1797   // 64-bit).  If "aligned" is true, the "from" and "to" addresses
+1798   // are assumed to be heapword aligned.
+1799   //
+1800   // Arguments:
+1801   //      from:  R3_ARG1
+1802   //      to:    R4_ARG2
+1803   //      count: R5_ARG3 treated as signed
+1804   //
+1805   void generate_conjoint_long_copy_core(bool aligned) {
+1806     Register tmp1 = R6_ARG4;
+1807     Register tmp2 = R7_ARG5;
+1808     Register tmp3 = R8_ARG6;
+1809     Register tmp4 = R0;
+1810 
+1811     Label l_1, l_2, l_3, l_4, l_5;
+1812 
+1813     __ cmpwi(CCR0, R5_ARG3, 0);
+1814     __ beq(CCR0, l_1);
+1815 
+1816     { // FasterArrayCopy
+1817       __ sldi(R5_ARG3, R5_ARG3, 3);
+1818       __ add(R3_ARG1, R3_ARG1, R5_ARG3);
+1819       __ add(R4_ARG2, R4_ARG2, R5_ARG3);
+1820       __ srdi(R5_ARG3, R5_ARG3, 3);
+1821 
+1822       __ cmpwi(CCR0, R5_ARG3, 3);
+1823       __ ble(CCR0, l_5); // copy 1 at a time if less than 4 elements remain
+1824 
+1825       __ srdi(tmp1, R5_ARG3, 2);
+1826       __ andi(R5_ARG3, R5_ARG3, 3);
+1827       __ mtctr(tmp1);
+1828 
+1829       __ bind(l_4);
+1830       // Use unrolled version for mass copying (copy 4 elements a time).
+1831       // Load feeding store gets zero latency on Power6, however not on Power5.
+1832       // Therefore, the following sequence is made for the good of both.
+1833       __ addi(R3_ARG1, R3_ARG1, -32);
+1834       __ addi(R4_ARG2, R4_ARG2, -32);
+1835       __ ld(tmp4, 24, R3_ARG1);
+1836       __ ld(tmp3, 16, R3_ARG1);
+1837       __ ld(tmp2, 8, R3_ARG1);
+1838       __ ld(tmp1, 0, R3_ARG1);
+1839       __ std(tmp4, 24, R4_ARG2);
+1840       __ std(tmp3, 16, R4_ARG2);
+1841       __ std(tmp2, 8, R4_ARG2);
+1842       __ std(tmp1, 0, R4_ARG2);
+1843       __ bdnz(l_4);
+1844 
+1845       __ cmpwi(CCR0, R5_ARG3, 0);
+1846       __ beq(CCR0, l_1);
+1847 
+1848       __ bind(l_5);
+1849       __ mtctr(R5_ARG3);
+1850       __ bind(l_3);
+1851       __ ld(R0, -8, R3_ARG1);
+1852       __ std(R0, -8, R4_ARG2);
+1853       __ addi(R3_ARG1, R3_ARG1, -8);
+1854       __ addi(R4_ARG2, R4_ARG2, -8);
+1855       __ bdnz(l_3);
+1856 
+1857     }
+1858     __ bind(l_1);
+1859   }
+1860 
+1861   // Generate stub for conjoint long copy.  If "aligned" is true, the
+1862   // "from" and "to" addresses are assumed to be heapword aligned.
+1863   //
+1864   // Arguments for generated stub:
+1865   //      from:  R3_ARG1
+1866   //      to:    R4_ARG2
+1867   //      count: R5_ARG3 treated as signed
+1868   //
+1869   address generate_conjoint_long_copy(bool aligned, const char * name) {
+1870     StubCodeMark mark(this, "StubRoutines", name);
+1871     address start = __ function_entry();
+1872 
+1873 #if defined(ABI_ELFv2)
+1874     address nooverlap_target = aligned ?
+1875       StubRoutines::arrayof_jlong_disjoint_arraycopy() :
+1876       StubRoutines::jlong_disjoint_arraycopy();
+1877 #else
+1878     address nooverlap_target = aligned ?
+1879       ((FunctionDescriptor*)StubRoutines::arrayof_jlong_disjoint_arraycopy())-&gt;entry() :
+1880       ((FunctionDescriptor*)StubRoutines::jlong_disjoint_arraycopy())-&gt;entry();
+1881 #endif
+1882 
+1883     array_overlap_test(nooverlap_target, 3);
+1884     generate_conjoint_long_copy_core(aligned);
+1885 
+1886     __ blr();
+1887 
+1888     return start;
+1889   }
+1890 
+1891   // Generate stub for conjoint oop copy.  If "aligned" is true, the
+1892   // "from" and "to" addresses are assumed to be heapword aligned.
+1893   //
+1894   // Arguments for generated stub:
+1895   //      from:  R3_ARG1
+1896   //      to:    R4_ARG2
+1897   //      count: R5_ARG3 treated as signed
+1898   //      dest_uninitialized: G1 support
+1899   //
+1900   address generate_conjoint_oop_copy(bool aligned, const char * name, bool dest_uninitialized) {
+1901     StubCodeMark mark(this, "StubRoutines", name);
+1902 
+1903     address start = __ function_entry();
+1904 
+1905 #if defined(ABI_ELFv2)
+1906     address nooverlap_target = aligned ?
+1907       StubRoutines::arrayof_oop_disjoint_arraycopy() :
+1908       StubRoutines::oop_disjoint_arraycopy();
+1909 #else
+1910     address nooverlap_target = aligned ?
+1911       ((FunctionDescriptor*)StubRoutines::arrayof_oop_disjoint_arraycopy())-&gt;entry() :
+1912       ((FunctionDescriptor*)StubRoutines::oop_disjoint_arraycopy())-&gt;entry();
+1913 #endif
+1914 
+1915     gen_write_ref_array_pre_barrier(R3_ARG1, R4_ARG2, R5_ARG3, dest_uninitialized, R9_ARG7);
+1916 
+1917     // Save arguments.
+1918     __ mr(R9_ARG7, R4_ARG2);
+1919     __ mr(R10_ARG8, R5_ARG3);
+1920 
+1921     if (UseCompressedOops) {
+1922       array_overlap_test(nooverlap_target, 2);
+1923       generate_conjoint_int_copy_core(aligned);
+1924     } else {
+1925       array_overlap_test(nooverlap_target, 3);
+1926       generate_conjoint_long_copy_core(aligned);
+1927     }
+1928 
+1929     gen_write_ref_array_post_barrier(R9_ARG7, R10_ARG8, R11_scratch1, /*branchToEnd*/ false);
+1930     return start;
+1931   }
+1932 
+1933   // Generate stub for disjoint oop copy.  If "aligned" is true, the
+1934   // "from" and "to" addresses are assumed to be heapword aligned.
+1935   //
+1936   // Arguments for generated stub:
+1937   //      from:  R3_ARG1
+1938   //      to:    R4_ARG2
+1939   //      count: R5_ARG3 treated as signed
+1940   //      dest_uninitialized: G1 support
+1941   //
+1942   address generate_disjoint_oop_copy(bool aligned, const char * name, bool dest_uninitialized) {
+1943     StubCodeMark mark(this, "StubRoutines", name);
+1944     address start = __ function_entry();
+1945 
+1946     gen_write_ref_array_pre_barrier(R3_ARG1, R4_ARG2, R5_ARG3, dest_uninitialized, R9_ARG7);
+1947 
+1948     // save some arguments, disjoint_long_copy_core destroys them.
+1949     // needed for post barrier
+1950     __ mr(R9_ARG7, R4_ARG2);
+1951     __ mr(R10_ARG8, R5_ARG3);
+1952 
+1953     if (UseCompressedOops) {
+1954       generate_disjoint_int_copy_core(aligned);
+1955     } else {
+1956       generate_disjoint_long_copy_core(aligned);
+1957     }
+1958 
+1959     gen_write_ref_array_post_barrier(R9_ARG7, R10_ARG8, R11_scratch1, /*branchToEnd*/ false);
+1960 
+1961     return start;
+1962   }
+1963 
+1964   void generate_arraycopy_stubs() {
+1965     // Note: the disjoint stubs must be generated first, some of
+1966     // the conjoint stubs use them.
+1967 
+1968     // non-aligned disjoint versions
+1969     StubRoutines::_jbyte_disjoint_arraycopy       = generate_disjoint_byte_copy(false, "jbyte_disjoint_arraycopy");
+1970     StubRoutines::_jshort_disjoint_arraycopy      = generate_disjoint_short_copy(false, "jshort_disjoint_arraycopy");
+1971     StubRoutines::_jint_disjoint_arraycopy        = generate_disjoint_int_copy(false, "jint_disjoint_arraycopy");
+1972     StubRoutines::_jlong_disjoint_arraycopy       = generate_disjoint_long_copy(false, "jlong_disjoint_arraycopy");
+1973     StubRoutines::_oop_disjoint_arraycopy         = generate_disjoint_oop_copy(false, "oop_disjoint_arraycopy", false);
+1974     StubRoutines::_oop_disjoint_arraycopy_uninit  = generate_disjoint_oop_copy(false, "oop_disjoint_arraycopy_uninit", true);
+1975 
+1976     // aligned disjoint versions
+1977     StubRoutines::_arrayof_jbyte_disjoint_arraycopy      = generate_disjoint_byte_copy(true, "arrayof_jbyte_disjoint_arraycopy");
+1978     StubRoutines::_arrayof_jshort_disjoint_arraycopy     = generate_disjoint_short_copy(true, "arrayof_jshort_disjoint_arraycopy");
+1979     StubRoutines::_arrayof_jint_disjoint_arraycopy       = generate_disjoint_int_copy(true, "arrayof_jint_disjoint_arraycopy");
+1980     StubRoutines::_arrayof_jlong_disjoint_arraycopy      = generate_disjoint_long_copy(true, "arrayof_jlong_disjoint_arraycopy");
+1981     StubRoutines::_arrayof_oop_disjoint_arraycopy        = generate_disjoint_oop_copy(true, "arrayof_oop_disjoint_arraycopy", false);
+1982     StubRoutines::_arrayof_oop_disjoint_arraycopy_uninit = generate_disjoint_oop_copy(true, "oop_disjoint_arraycopy_uninit", true);
+1983 
+1984     // non-aligned conjoint versions
+1985     StubRoutines::_jbyte_arraycopy      = generate_conjoint_byte_copy(false, "jbyte_arraycopy");
+1986     StubRoutines::_jshort_arraycopy     = generate_conjoint_short_copy(false, "jshort_arraycopy");
+1987     StubRoutines::_jint_arraycopy       = generate_conjoint_int_copy(false, "jint_arraycopy");
+1988     StubRoutines::_jlong_arraycopy      = generate_conjoint_long_copy(false, "jlong_arraycopy");
+1989     StubRoutines::_oop_arraycopy        = generate_conjoint_oop_copy(false, "oop_arraycopy", false);
+1990     StubRoutines::_oop_arraycopy_uninit = generate_conjoint_oop_copy(false, "oop_arraycopy_uninit", true);
+1991 
+1992     // aligned conjoint versions
+1993     StubRoutines::_arrayof_jbyte_arraycopy      = generate_conjoint_byte_copy(true, "arrayof_jbyte_arraycopy");
+1994     StubRoutines::_arrayof_jshort_arraycopy     = generate_conjoint_short_copy(true, "arrayof_jshort_arraycopy");
+1995     StubRoutines::_arrayof_jint_arraycopy       = generate_conjoint_int_copy(true, "arrayof_jint_arraycopy");
+1996     StubRoutines::_arrayof_jlong_arraycopy      = generate_conjoint_long_copy(true, "arrayof_jlong_arraycopy");
+1997     StubRoutines::_arrayof_oop_arraycopy        = generate_conjoint_oop_copy(true, "arrayof_oop_arraycopy", false);
+1998     StubRoutines::_arrayof_oop_arraycopy_uninit = generate_conjoint_oop_copy(true, "arrayof_oop_arraycopy", true);
+1999 
+2000     // fill routines
+2001     StubRoutines::_jbyte_fill          = generate_fill(T_BYTE,  false, "jbyte_fill");
+2002     StubRoutines::_jshort_fill         = generate_fill(T_SHORT, false, "jshort_fill");
+2003     StubRoutines::_jint_fill           = generate_fill(T_INT,   false, "jint_fill");
+2004     StubRoutines::_arrayof_jbyte_fill  = generate_fill(T_BYTE,  true, "arrayof_jbyte_fill");
+2005     StubRoutines::_arrayof_jshort_fill = generate_fill(T_SHORT, true, "arrayof_jshort_fill");
+2006     StubRoutines::_arrayof_jint_fill   = generate_fill(T_INT,   true, "arrayof_jint_fill");
+2007   }
+2008 
+2009   // Safefetch stubs.
+2010   void generate_safefetch(const char* name, int size, address* entry, address* fault_pc, address* continuation_pc) {
+2011     // safefetch signatures:
+2012     //   int      SafeFetch32(int*      adr, int      errValue);
+2013     //   intptr_t SafeFetchN (intptr_t* adr, intptr_t errValue);
+2014     //
+2015     // arguments:
+2016     //   R3_ARG1 = adr
+2017     //   R4_ARG2 = errValue
+2018     //
+2019     // result:
+2020     //   R3_RET  = *adr or errValue
+2021 
+2022     StubCodeMark mark(this, "StubRoutines", name);
+2023 
+2024     // Entry point, pc or function descriptor.
+2025     *entry = __ function_entry();
+2026 
+2027     // Load *adr into R4_ARG2, may fault.
+2028     *fault_pc = __ pc();
+2029     switch (size) {
+2030       case 4:
+2031         // int32_t, signed extended
+2032         __ lwa(R4_ARG2, 0, R3_ARG1);
+2033         break;
+2034       case 8:
+2035         // int64_t
+2036         __ ld(R4_ARG2, 0, R3_ARG1);
+2037         break;
+2038       default:
+2039         ShouldNotReachHere();
+2040     }
+2041 
+2042     // return errValue or *adr
+2043     *continuation_pc = __ pc();
+2044     __ mr(R3_RET, R4_ARG2);
+2045     __ blr();
+2046   }
+2047 
+2048   // Initialization
+2049   void generate_initial() {
+2050     // Generates all stubs and initializes the entry points
+2051 
+2052     // Entry points that exist in all platforms.
+2053     // Note: This is code that could be shared among different platforms - however the
+2054     // benefit seems to be smaller than the disadvantage of having a
+2055     // much more complicated generator structure. See also comment in
+2056     // stubRoutines.hpp.
+2057 
+2058     StubRoutines::_forward_exception_entry          = generate_forward_exception();
+2059     StubRoutines::_call_stub_entry                  = generate_call_stub(StubRoutines::_call_stub_return_address);
+2060     StubRoutines::_catch_exception_entry            = generate_catch_exception();
+2061 
+2062     // Build this early so it's available for the interpreter.
+2063     StubRoutines::_throw_StackOverflowError_entry   =
+2064       generate_throw_exception("StackOverflowError throw_exception",
+2065                                CAST_FROM_FN_PTR(address, SharedRuntime::throw_StackOverflowError), false);
+2066   }
+2067 
+2068   void generate_all() {
+2069     // Generates all stubs and initializes the entry points
+2070 
+2071     // These entry points require SharedInfo::stack0 to be set up in
+2072     // non-core builds
+2073     StubRoutines::_throw_AbstractMethodError_entry         = generate_throw_exception("AbstractMethodError throw_exception",          CAST_FROM_FN_PTR(address, SharedRuntime::throw_AbstractMethodError),  false);
+2074     // Handle IncompatibleClassChangeError in itable stubs.
+2075     StubRoutines::_throw_IncompatibleClassChangeError_entry= generate_throw_exception("IncompatibleClassChangeError throw_exception", CAST_FROM_FN_PTR(address, SharedRuntime::throw_IncompatibleClassChangeError),  false);
+2076     StubRoutines::_throw_NullPointerException_at_call_entry= generate_throw_exception("NullPointerException at call throw_exception", CAST_FROM_FN_PTR(address, SharedRuntime::throw_NullPointerException_at_call), false);
+2077 
+2078     StubRoutines::_handler_for_unsafe_access_entry         = generate_handler_for_unsafe_access();
+2079 
+2080     // support for verify_oop (must happen after universe_init)
+2081     StubRoutines::_verify_oop_subroutine_entry             = generate_verify_oop();
+2082 
+2083     // arraycopy stubs used by compilers
+2084     generate_arraycopy_stubs();
+2085 
+2086     if (UseAESIntrinsics) {
+2087       guarantee(!UseAESIntrinsics, "not yet implemented.");
+2088     }
+2089 
+2090     if (UseObjectLayoutIntrinsics) {
+2091       guarantee(!UseObjectLayoutIntrinsics, "not yet implemented.");
+2092     }
+2093 
+2094     // Safefetch stubs.
+2095     generate_safefetch("SafeFetch32", sizeof(int),     &amp;StubRoutines::_safefetch32_entry,
+2096                                                        &amp;StubRoutines::_safefetch32_fault_pc,
+2097                                                        &amp;StubRoutines::_safefetch32_continuation_pc);
+2098     generate_safefetch("SafeFetchN", sizeof(intptr_t), &amp;StubRoutines::_safefetchN_entry,
+2099                                                        &amp;StubRoutines::_safefetchN_fault_pc,
+2100                                                        &amp;StubRoutines::_safefetchN_continuation_pc);
+2101   }
+2102 
+2103  public:
+2104   StubGenerator(CodeBuffer* code, bool all) : StubCodeGenerator(code) {
+2105     // replace the standard masm with a special one:
+2106     _masm = new MacroAssembler(code);
+2107     if (all) {
+2108       generate_all();
+2109     } else {
+2110       generate_initial();
+2111     }
+2112   }
+2113 };
+2114 
+2115 void StubGenerator_generate(CodeBuffer* code, bool all) {
+2116   StubGenerator g(code, all);
+2117 }
+</pre></body></html>

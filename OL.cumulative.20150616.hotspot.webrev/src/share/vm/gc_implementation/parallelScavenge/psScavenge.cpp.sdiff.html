@@ -1,0 +1,489 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/gc_implementation/parallelScavenge </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 109   }
+ 110   virtual void do_oop(oop* p)       { PSKeepAliveClosure::do_oop_work(p); }
+ 111   virtual void do_oop(narrowOop* p) { PSKeepAliveClosure::do_oop_work(p); }
+ 112 };
+ 113 
+ 114 class PSEvacuateFollowersClosure: public VoidClosure {
+ 115  private:
+ 116   PSPromotionManager* _promotion_manager;
+ 117  public:
+ 118   PSEvacuateFollowersClosure(PSPromotionManager* pm) : _promotion_manager(pm) {}
+ 119 
+ 120   virtual void do_void() {
+ 121     assert(_promotion_manager != NULL, "Sanity");
+ 122     _promotion_manager-&gt;drain_stacks(true);
+ 123     guarantee(_promotion_manager-&gt;stacks_empty(),
+ 124               "stacks should be empty at this point");
+ 125   }
+ 126 };
+ 127 
+ 128 class PSPromotionFailedClosure : public ObjectClosure {
+
+ 129   virtual void do_object(oop obj) {
+ 130     if (obj-&gt;is_forwarded()) {
+<span class="changed"> 131       obj-&gt;init_mark();</span>
+ 132     }
+ 133   }
+ 134 };
+ 135 
+ 136 class PSRefProcTaskProxy: public GCTask {
+ 137   typedef AbstractRefProcTaskExecutor::ProcessTask ProcessTask;
+ 138   ProcessTask &amp; _rp_task;
+ 139   uint          _work_id;
+ 140 public:
+ 141   PSRefProcTaskProxy(ProcessTask &amp; rp_task, uint work_id)
+ 142     : _rp_task(rp_task),
+ 143       _work_id(work_id)
+ 144   { }
+ 145 
+ 146 private:
+ 147   virtual char* name() { return (char *)"Process referents by policy in parallel"; }
+ 148   virtual void do_it(GCTaskManager* manager, uint which);
+ 149 };
+ 150 
+ 151 void PSRefProcTaskProxy::do_it(GCTaskManager* manager, uint which)
+
+</pre><hr></hr><pre>
+ 312   heap-&gt;trace_heap_before_gc(&amp;_gc_tracer);
+ 313 
+ 314   assert(!NeverTenure || _tenuring_threshold == markOopDesc::max_age + 1, "Sanity");
+ 315   assert(!AlwaysTenure || _tenuring_threshold == 0, "Sanity");
+ 316 
+ 317   size_t prev_used = heap-&gt;used();
+ 318 
+ 319   // Fill in TLABs
+ 320   heap-&gt;accumulate_statistics_all_tlabs();
+ 321   heap-&gt;ensure_parsability(true);  // retire TLABs
+ 322 
+ 323   if (VerifyBeforeGC &amp;&amp; heap-&gt;total_collections() &gt;= VerifyGCStartAt) {
+ 324     HandleMark hm;  // Discard invalid handles created during verification
+ 325     Universe::verify(" VerifyBeforeGC:");
+ 326   }
+ 327 
+ 328   {
+ 329     ResourceMark rm;
+ 330     HandleMark hm;
+ 331 
+
+ 332     TraceCPUTime tcpu(PrintGCDetails, true, gclog_or_tty);
+ 333     GCTraceTime t1(GCCauseString("GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer.gc_id());
+ 334     TraceCollectorStats tcs(counters());
+ 335     TraceMemoryManagerStats tms(false /* not full GC */,gc_cause);
+ 336 
+<span class="changed"> 337     if (TraceGen0Time) accumulated_time()-&gt;start();</span>
+
+
+
+
+
+
+ 338 
+ 339     // Let the size policy know we're starting
+ 340     size_policy-&gt;minor_collection_begin();
+ 341 
+ 342     // Verify the object start arrays.
+ 343     if (VerifyObjectStartArray &amp;&amp;
+ 344         VerifyBeforeGC) {
+ 345       old_gen-&gt;verify_object_start_array();
+ 346     }
+ 347 
+ 348     // Verify no unmarked old-&gt;young roots
+ 349     if (VerifyRememberedSets) {
+ 350       CardTableExtension::verify_all_young_refs_imprecise();
+ 351     }
+ 352 
+ 353     if (!ScavengeWithObjectsInToSpace) {
+ 354       assert(young_gen-&gt;to_space()-&gt;is_empty(),
+ 355              "Attempt to scavenge with live objects in to_space");
+ 356       young_gen-&gt;to_space()-&gt;clear(SpaceDecorator::Mangle);
+ 357     } else if (ZapUnusedHeapArea) {
+
+</pre><hr></hr><pre>
+ 419       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::management));
+ 420       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::system_dictionary));
+ 421       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::class_loader_data));
+ 422       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::jvmti));
+ 423       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::code_cache));
+ 424 
+ 425       ParallelTaskTerminator terminator(
+ 426         active_workers,
+ 427                   (TaskQueueSetSuper*) promotion_manager-&gt;stack_array_depth());
+ 428       if (active_workers &gt; 1) {
+ 429         for (uint j = 0; j &lt; active_workers; j++) {
+ 430           q-&gt;enqueue(new StealTask(&amp;terminator));
+ 431         }
+ 432       }
+ 433 
+ 434       gc_task_manager()-&gt;execute_and_wait(q);
+ 435     }
+ 436 
+ 437     scavenge_midpoint.update();
+ 438 
+<span class="changed"> 439     // Process reference objects discovered during scavenge</span>
+
+
+
+
+ 440     {
+ 441       GCTraceTime tm("References", false, false, &amp;_gc_timer, _gc_tracer.gc_id());
+ 442 
+ 443       reference_processor()-&gt;setup_policy(false); // not always_clear
+ 444       reference_processor()-&gt;set_active_mt_degree(active_workers);
+ 445       PSKeepAliveClosure keep_alive(promotion_manager);
+ 446       PSEvacuateFollowersClosure evac_followers(promotion_manager);
+ 447       ReferenceProcessorStats stats;
+ 448       if (reference_processor()-&gt;processing_is_mt()) {
+ 449         PSRefProcTaskExecutor task_executor;
+ 450         stats = reference_processor()-&gt;process_discovered_references(
+ 451           &amp;_is_alive_closure, &amp;keep_alive, &amp;evac_followers, &amp;task_executor,
+ 452           &amp;_gc_timer, _gc_tracer.gc_id());
+ 453       } else {
+ 454         stats = reference_processor()-&gt;process_discovered_references(
+ 455           &amp;_is_alive_closure, &amp;keep_alive, &amp;evac_followers, NULL, &amp;_gc_timer, _gc_tracer.gc_id());
+ 456       }
+ 457 
+ 458       _gc_tracer.report_gc_reference_stats(stats);
+ 459 
+
+</pre><hr></hr><pre>
+ 639     {
+ 640       GCTraceTime tm("Prune Scavenge Root Methods", false, false, &amp;_gc_timer, _gc_tracer.gc_id());
+ 641 
+ 642       CodeCache::prune_scavenge_root_nmethods();
+ 643     }
+ 644 
+ 645     // Re-verify object start arrays
+ 646     if (VerifyObjectStartArray &amp;&amp;
+ 647         VerifyAfterGC) {
+ 648       old_gen-&gt;verify_object_start_array();
+ 649     }
+ 650 
+ 651     // Verify all old -&gt; young cards are now precise
+ 652     if (VerifyRememberedSets) {
+ 653       // Precise verification will give false positives. Until this is fixed,
+ 654       // use imprecise verification.
+ 655       // CardTableExtension::verify_all_young_refs_precise();
+ 656       CardTableExtension::verify_all_young_refs_imprecise();
+ 657     }
+ 658 
+<span class="changed"> 659     if (TraceGen0Time) accumulated_time()-&gt;stop();</span>
+
+
+
+
+
+
+ 660 
+ 661     if (PrintGC) {
+ 662       if (PrintGCDetails) {
+ 663         // Don't print a GC timestamp here.  This is after the GC so
+ 664         // would be confusing.
+ 665         young_gen-&gt;print_used_change(young_gen_used_before);
+ 666       }
+ 667       heap-&gt;print_heap_change(prev_used);
+ 668     }
+ 669 
+ 670     // Track memory usage and detect low memory
+ 671     MemoryService::track_memory_usage();
+ 672     heap-&gt;update_counters();
+ 673 
+ 674     gc_task_manager()-&gt;release_idle_workers();
+ 675   }
+ 676 
+ 677   if (VerifyAfterGC &amp;&amp; heap-&gt;total_collections() &gt;= VerifyGCStartAt) {
+ 678     HandleMark hm;  // Discard invalid handles created during verification
+ 679     Universe::verify(" VerifyAfterGC:");
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 109   }
+ 110   virtual void do_oop(oop* p)       { PSKeepAliveClosure::do_oop_work(p); }
+ 111   virtual void do_oop(narrowOop* p) { PSKeepAliveClosure::do_oop_work(p); }
+ 112 };
+ 113 
+ 114 class PSEvacuateFollowersClosure: public VoidClosure {
+ 115  private:
+ 116   PSPromotionManager* _promotion_manager;
+ 117  public:
+ 118   PSEvacuateFollowersClosure(PSPromotionManager* pm) : _promotion_manager(pm) {}
+ 119 
+ 120   virtual void do_void() {
+ 121     assert(_promotion_manager != NULL, "Sanity");
+ 122     _promotion_manager-&gt;drain_stacks(true);
+ 123     guarantee(_promotion_manager-&gt;stacks_empty(),
+ 124               "stacks should be empty at this point");
+ 125   }
+ 126 };
+ 127 
+ 128 class PSPromotionFailedClosure : public ObjectClosure {
+<span class="new"> 129  public:</span>
+ 130   virtual void do_object(oop obj) {
+ 131     if (obj-&gt;is_forwarded()) {
+<span class="changed"> 132       obj-&gt;convert_to_unmarked();</span>
+ 133     }
+ 134   }
+ 135 };
+ 136 
+ 137 class PSRefProcTaskProxy: public GCTask {
+ 138   typedef AbstractRefProcTaskExecutor::ProcessTask ProcessTask;
+ 139   ProcessTask &amp; _rp_task;
+ 140   uint          _work_id;
+ 141 public:
+ 142   PSRefProcTaskProxy(ProcessTask &amp; rp_task, uint work_id)
+ 143     : _rp_task(rp_task),
+ 144       _work_id(work_id)
+ 145   { }
+ 146 
+ 147 private:
+ 148   virtual char* name() { return (char *)"Process referents by policy in parallel"; }
+ 149   virtual void do_it(GCTaskManager* manager, uint which);
+ 150 };
+ 151 
+ 152 void PSRefProcTaskProxy::do_it(GCTaskManager* manager, uint which)
+
+</pre><hr></hr><pre>
+ 313   heap-&gt;trace_heap_before_gc(&amp;_gc_tracer);
+ 314 
+ 315   assert(!NeverTenure || _tenuring_threshold == markOopDesc::max_age + 1, "Sanity");
+ 316   assert(!AlwaysTenure || _tenuring_threshold == 0, "Sanity");
+ 317 
+ 318   size_t prev_used = heap-&gt;used();
+ 319 
+ 320   // Fill in TLABs
+ 321   heap-&gt;accumulate_statistics_all_tlabs();
+ 322   heap-&gt;ensure_parsability(true);  // retire TLABs
+ 323 
+ 324   if (VerifyBeforeGC &amp;&amp; heap-&gt;total_collections() &gt;= VerifyGCStartAt) {
+ 325     HandleMark hm;  // Discard invalid handles created during verification
+ 326     Universe::verify(" VerifyBeforeGC:");
+ 327   }
+ 328 
+ 329   {
+ 330     ResourceMark rm;
+ 331     HandleMark hm;
+ 332 
+<span class="new"> 333     gclog_or_tty-&gt;date_stamp(PrintGC &amp;&amp; PrintGCDateStamps);</span>
+ 334     TraceCPUTime tcpu(PrintGCDetails, true, gclog_or_tty);
+ 335     GCTraceTime t1(GCCauseString("GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer.gc_id());
+ 336     TraceCollectorStats tcs(counters());
+ 337     TraceMemoryManagerStats tms(false /* not full GC */,gc_cause);
+ 338 
+<span class="changed"> 339     if (TraceGen0Time) {</span>
+<span class="changed"> 340       accumulated_time()-&gt;start();</span>
+<span class="changed"> 341     }</span>
+<span class="changed"> 342 </span>
+<span class="changed"> 343     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="changed"> 344       tty-&gt;print_cr("PSScavenge::invoke_no_policy: Starting minor GC...");</span>
+<span class="changed"> 345     }</span>
+ 346 
+ 347     // Let the size policy know we're starting
+ 348     size_policy-&gt;minor_collection_begin();
+ 349 
+ 350     // Verify the object start arrays.
+ 351     if (VerifyObjectStartArray &amp;&amp;
+ 352         VerifyBeforeGC) {
+ 353       old_gen-&gt;verify_object_start_array();
+ 354     }
+ 355 
+ 356     // Verify no unmarked old-&gt;young roots
+ 357     if (VerifyRememberedSets) {
+ 358       CardTableExtension::verify_all_young_refs_imprecise();
+ 359     }
+ 360 
+ 361     if (!ScavengeWithObjectsInToSpace) {
+ 362       assert(young_gen-&gt;to_space()-&gt;is_empty(),
+ 363              "Attempt to scavenge with live objects in to_space");
+ 364       young_gen-&gt;to_space()-&gt;clear(SpaceDecorator::Mangle);
+ 365     } else if (ZapUnusedHeapArea) {
+
+</pre><hr></hr><pre>
+ 427       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::management));
+ 428       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::system_dictionary));
+ 429       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::class_loader_data));
+ 430       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::jvmti));
+ 431       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::code_cache));
+ 432 
+ 433       ParallelTaskTerminator terminator(
+ 434         active_workers,
+ 435                   (TaskQueueSetSuper*) promotion_manager-&gt;stack_array_depth());
+ 436       if (active_workers &gt; 1) {
+ 437         for (uint j = 0; j &lt; active_workers; j++) {
+ 438           q-&gt;enqueue(new StealTask(&amp;terminator));
+ 439         }
+ 440       }
+ 441 
+ 442       gc_task_manager()-&gt;execute_and_wait(q);
+ 443     }
+ 444 
+ 445     scavenge_midpoint.update();
+ 446 
+<span class="changed"> 447     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="changed"> 448       tty-&gt;print_cr("PSScavenge::invoke_no_policy: Midpoint of minor GC...");</span>
+<span class="changed"> 449     }</span>
+<span class="changed"> 450 </span>
+<span class="changed"> 451     // Process discovered reference objects</span>
+ 452     {
+ 453       GCTraceTime tm("References", false, false, &amp;_gc_timer, _gc_tracer.gc_id());
+ 454 
+ 455       reference_processor()-&gt;setup_policy(false); // not always_clear
+ 456       reference_processor()-&gt;set_active_mt_degree(active_workers);
+ 457       PSKeepAliveClosure keep_alive(promotion_manager);
+ 458       PSEvacuateFollowersClosure evac_followers(promotion_manager);
+ 459       ReferenceProcessorStats stats;
+ 460       if (reference_processor()-&gt;processing_is_mt()) {
+ 461         PSRefProcTaskExecutor task_executor;
+ 462         stats = reference_processor()-&gt;process_discovered_references(
+ 463           &amp;_is_alive_closure, &amp;keep_alive, &amp;evac_followers, &amp;task_executor,
+ 464           &amp;_gc_timer, _gc_tracer.gc_id());
+ 465       } else {
+ 466         stats = reference_processor()-&gt;process_discovered_references(
+ 467           &amp;_is_alive_closure, &amp;keep_alive, &amp;evac_followers, NULL, &amp;_gc_timer, _gc_tracer.gc_id());
+ 468       }
+ 469 
+ 470       _gc_tracer.report_gc_reference_stats(stats);
+ 471 
+
+</pre><hr></hr><pre>
+ 651     {
+ 652       GCTraceTime tm("Prune Scavenge Root Methods", false, false, &amp;_gc_timer, _gc_tracer.gc_id());
+ 653 
+ 654       CodeCache::prune_scavenge_root_nmethods();
+ 655     }
+ 656 
+ 657     // Re-verify object start arrays
+ 658     if (VerifyObjectStartArray &amp;&amp;
+ 659         VerifyAfterGC) {
+ 660       old_gen-&gt;verify_object_start_array();
+ 661     }
+ 662 
+ 663     // Verify all old -&gt; young cards are now precise
+ 664     if (VerifyRememberedSets) {
+ 665       // Precise verification will give false positives. Until this is fixed,
+ 666       // use imprecise verification.
+ 667       // CardTableExtension::verify_all_young_refs_precise();
+ 668       CardTableExtension::verify_all_young_refs_imprecise();
+ 669     }
+ 670 
+<span class="changed"> 671     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="changed"> 672       tty-&gt;print_cr("PSScavenge::invoke_no_policy: Finished minor GC");</span>
+<span class="changed"> 673     }</span>
+<span class="changed"> 674 </span>
+<span class="changed"> 675     if (TraceGen0Time) {</span>
+<span class="changed"> 676       accumulated_time()-&gt;stop();</span>
+<span class="changed"> 677     }</span>
+ 678 
+ 679     if (PrintGC) {
+ 680       if (PrintGCDetails) {
+ 681         // Don't print a GC timestamp here.  This is after the GC so
+ 682         // would be confusing.
+ 683         young_gen-&gt;print_used_change(young_gen_used_before);
+ 684       }
+ 685       heap-&gt;print_heap_change(prev_used);
+ 686     }
+ 687 
+ 688     // Track memory usage and detect low memory
+ 689     MemoryService::track_memory_usage();
+ 690     heap-&gt;update_counters();
+ 691 
+ 692     gc_task_manager()-&gt;release_idle_workers();
+ 693   }
+ 694 
+ 695   if (VerifyAfterGC &amp;&amp; heap-&gt;total_collections() &gt;= VerifyGCStartAt) {
+ 696     HandleMark hm;  // Discard invalid handles created during verification
+ 697     Universe::verify(" VerifyAfterGC:");
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

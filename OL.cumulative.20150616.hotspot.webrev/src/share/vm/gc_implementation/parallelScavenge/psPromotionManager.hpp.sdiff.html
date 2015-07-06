@@ -1,0 +1,343 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/gc_implementation/parallelScavenge </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+  64 
+  65 #if TASKQUEUE_STATS
+  66   size_t                              _masked_pushes;
+  67   size_t                              _masked_steals;
+  68   size_t                              _arrays_chunked;
+  69   size_t                              _array_chunks_processed;
+  70 
+  71   void print_taskqueue_stats(uint i) const;
+  72   void print_local_stats(uint i) const;
+  73   static void print_stats();
+  74 
+  75   void reset_stats();
+  76 #endif // TASKQUEUE_STATS
+  77 
+  78   PSYoungPromotionLAB                 _young_lab;
+  79   PSOldPromotionLAB                   _old_lab;
+  80   bool                                _young_gen_is_full;
+  81   bool                                _old_gen_is_full;
+  82 
+  83   OopStarTaskQueue                    _claimed_stack_depth;
+<span class="removed">  84   OverflowTaskQueue&lt;oop, mtGC&gt;        _claimed_stack_breadth;</span>
+  85 
+  86   bool                                _totally_drain;
+  87   uint                                _target_stack_size;
+  88 
+  89   uint                                _array_chunk_size;
+  90   uint                                _min_array_size_for_chunking;
+  91 
+  92   PromotionFailedInfo                 _promotion_failed_info;
+  93 
+  94   // Accessors
+  95   static PSOldGen* old_gen()         { return _old_gen; }
+  96   static MutableSpace* young_space() { return _young_space; }
+  97 
+  98   inline static PSPromotionManager* manager_array(int index);
+<span class="removed">  99   template &lt;class T&gt; inline void claim_or_forward_internal_depth(T* p);</span>
+ 100 
+ 101   // On the task queues we push reference locations as well as
+ 102   // partially-scanned arrays (in the latter case, we push an oop to
+ 103   // the from-space image of the array and the length on the
+ 104   // from-space image indicates how many entries on the array we still
+ 105   // need to scan; this is basically how ParNew does partial array
+ 106   // scanning too). To be able to distinguish between reference
+ 107   // locations and partially-scanned array oops we simply mask the
+ 108   // latter oops with 0x01. The next three methods do the masking,
+ 109   // unmasking, and checking whether the oop is masked or not. Notice
+ 110   // that the signature of the mask and unmask methods looks a bit
+ 111   // strange, as they accept and return different types (oop and
+ 112   // oop*). This is because of the difference in types between what
+ 113   // the task queue holds (oop*) and oops to partially-scanned arrays
+ 114   // (oop). We do all the necessary casting in the mask / unmask
+ 115   // methods to avoid sprinkling the rest of the code with more casts.
+ 116 
+ 117   // These are added to the taskqueue so PS_CHUNKED_ARRAY_OOP_MASK (or any
+ 118   // future masks) can't conflict with COMPRESSED_OOP_MASK
+ 119 #define PS_CHUNKED_ARRAY_OOP_MASK  0x2
+
+</pre><hr></hr><pre>
+ 148     claimed_stack_depth()-&gt;push(p);
+ 149   }
+ 150 
+ 151  protected:
+ 152   static OopStarTaskQueueSet* stack_array_depth()   { return _stack_array_depth; }
+ 153  public:
+ 154   // Static
+ 155   static void initialize();
+ 156 
+ 157   static void pre_scavenge();
+ 158   static bool post_scavenge(YoungGCTracer&amp; gc_tracer);
+ 159 
+ 160   static PSPromotionManager* gc_thread_promotion_manager(int index);
+ 161   static PSPromotionManager* vm_thread_promotion_manager();
+ 162 
+ 163   static bool steal_depth(int queue_num, int* seed, StarTask&amp; t) {
+ 164     return stack_array_depth()-&gt;steal(queue_num, seed, t);
+ 165   }
+ 166 
+ 167   PSPromotionManager();
+
+ 168 
+ 169   // Accessors
+ 170   OopStarTaskQueue* claimed_stack_depth() {
+ 171     return &amp;_claimed_stack_depth;
+ 172   }
+ 173 
+<span class="removed"> 174   bool young_gen_is_full()             { return _young_gen_is_full; }</span>
+<span class="removed"> 175 </span>
+<span class="removed"> 176   bool old_gen_is_full()               { return _old_gen_is_full; }</span>
+<span class="removed"> 177   void set_old_gen_is_full(bool state) { _old_gen_is_full = state; }</span>
+<span class="removed"> 178 </span>
+ 179   // Promotion methods
+ 180   template&lt;bool promote_immediately&gt; oop copy_to_survivor_space(oop o);
+<span class="removed"> 181   oop oop_promotion_failed(oop obj, markOop obj_mark);</span>
+ 182 
+<span class="changed"> 183   void reset();</span>
+
+
+
+ 184 
+
+ 185   void flush_labs();
+ 186   void drain_stacks(bool totally_drain) {
+ 187     drain_stacks_depth(totally_drain);
+ 188   }
+<span class="removed"> 189  public:</span>
+ 190   void drain_stacks_cond_depth() {
+ 191     if (claimed_stack_depth()-&gt;size() &gt; _target_stack_size) {
+ 192       drain_stacks_depth(false);
+ 193     }
+ 194   }
+ 195   void drain_stacks_depth(bool totally_drain);
+ 196 
+ 197   bool stacks_empty() {
+ 198     return claimed_stack_depth()-&gt;is_empty();
+ 199   }
+ 200 
+ 201   inline void process_popped_location_depth(StarTask p);
+ 202 
+ 203   template &lt;class T&gt; inline void claim_or_forward_depth(T* p);
+ 204 
+ 205   TASKQUEUE_STATS_ONLY(inline void record_steal(StarTask&amp; p);)
+ 206 };
+ 207 
+ 208 #endif // SHARE_VM_GC_IMPLEMENTATION_PARALLELSCAVENGE_PSPROMOTIONMANAGER_HPP
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+  64 
+  65 #if TASKQUEUE_STATS
+  66   size_t                              _masked_pushes;
+  67   size_t                              _masked_steals;
+  68   size_t                              _arrays_chunked;
+  69   size_t                              _array_chunks_processed;
+  70 
+  71   void print_taskqueue_stats(uint i) const;
+  72   void print_local_stats(uint i) const;
+  73   static void print_stats();
+  74 
+  75   void reset_stats();
+  76 #endif // TASKQUEUE_STATS
+  77 
+  78   PSYoungPromotionLAB                 _young_lab;
+  79   PSOldPromotionLAB                   _old_lab;
+  80   bool                                _young_gen_is_full;
+  81   bool                                _old_gen_is_full;
+  82 
+  83   OopStarTaskQueue                    _claimed_stack_depth;
+
+  84 
+  85   bool                                _totally_drain;
+  86   uint                                _target_stack_size;
+  87 
+  88   uint                                _array_chunk_size;
+  89   uint                                _min_array_size_for_chunking;
+  90 
+  91   PromotionFailedInfo                 _promotion_failed_info;
+  92 
+  93   // Accessors
+  94   static PSOldGen* old_gen()         { return _old_gen; }
+  95   static MutableSpace* young_space() { return _young_space; }
+  96 
+  97   inline static PSPromotionManager* manager_array(int index);
+
+  98 
+  99   // On the task queues we push reference locations as well as
+ 100   // partially-scanned arrays (in the latter case, we push an oop to
+ 101   // the from-space image of the array and the length on the
+ 102   // from-space image indicates how many entries on the array we still
+ 103   // need to scan; this is basically how ParNew does partial array
+ 104   // scanning too). To be able to distinguish between reference
+ 105   // locations and partially-scanned array oops we simply mask the
+ 106   // latter oops with 0x01. The next three methods do the masking,
+ 107   // unmasking, and checking whether the oop is masked or not. Notice
+ 108   // that the signature of the mask and unmask methods looks a bit
+ 109   // strange, as they accept and return different types (oop and
+ 110   // oop*). This is because of the difference in types between what
+ 111   // the task queue holds (oop*) and oops to partially-scanned arrays
+ 112   // (oop). We do all the necessary casting in the mask / unmask
+ 113   // methods to avoid sprinkling the rest of the code with more casts.
+ 114 
+ 115   // These are added to the taskqueue so PS_CHUNKED_ARRAY_OOP_MASK (or any
+ 116   // future masks) can't conflict with COMPRESSED_OOP_MASK
+ 117 #define PS_CHUNKED_ARRAY_OOP_MASK  0x2
+
+</pre><hr></hr><pre>
+ 146     claimed_stack_depth()-&gt;push(p);
+ 147   }
+ 148 
+ 149  protected:
+ 150   static OopStarTaskQueueSet* stack_array_depth()   { return _stack_array_depth; }
+ 151  public:
+ 152   // Static
+ 153   static void initialize();
+ 154 
+ 155   static void pre_scavenge();
+ 156   static bool post_scavenge(YoungGCTracer&amp; gc_tracer);
+ 157 
+ 158   static PSPromotionManager* gc_thread_promotion_manager(int index);
+ 159   static PSPromotionManager* vm_thread_promotion_manager();
+ 160 
+ 161   static bool steal_depth(int queue_num, int* seed, StarTask&amp; t) {
+ 162     return stack_array_depth()-&gt;steal(queue_num, seed, t);
+ 163   }
+ 164 
+ 165   PSPromotionManager();
+<span class="new"> 166   void reset();</span>
+ 167 
+ 168   // Accessors
+ 169   OopStarTaskQueue* claimed_stack_depth() {
+ 170     return &amp;_claimed_stack_depth;
+ 171   }
+ 172 
+
+
+
+
+
+ 173   // Promotion methods
+ 174   template&lt;bool promote_immediately&gt; oop copy_to_survivor_space(oop o);
+
+ 175 
+<span class="changed"> 176  private:</span>
+<span class="changed"> 177   inline oop allocate_in_young_gen_slow(size_t size);</span>
+<span class="changed"> 178   inline oop allocate_in_old_gen_slow(size_t size);</span>
+<span class="changed"> 179   oop oop_promotion_failed(oop obj, markOop obj_mark);</span>
+ 180 
+<span class="new"> 181  public:</span>
+ 182   void flush_labs();
+ 183   void drain_stacks(bool totally_drain) {
+ 184     drain_stacks_depth(totally_drain);
+ 185   }
+
+ 186   void drain_stacks_cond_depth() {
+ 187     if (claimed_stack_depth()-&gt;size() &gt; _target_stack_size) {
+ 188       drain_stacks_depth(false);
+ 189     }
+ 190   }
+ 191   void drain_stacks_depth(bool totally_drain);
+ 192 
+ 193   bool stacks_empty() {
+ 194     return claimed_stack_depth()-&gt;is_empty();
+ 195   }
+ 196 
+ 197   inline void process_popped_location_depth(StarTask p);
+ 198 
+ 199   template &lt;class T&gt; inline void claim_or_forward_depth(T* p);
+ 200 
+ 201   TASKQUEUE_STATS_ONLY(inline void record_steal(StarTask&amp; p);)
+ 202 };
+ 203 
+ 204 #endif // SHARE_VM_GC_IMPLEMENTATION_PARALLELSCAVENGE_PSPROMOTIONMANAGER_HPP
+</pre></td>
+</tr></table>
+</body></html>

@@ -1,0 +1,104 @@
+--- old/src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp	2015-06-16 10:25:42.538480118 -0700
++++ new/src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp	2015-06-16 10:25:42.470481741 -0700
+@@ -305,40 +305,78 @@
+ }
+ 
+ oop PSPromotionManager::oop_promotion_failed(oop obj, markOop obj_mark) {
+-  assert(_old_gen_is_full || PromotionFailureALot, "Sanity");
++  assert(_old_gen_is_full || PromotionFailureALot, "sanity");
+ 
+-  // Attempt to CAS in the header.
+-  // This tests if the header is still the same as when
+-  // this started.  If it is the same (i.e., no forwarding
+-  // pointer has been installed), then this thread owns
+-  // it.
++  // This attempt to CAS in the header tests if the header is still the same as
++  // when this started. If it is the same (i.e., no forwarding pointer has been
++  // installed), then this thread owns it.
+   if (obj->cas_forward_to(obj, obj_mark)) {
+     // We won any races, we "own" this object.
+-    assert(obj == obj->forwardee(), "Sanity");
+-
+-    _promotion_failed_info.register_copy_failure(obj->size());
+-
+-    obj->push_contents(this);
++    assert(obj == obj->forwardee(), "sanity");
+ 
+     // Save the mark if needed
+     PSScavenge::oop_promotion_failed(obj, obj_mark);
+-  }  else {
+-    // We lost, someone else "owns" this object
+-    guarantee(obj->is_forwarded(), "Object must be forwarded if the cas failed.");
+ 
+-    // No unallocation to worry about.
+-    obj = obj->forwardee();
+-  }
++#ifndef PRODUCT
++    if (TraceScavenge) {
++      ResourceMark rm;
++      gclog_or_tty->print_cr("{%s %s 0x%p (%d)}", "promotion-failure",
++          obj->klass()->internal_name(), (void*) obj, obj->size());
++    }
++#endif // PRODUCT
++
++    size_t obj_size = obj->size();
++
++    if (oopDesc::is_container(obj_mark, obj->klass())) {
++      // At this point obj is always an outermost container.
++      assert(!oopDesc::is_contained(obj_mark),
++          "object must be an outermost container");
++
++      obj_size = org_ObjectLayout_AbstractStructuredArray::
++          footprint_with_contained_objects(obj) >> LogHeapWordSize;
++
++      // The thread that "owns" a container also "owns" all its contained
++      // objects. We need to forward all of them to themselves. For this
++      // we simply need to iterate through all Java objects between
++      // ((HeapWord*) obj) + obj->size() and ((HeapWord*) obj) + obj_size
++      // and forward every object to the corresponding new location.
++      // (See PSPromotionManager::copy_to_survivor_space() for a detailed
++      // explanation.) For installing forwarding pointers we can use
++      // the non MT safe oopDesc::forward_to(), since no other thread can
++      // interfere with us.
++      HeapWord* src = ((HeapWord*) obj) + obj->size();
++      HeapWord* src_end = ((HeapWord*) obj) + obj_size;
++      while (src < src_end) {
++        markOop src_mark = ((oop) src)->mark();
++        ((oop) src)->forward_to((oop) src);
++
++        // Save the mark if needed
++        PSScavenge::oop_promotion_failed(((oop) src), src_mark);
+ 
+ #ifndef PRODUCT
+-  if (TraceScavenge) {
+-    gclog_or_tty->print_cr("{%s %s 0x%x (%d)}",
+-                           "promotion-failure",
+-                           obj->klass()->internal_name(),
+-                           (void *)obj, obj->size());
++        if (TraceScavenge) {
++          ResourceMark rm;
++          oop o = (oop) src;
++          gclog_or_tty->print_cr("{%s %s 0x%p (%d)}", "promotion-failure",
++              o->klass()->internal_name(), (void*) src, o->size());
++        }
++#endif // PRODUCT
++
++        src += ((oop) src)->size();
++      }
++      assert(src == src_end, "sanity");
++    }
++
++    _promotion_failed_info.register_copy_failure(obj_size);
+ 
++    obj->push_contents(this);
++  } else {
++    // We lost, someone else "owns" this object.
++    guarantee(obj->is_forwarded(), "object must be forwarded if CAS failed");
++
++    // There is no unallocation to worry about.
++    obj = obj->forwardee();
+   }
+-#endif
+ 
+   return obj;
+ }

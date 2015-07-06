@@ -1,0 +1,54 @@
+--- old/src/share/vm/oops/klass.hpp	2015-06-16 10:25:45.266414735 -0700
++++ new/src/share/vm/oops/klass.hpp	2015-06-16 10:25:45.198416373 -0700
+@@ -506,11 +506,12 @@
+   //     and the package separators as '/'.
+   virtual const char* signature_name() const;
+ 
+-  // garbage collection support
++  // Garbage collection support
++  // Mark-Sweep GCs
+   virtual void oop_follow_contents(oop obj) = 0;
+-  virtual int  oop_adjust_pointers(oop obj) = 0;
++  virtual int oop_adjust_pointers(oop obj) = 0;
+ 
+-  // Parallel Scavenge and Parallel Old
++  // Parallel Scavenge and Parallel Old GCs
+   PARALLEL_GC_DECLS_PV
+ 
+   // type testing operations
+@@ -535,18 +536,23 @@
+   }
+  public:
+   #endif
+-  inline  bool oop_is_instance()            const { return assert_same_query(
+-                                                    layout_helper_is_instance(layout_helper()),
+-                                                    oop_is_instance_slow()); }
+-  inline  bool oop_is_array()               const { return assert_same_query(
+-                                                    layout_helper_is_array(layout_helper()),
+-                                                    oop_is_array_slow()); }
+-  inline  bool oop_is_objArray()            const { return assert_same_query(
+-                                                    layout_helper_is_objArray(layout_helper()),
+-                                                    oop_is_objArray_slow()); }
+-  inline  bool oop_is_typeArray()           const { return assert_same_query(
+-                                                    layout_helper_is_typeArray(layout_helper()),
+-                                                    oop_is_typeArray_slow()); }
++  inline bool oop_is_instance() const {
++    return assert_same_query(layout_helper_is_instance(layout_helper()),
++        oop_is_instance_slow());
++  }
++  bool oop_is_container() const;
++  inline bool oop_is_array() const {
++    return assert_same_query(layout_helper_is_array(layout_helper()),
++        oop_is_array_slow());
++  }
++  inline bool oop_is_objArray() const {
++    return assert_same_query(layout_helper_is_objArray(layout_helper()),
++        oop_is_objArray_slow());
++  }
++  inline bool oop_is_typeArray() const {
++    return assert_same_query(layout_helper_is_typeArray(layout_helper()),
++        oop_is_typeArray_slow());
++  }
+   #undef assert_same_query
+ 
+   // Access flags

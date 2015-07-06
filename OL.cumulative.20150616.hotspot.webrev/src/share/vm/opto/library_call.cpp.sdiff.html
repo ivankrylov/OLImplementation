@@ -1,0 +1,1357 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/opto </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/opto/library_call.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #include "precompiled.hpp"
+  26 #include "classfile/systemDictionary.hpp"
+  27 #include "classfile/vmSymbols.hpp"
+  28 #include "compiler/compileBroker.hpp"
+  29 #include "compiler/compileLog.hpp"
+  30 #include "oops/objArrayKlass.hpp"
+  31 #include "opto/addnode.hpp"
+  32 #include "opto/callGenerator.hpp"
+  33 #include "opto/cfgnode.hpp"
+<span class="removed">  34 #include "opto/connode.hpp"</span>
+  35 #include "opto/idealKit.hpp"
+  36 #include "opto/mathexactnode.hpp"
+  37 #include "opto/mulnode.hpp"
+  38 #include "opto/parse.hpp"
+  39 #include "opto/runtime.hpp"
+  40 #include "opto/subnode.hpp"
+  41 #include "prims/nativeLookup.hpp"
+  42 #include "runtime/sharedRuntime.hpp"
+  43 #include "trace/traceMacros.hpp"
+  44 
+  45 class LibraryIntrinsic : public InlineCallGenerator {
+  46   // Extend the set of intrinsics known to the runtime:
+  47  public:
+  48  private:
+  49   bool             _is_virtual;
+  50   bool             _does_virtual_dispatch;
+  51   int8_t           _predicates_count;  // Intrinsic is predicated by several conditions
+  52   int8_t           _last_predicate; // Last generated predicate
+  53   vmIntrinsics::ID _intrinsic_id;
+  54 
+
+</pre><hr></hr><pre>
+ 213   bool inline_math_addExactI(bool is_increment);
+ 214   bool inline_math_addExactL(bool is_increment);
+ 215   bool inline_math_multiplyExactI();
+ 216   bool inline_math_multiplyExactL();
+ 217   bool inline_math_negateExactI();
+ 218   bool inline_math_negateExactL();
+ 219   bool inline_math_subtractExactI(bool is_decrement);
+ 220   bool inline_math_subtractExactL(bool is_decrement);
+ 221   bool inline_exp();
+ 222   bool inline_pow();
+ 223   Node* finish_pow_exp(Node* result, Node* x, Node* y, const TypeFunc* call_type, address funcAddr, const char* funcName);
+ 224   bool inline_min_max(vmIntrinsics::ID id);
+ 225   Node* generate_min_max(vmIntrinsics::ID id, Node* x, Node* y);
+ 226   // This returns Type::AnyPtr, RawPtr, or OopPtr.
+ 227   int classify_unsafe_addr(Node* &amp;base, Node* &amp;offset);
+ 228   Node* make_unsafe_address(Node* base, Node* offset);
+ 229   // Helper for inline_unsafe_access.
+ 230   // Generates the guards that check whether the result of
+ 231   // Unsafe.getObject should be recorded in an SATB log buffer.
+ 232   void insert_pre_barrier(Node* base_oop, Node* offset, Node* pre_val, bool need_mem_bar);
+
+ 233   bool inline_unsafe_access(bool is_native_ptr, bool is_store, BasicType type, bool is_volatile);
+ 234   bool inline_unsafe_prefetch(bool is_native_ptr, bool is_store, bool is_static);
+ 235   static bool klass_needs_init_guard(Node* kls);
+ 236   bool inline_unsafe_allocate();
+ 237   bool inline_unsafe_copyMemory();
+ 238   bool inline_native_currentThread();
+ 239 #ifdef TRACE_HAVE_INTRINSICS
+ 240   bool inline_native_classID();
+ 241   bool inline_native_threadID();
+ 242 #endif
+ 243   bool inline_native_time_funcs(address method, const char* funcName);
+ 244   bool inline_native_isInterrupted();
+ 245   bool inline_native_Class_query(vmIntrinsics::ID id);
+ 246   bool inline_native_subtype_check();
+ 247 
+ 248   bool inline_native_newArray();
+ 249   bool inline_native_getLength();
+ 250   bool inline_array_copyOf(bool is_copyOfRange);
+ 251   bool inline_array_equals();
+ 252   void copy_to_clone(Node* obj, Node* alloc_obj, Node* obj_size, bool is_array, bool card_mark);
+
+</pre><hr></hr><pre>
+ 289                                      Node* src,  Node* src_offset,
+ 290                                      Node* dest, Node* dest_offset,
+ 291                                      Node* copy_length, bool dest_uninitialized);
+ 292   Node* generate_generic_arraycopy(const TypePtr* adr_type,
+ 293                                    Node* src,  Node* src_offset,
+ 294                                    Node* dest, Node* dest_offset,
+ 295                                    Node* copy_length, bool dest_uninitialized);
+ 296   void generate_unchecked_arraycopy(const TypePtr* adr_type,
+ 297                                     BasicType basic_elem_type,
+ 298                                     bool disjoint_bases,
+ 299                                     Node* src,  Node* src_offset,
+ 300                                     Node* dest, Node* dest_offset,
+ 301                                     Node* copy_length, bool dest_uninitialized);
+ 302   typedef enum { LS_xadd, LS_xchg, LS_cmpxchg } LoadStoreKind;
+ 303   bool inline_unsafe_load_store(BasicType type,  LoadStoreKind kind);
+ 304   bool inline_unsafe_ordered_store(BasicType type);
+ 305   bool inline_unsafe_fence(vmIntrinsics::ID id);
+ 306   bool inline_fp_conversions(vmIntrinsics::ID id);
+ 307   bool inline_number_methods(vmIntrinsics::ID id);
+ 308   bool inline_reference_get();
+
+
+
+ 309   bool inline_aescrypt_Block(vmIntrinsics::ID id);
+ 310   bool inline_cipherBlockChaining_AESCrypt(vmIntrinsics::ID id);
+ 311   Node* inline_cipherBlockChaining_AESCrypt_predicate(bool decrypting);
+ 312   Node* get_key_start_from_aescrypt_object(Node* aescrypt_object);
+ 313   Node* get_original_key_start_from_aescrypt_object(Node* aescrypt_object);
+ 314   bool inline_sha_implCompress(vmIntrinsics::ID id);
+ 315   bool inline_digestBase_implCompressMB(int predicate);
+ 316   bool inline_sha_implCompressMB(Node* digestBaseObj, ciInstanceKlass* instklass_SHA,
+ 317                                  bool long_state, address stubAddr, const char *stubName,
+ 318                                  Node* src_start, Node* ofs, Node* limit);
+ 319   Node* get_state_from_sha_object(Node *sha_object);
+ 320   Node* get_state_from_sha5_object(Node *sha_object);
+ 321   Node* inline_digestBase_implCompressMB_predicate(int predicate);
+ 322   bool inline_encodeISOArray();
+ 323   bool inline_updateCRC32();
+ 324   bool inline_updateBytesCRC32();
+ 325   bool inline_updateByteBufferCRC32();
+ 326   bool inline_multiplyToLen();
+<span class="removed"> 327 </span>
+<span class="removed"> 328   bool inline_profileBoolean();</span>
+ 329 };
+ 330 
+ 331 
+ 332 //---------------------------make_vm_intrinsic----------------------------
+ 333 CallGenerator* Compile::make_vm_intrinsic(ciMethod* m, bool is_virtual) {
+ 334   vmIntrinsics::ID id = m-&gt;intrinsic_id();
+ 335   assert(id != vmIntrinsics::_none, "must be a VM intrinsic");
+ 336 
+ 337   ccstr disable_intr = NULL;
+ 338 
+ 339   if ((DisableIntrinsic[0] != '\0'
+ 340        &amp;&amp; strstr(DisableIntrinsic, vmIntrinsics::name_at(id)) != NULL) ||
+ 341       (method_has_option_value("DisableIntrinsic", disable_intr)
+ 342        &amp;&amp; strstr(disable_intr, vmIntrinsics::name_at(id)) != NULL)) {
+ 343     // disabled by a user request on the command line:
+ 344     // example: -XX:DisableIntrinsic=_hashCode,_getClass
+ 345     return NULL;
+ 346   }
+ 347 
+ 348   if (!m-&gt;is_loaded()) {
+
+</pre><hr></hr><pre>
+ 501     break;
+ 502 
+ 503   case vmIntrinsics::_getAndSetInt:
+ 504     if (!Matcher::match_rule_supported(Op_GetAndSetI)) return NULL;
+ 505     break;
+ 506 
+ 507   case vmIntrinsics::_getAndSetLong:
+ 508     if (!Matcher::match_rule_supported(Op_GetAndSetL)) return NULL;
+ 509     break;
+ 510 
+ 511   case vmIntrinsics::_getAndSetObject:
+ 512 #ifdef _LP64
+ 513     if (!UseCompressedOops &amp;&amp; !Matcher::match_rule_supported(Op_GetAndSetP)) return NULL;
+ 514     if (UseCompressedOops &amp;&amp; !Matcher::match_rule_supported(Op_GetAndSetN)) return NULL;
+ 515     break;
+ 516 #else
+ 517     if (!Matcher::match_rule_supported(Op_GetAndSetP)) return NULL;
+ 518     break;
+ 519 #endif
+ 520 
+
+
+
+
+ 521   case vmIntrinsics::_aescrypt_encryptBlock:
+ 522   case vmIntrinsics::_aescrypt_decryptBlock:
+ 523     if (!UseAESIntrinsics) return NULL;
+ 524     break;
+ 525 
+ 526   case vmIntrinsics::_multiplyToLen:
+ 527     if (!UseMultiplyToLenIntrinsic) return NULL;
+ 528     break;
+ 529 
+ 530   case vmIntrinsics::_cipherBlockChaining_encryptAESCrypt:
+ 531   case vmIntrinsics::_cipherBlockChaining_decryptAESCrypt:
+ 532     if (!UseAESIntrinsics) return NULL;
+ 533     // these two require the predicated logic
+ 534     predicates = 1;
+ 535     break;
+ 536 
+ 537   case vmIntrinsics::_sha_implCompress:
+ 538     if (!UseSHA1Intrinsics) return NULL;
+ 539     break;
+ 540 
+
+</pre><hr></hr><pre>
+ 892   case vmIntrinsics::_intBitsToFloat:
+ 893   case vmIntrinsics::_doubleToRawLongBits:
+ 894   case vmIntrinsics::_doubleToLongBits:
+ 895   case vmIntrinsics::_longBitsToDouble:         return inline_fp_conversions(intrinsic_id());
+ 896 
+ 897   case vmIntrinsics::_numberOfLeadingZeros_i:
+ 898   case vmIntrinsics::_numberOfLeadingZeros_l:
+ 899   case vmIntrinsics::_numberOfTrailingZeros_i:
+ 900   case vmIntrinsics::_numberOfTrailingZeros_l:
+ 901   case vmIntrinsics::_bitCount_i:
+ 902   case vmIntrinsics::_bitCount_l:
+ 903   case vmIntrinsics::_reverseBytes_i:
+ 904   case vmIntrinsics::_reverseBytes_l:
+ 905   case vmIntrinsics::_reverseBytes_s:
+ 906   case vmIntrinsics::_reverseBytes_c:           return inline_number_methods(intrinsic_id());
+ 907 
+ 908   case vmIntrinsics::_getCallerClass:           return inline_native_Reflection_getCallerClass();
+ 909 
+ 910   case vmIntrinsics::_Reference_get:            return inline_reference_get();
+ 911 
+
+
+
+ 912   case vmIntrinsics::_aescrypt_encryptBlock:
+ 913   case vmIntrinsics::_aescrypt_decryptBlock:    return inline_aescrypt_Block(intrinsic_id());
+ 914 
+ 915   case vmIntrinsics::_cipherBlockChaining_encryptAESCrypt:
+ 916   case vmIntrinsics::_cipherBlockChaining_decryptAESCrypt:
+ 917     return inline_cipherBlockChaining_AESCrypt(intrinsic_id());
+ 918 
+ 919   case vmIntrinsics::_sha_implCompress:
+ 920   case vmIntrinsics::_sha2_implCompress:
+ 921   case vmIntrinsics::_sha5_implCompress:
+ 922     return inline_sha_implCompress(intrinsic_id());
+ 923 
+ 924   case vmIntrinsics::_digestBase_implCompressMB:
+ 925     return inline_digestBase_implCompressMB(predicate);
+ 926 
+ 927   case vmIntrinsics::_multiplyToLen:
+ 928     return inline_multiplyToLen();
+ 929 
+ 930   case vmIntrinsics::_encodeISOArray:
+ 931     return inline_encodeISOArray();
+ 932 
+ 933   case vmIntrinsics::_updateCRC32:
+ 934     return inline_updateCRC32();
+ 935   case vmIntrinsics::_updateBytesCRC32:
+ 936     return inline_updateBytesCRC32();
+ 937   case vmIntrinsics::_updateByteBufferCRC32:
+ 938     return inline_updateByteBufferCRC32();
+ 939 
+<span class="removed"> 940   case vmIntrinsics::_profileBoolean:</span>
+<span class="removed"> 941     return inline_profileBoolean();</span>
+<span class="removed"> 942 </span>
+ 943   default:
+ 944     // If you get here, it may be that someone has added a new intrinsic
+ 945     // to the list in vmSymbols.hpp without implementing it here.
+ 946 #ifndef PRODUCT
+ 947     if ((PrintMiscellaneous &amp;&amp; (Verbose || WizardMode)) || PrintOpto) {
+ 948       tty-&gt;print_cr("*** Warning: Unimplemented intrinsic %s(%d)",
+ 949                     vmIntrinsics::name_at(intrinsic_id()), intrinsic_id());
+ 950     }
+ 951 #endif
+ 952     return false;
+ 953   }
+ 954 }
+ 955 
+ 956 Node* LibraryCallKit::try_to_predicate(int predicate) {
+ 957   if (!jvms()-&gt;has_method()) {
+ 958     // Root JVMState has a null method.
+ 959     assert(map()-&gt;memory()-&gt;Opcode() == Op_Parm, "");
+ 960     // Insert the memory aliasing node
+ 961     set_all_memory(reset_memory());
+ 962   }
+
+</pre><hr></hr><pre>
+2361 bool LibraryCallKit::inline_number_methods(vmIntrinsics::ID id) {
+2362   Node* arg = argument(0);
+2363   Node* n;
+2364   switch (id) {
+2365   case vmIntrinsics::_numberOfLeadingZeros_i:   n = new (C) CountLeadingZerosINode( arg);  break;
+2366   case vmIntrinsics::_numberOfLeadingZeros_l:   n = new (C) CountLeadingZerosLNode( arg);  break;
+2367   case vmIntrinsics::_numberOfTrailingZeros_i:  n = new (C) CountTrailingZerosINode(arg);  break;
+2368   case vmIntrinsics::_numberOfTrailingZeros_l:  n = new (C) CountTrailingZerosLNode(arg);  break;
+2369   case vmIntrinsics::_bitCount_i:               n = new (C) PopCountINode(          arg);  break;
+2370   case vmIntrinsics::_bitCount_l:               n = new (C) PopCountLNode(          arg);  break;
+2371   case vmIntrinsics::_reverseBytes_c:           n = new (C) ReverseBytesUSNode(0,   arg);  break;
+2372   case vmIntrinsics::_reverseBytes_s:           n = new (C) ReverseBytesSNode( 0,   arg);  break;
+2373   case vmIntrinsics::_reverseBytes_i:           n = new (C) ReverseBytesINode( 0,   arg);  break;
+2374   case vmIntrinsics::_reverseBytes_l:           n = new (C) ReverseBytesLNode( 0,   arg);  break;
+2375   default:  fatal_unexpected_iid(id);  break;
+2376   }
+2377   set_result(_gvn.transform(n));
+2378   return true;
+2379 }
+2380 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+2381 //----------------------------inline_unsafe_access----------------------------
+2382 
+2383 const static BasicType T_ADDRESS_HOLDER = T_LONG;
+2384 
+2385 // Helper that guards and inserts a pre-barrier.
+2386 void LibraryCallKit::insert_pre_barrier(Node* base_oop, Node* offset,
+2387                                         Node* pre_val, bool need_mem_bar) {
+2388   // We could be accessing the referent field of a reference object. If so, when G1
+2389   // is enabled, we need to log the value in the referent field in an SATB buffer.
+2390   // This routine performs some compile time filters and generates suitable
+2391   // runtime filters that guard the pre-barrier code.
+2392   // Also add memory barrier for non volatile load from the referent field
+2393   // to prevent commoning of loads across safepoint.
+2394   if (!UseG1GC &amp;&amp; !need_mem_bar)
+2395     return;
+2396 
+2397   // Some compile time checks.
+2398 
+2399   // If offset is a constant, is it java_lang_ref_Reference::_reference_offset?
+2400   const TypeX* otype = offset-&gt;find_intptr_t_type();
+
+</pre><hr></hr><pre>
+6032   } else {
+6033     type = Type::get_const_basic_type(bt);
+6034   }
+6035 
+6036   if (support_IRIW_for_not_multiple_copy_atomic_cpu &amp;&amp; is_vol) {
+6037     insert_mem_bar(Op_MemBarVolatile);   // StoreLoad barrier
+6038   }
+6039   // Build the load.
+6040   MemNode::MemOrd mo = is_vol ? MemNode::acquire : MemNode::unordered;
+6041   Node* loadedField = make_load(NULL, adr, type, bt, adr_type, mo, is_vol);
+6042   // If reference is volatile, prevent following memory ops from
+6043   // floating up past the volatile read.  Also prevents commoning
+6044   // another volatile read.
+6045   if (is_vol) {
+6046     // Memory barrier includes bogus read of value to force load BEFORE membar
+6047     insert_mem_bar(Op_MemBarAcquire, loadedField);
+6048   }
+6049   return loadedField;
+6050 }
+6051 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+6052 
+6053 //------------------------------inline_aescrypt_Block-----------------------
+6054 bool LibraryCallKit::inline_aescrypt_Block(vmIntrinsics::ID id) {
+6055   address stubAddr;
+6056   const char *stubName;
+6057   assert(UseAES, "need AES instruction support");
+6058 
+6059   switch(id) {
+6060   case vmIntrinsics::_aescrypt_encryptBlock:
+6061     stubAddr = StubRoutines::aescrypt_encryptBlock();
+6062     stubName = "aescrypt_encryptBlock";
+6063     break;
+6064   case vmIntrinsics::_aescrypt_decryptBlock:
+6065     stubAddr = StubRoutines::aescrypt_decryptBlock();
+6066     stubName = "aescrypt_decryptBlock";
+6067     break;
+6068   }
+6069   if (stubAddr == NULL) return false;
+6070 
+6071   Node* aescrypt_object = argument(0);
+
+</pre><hr></hr><pre>
+6532   }
+6533 
+6534   ciKlass* klass_SHA = NULL;
+6535   if (klass_SHA_name != NULL) {
+6536     klass_SHA = tinst-&gt;klass()-&gt;as_instance_klass()-&gt;find_klass(ciSymbol::make(klass_SHA_name));
+6537   }
+6538   if ((klass_SHA == NULL) || !klass_SHA-&gt;is_loaded()) {
+6539     // if none of SHA/SHA2/SHA5 is loaded, we never take the intrinsic fast path
+6540     Node* ctrl = control();
+6541     set_control(top()); // no intrinsic path
+6542     return ctrl;
+6543   }
+6544   ciInstanceKlass* instklass_SHA = klass_SHA-&gt;as_instance_klass();
+6545 
+6546   Node* instofSHA = gen_instanceof(digestBaseObj, makecon(TypeKlassPtr::make(instklass_SHA)));
+6547   Node* cmp_instof = _gvn.transform(new (C) CmpINode(instofSHA, intcon(1)));
+6548   Node* bool_instof = _gvn.transform(new (C) BoolNode(cmp_instof, BoolTest::ne));
+6549   Node* instof_false = generate_guard(bool_instof, NULL, PROB_MIN);
+6550 
+6551   return instof_false;  // even if it is NULL
+<span class="removed">6552 }</span>
+<span class="removed">6553 </span>
+<span class="removed">6554 bool LibraryCallKit::inline_profileBoolean() {</span>
+<span class="removed">6555   Node* counts = argument(1);</span>
+<span class="removed">6556   const TypeAryPtr* ary = NULL;</span>
+<span class="removed">6557   ciArray* aobj = NULL;</span>
+<span class="removed">6558   if (counts-&gt;is_Con()</span>
+<span class="removed">6559       &amp;&amp; (ary = counts-&gt;bottom_type()-&gt;isa_aryptr()) != NULL</span>
+<span class="removed">6560       &amp;&amp; (aobj = ary-&gt;const_oop()-&gt;as_array()) != NULL</span>
+<span class="removed">6561       &amp;&amp; (aobj-&gt;length() == 2)) {</span>
+<span class="removed">6562     // Profile is int[2] where [0] and [1] correspond to false and true value occurrences respectively.</span>
+<span class="removed">6563     jint false_cnt = aobj-&gt;element_value(0).as_int();</span>
+<span class="removed">6564     jint  true_cnt = aobj-&gt;element_value(1).as_int();</span>
+<span class="removed">6565 </span>
+<span class="removed">6566     method()-&gt;set_injected_profile(true);</span>
+<span class="removed">6567 </span>
+<span class="removed">6568     if (C-&gt;log() != NULL) {</span>
+<span class="removed">6569       C-&gt;log()-&gt;elem("observe source='profileBoolean' false='%d' true='%d'",</span>
+<span class="removed">6570                      false_cnt, true_cnt);</span>
+<span class="removed">6571     }</span>
+<span class="removed">6572 </span>
+<span class="removed">6573     if (false_cnt + true_cnt == 0) {</span>
+<span class="removed">6574       // According to profile, never executed.</span>
+<span class="removed">6575       uncommon_trap_exact(Deoptimization::Reason_intrinsic,</span>
+<span class="removed">6576                           Deoptimization::Action_reinterpret);</span>
+<span class="removed">6577       return true;</span>
+<span class="removed">6578     }</span>
+<span class="removed">6579 </span>
+<span class="removed">6580     // result is a boolean (0 or 1) and its profile (false_cnt &amp; true_cnt)</span>
+<span class="removed">6581     // is a number of each value occurrences.</span>
+<span class="removed">6582     Node* result = argument(0);</span>
+<span class="removed">6583     if (false_cnt == 0 || true_cnt == 0) {</span>
+<span class="removed">6584       // According to profile, one value has been never seen.</span>
+<span class="removed">6585       int expected_val = (false_cnt == 0) ? 1 : 0;</span>
+<span class="removed">6586 </span>
+<span class="removed">6587       Node* cmp  = _gvn.transform(new (C) CmpINode(result, intcon(expected_val)));</span>
+<span class="removed">6588       Node* test = _gvn.transform(new (C) BoolNode(cmp, BoolTest::eq));</span>
+<span class="removed">6589 </span>
+<span class="removed">6590       IfNode* check = create_and_map_if(control(), test, PROB_ALWAYS, COUNT_UNKNOWN);</span>
+<span class="removed">6591       Node* fast_path = _gvn.transform(new (C) IfTrueNode(check));</span>
+<span class="removed">6592       Node* slow_path = _gvn.transform(new (C) IfFalseNode(check));</span>
+<span class="removed">6593 </span>
+<span class="removed">6594       { // Slow path: uncommon trap for never seen value and then reexecute</span>
+<span class="removed">6595         // MethodHandleImpl::profileBoolean() to bump the count, so JIT knows</span>
+<span class="removed">6596         // the value has been seen at least once.</span>
+<span class="removed">6597         PreserveJVMState pjvms(this);</span>
+<span class="removed">6598         PreserveReexecuteState preexecs(this);</span>
+<span class="removed">6599         jvms()-&gt;set_should_reexecute(true);</span>
+<span class="removed">6600 </span>
+<span class="removed">6601         set_control(slow_path);</span>
+<span class="removed">6602         set_i_o(i_o());</span>
+<span class="removed">6603 </span>
+<span class="removed">6604         uncommon_trap_exact(Deoptimization::Reason_intrinsic,</span>
+<span class="removed">6605                             Deoptimization::Action_reinterpret);</span>
+<span class="removed">6606       }</span>
+<span class="removed">6607       // The guard for never seen value enables sharpening of the result and</span>
+<span class="removed">6608       // returning a constant. It allows to eliminate branches on the same value</span>
+<span class="removed">6609       // later on.</span>
+<span class="removed">6610       set_control(fast_path);</span>
+<span class="removed">6611       result = intcon(expected_val);</span>
+<span class="removed">6612     }</span>
+<span class="removed">6613     // Stop profiling.</span>
+<span class="removed">6614     // MethodHandleImpl::profileBoolean() has profiling logic in its bytecode.</span>
+<span class="removed">6615     // By replacing method body with profile data (represented as ProfileBooleanNode</span>
+<span class="removed">6616     // on IR level) we effectively disable profiling.</span>
+<span class="removed">6617     // It enables full speed execution once optimized code is generated.</span>
+<span class="removed">6618     Node* profile = _gvn.transform(new (C) ProfileBooleanNode(result, false_cnt, true_cnt));</span>
+<span class="removed">6619     C-&gt;record_for_igvn(profile);</span>
+<span class="removed">6620     set_result(profile);</span>
+<span class="removed">6621     return true;</span>
+<span class="removed">6622   } else {</span>
+<span class="removed">6623     // Continue profiling.</span>
+<span class="removed">6624     // Profile data isn't available at the moment. So, execute method's bytecode version.</span>
+<span class="removed">6625     // Usually, when GWT LambdaForms are profiled it means that a stand-alone nmethod</span>
+<span class="removed">6626     // is compiled and counters aren't available since corresponding MethodHandle</span>
+<span class="removed">6627     // isn't a compile-time constant.</span>
+<span class="removed">6628     return false;</span>
+<span class="removed">6629   }</span>
+6630 }
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #include "precompiled.hpp"
+  26 #include "classfile/systemDictionary.hpp"
+  27 #include "classfile/vmSymbols.hpp"
+  28 #include "compiler/compileBroker.hpp"
+  29 #include "compiler/compileLog.hpp"
+  30 #include "oops/objArrayKlass.hpp"
+  31 #include "opto/addnode.hpp"
+  32 #include "opto/callGenerator.hpp"
+  33 #include "opto/cfgnode.hpp"
+
+  34 #include "opto/idealKit.hpp"
+  35 #include "opto/mathexactnode.hpp"
+  36 #include "opto/mulnode.hpp"
+  37 #include "opto/parse.hpp"
+  38 #include "opto/runtime.hpp"
+  39 #include "opto/subnode.hpp"
+  40 #include "prims/nativeLookup.hpp"
+  41 #include "runtime/sharedRuntime.hpp"
+  42 #include "trace/traceMacros.hpp"
+  43 
+  44 class LibraryIntrinsic : public InlineCallGenerator {
+  45   // Extend the set of intrinsics known to the runtime:
+  46  public:
+  47  private:
+  48   bool             _is_virtual;
+  49   bool             _does_virtual_dispatch;
+  50   int8_t           _predicates_count;  // Intrinsic is predicated by several conditions
+  51   int8_t           _last_predicate; // Last generated predicate
+  52   vmIntrinsics::ID _intrinsic_id;
+  53 
+
+</pre><hr></hr><pre>
+ 212   bool inline_math_addExactI(bool is_increment);
+ 213   bool inline_math_addExactL(bool is_increment);
+ 214   bool inline_math_multiplyExactI();
+ 215   bool inline_math_multiplyExactL();
+ 216   bool inline_math_negateExactI();
+ 217   bool inline_math_negateExactL();
+ 218   bool inline_math_subtractExactI(bool is_decrement);
+ 219   bool inline_math_subtractExactL(bool is_decrement);
+ 220   bool inline_exp();
+ 221   bool inline_pow();
+ 222   Node* finish_pow_exp(Node* result, Node* x, Node* y, const TypeFunc* call_type, address funcAddr, const char* funcName);
+ 223   bool inline_min_max(vmIntrinsics::ID id);
+ 224   Node* generate_min_max(vmIntrinsics::ID id, Node* x, Node* y);
+ 225   // This returns Type::AnyPtr, RawPtr, or OopPtr.
+ 226   int classify_unsafe_addr(Node* &amp;base, Node* &amp;offset);
+ 227   Node* make_unsafe_address(Node* base, Node* offset);
+ 228   // Helper for inline_unsafe_access.
+ 229   // Generates the guards that check whether the result of
+ 230   // Unsafe.getObject should be recorded in an SATB log buffer.
+ 231   void insert_pre_barrier(Node* base_oop, Node* offset, Node* pre_val, bool need_mem_bar);
+<span class="new"> 232   bool inline_unsafe_deriveContainedObjectAtOffset();</span>
+ 233   bool inline_unsafe_access(bool is_native_ptr, bool is_store, BasicType type, bool is_volatile);
+ 234   bool inline_unsafe_prefetch(bool is_native_ptr, bool is_store, bool is_static);
+ 235   static bool klass_needs_init_guard(Node* kls);
+ 236   bool inline_unsafe_allocate();
+ 237   bool inline_unsafe_copyMemory();
+ 238   bool inline_native_currentThread();
+ 239 #ifdef TRACE_HAVE_INTRINSICS
+ 240   bool inline_native_classID();
+ 241   bool inline_native_threadID();
+ 242 #endif
+ 243   bool inline_native_time_funcs(address method, const char* funcName);
+ 244   bool inline_native_isInterrupted();
+ 245   bool inline_native_Class_query(vmIntrinsics::ID id);
+ 246   bool inline_native_subtype_check();
+ 247 
+ 248   bool inline_native_newArray();
+ 249   bool inline_native_getLength();
+ 250   bool inline_array_copyOf(bool is_copyOfRange);
+ 251   bool inline_array_equals();
+ 252   void copy_to_clone(Node* obj, Node* alloc_obj, Node* obj_size, bool is_array, bool card_mark);
+
+</pre><hr></hr><pre>
+ 289                                      Node* src,  Node* src_offset,
+ 290                                      Node* dest, Node* dest_offset,
+ 291                                      Node* copy_length, bool dest_uninitialized);
+ 292   Node* generate_generic_arraycopy(const TypePtr* adr_type,
+ 293                                    Node* src,  Node* src_offset,
+ 294                                    Node* dest, Node* dest_offset,
+ 295                                    Node* copy_length, bool dest_uninitialized);
+ 296   void generate_unchecked_arraycopy(const TypePtr* adr_type,
+ 297                                     BasicType basic_elem_type,
+ 298                                     bool disjoint_bases,
+ 299                                     Node* src,  Node* src_offset,
+ 300                                     Node* dest, Node* dest_offset,
+ 301                                     Node* copy_length, bool dest_uninitialized);
+ 302   typedef enum { LS_xadd, LS_xchg, LS_cmpxchg } LoadStoreKind;
+ 303   bool inline_unsafe_load_store(BasicType type,  LoadStoreKind kind);
+ 304   bool inline_unsafe_ordered_store(BasicType type);
+ 305   bool inline_unsafe_fence(vmIntrinsics::ID id);
+ 306   bool inline_fp_conversions(vmIntrinsics::ID id);
+ 307   bool inline_number_methods(vmIntrinsics::ID id);
+ 308   bool inline_reference_get();
+<span class="new"> 309   bool inline_derive_contained_object();</span>
+<span class="new"> 310   bool inline_asa_get();</span>
+<span class="new"> 311   Node* load_container_class(Node* ctrObj);</span>
+ 312   bool inline_aescrypt_Block(vmIntrinsics::ID id);
+ 313   bool inline_cipherBlockChaining_AESCrypt(vmIntrinsics::ID id);
+ 314   Node* inline_cipherBlockChaining_AESCrypt_predicate(bool decrypting);
+ 315   Node* get_key_start_from_aescrypt_object(Node* aescrypt_object);
+ 316   Node* get_original_key_start_from_aescrypt_object(Node* aescrypt_object);
+ 317   bool inline_sha_implCompress(vmIntrinsics::ID id);
+ 318   bool inline_digestBase_implCompressMB(int predicate);
+ 319   bool inline_sha_implCompressMB(Node* digestBaseObj, ciInstanceKlass* instklass_SHA,
+ 320                                  bool long_state, address stubAddr, const char *stubName,
+ 321                                  Node* src_start, Node* ofs, Node* limit);
+ 322   Node* get_state_from_sha_object(Node *sha_object);
+ 323   Node* get_state_from_sha5_object(Node *sha_object);
+ 324   Node* inline_digestBase_implCompressMB_predicate(int predicate);
+ 325   bool inline_encodeISOArray();
+ 326   bool inline_updateCRC32();
+ 327   bool inline_updateBytesCRC32();
+ 328   bool inline_updateByteBufferCRC32();
+ 329   bool inline_multiplyToLen();
+
+
+ 330 };
+ 331 
+ 332 
+ 333 //---------------------------make_vm_intrinsic----------------------------
+ 334 CallGenerator* Compile::make_vm_intrinsic(ciMethod* m, bool is_virtual) {
+ 335   vmIntrinsics::ID id = m-&gt;intrinsic_id();
+ 336   assert(id != vmIntrinsics::_none, "must be a VM intrinsic");
+ 337 
+ 338   ccstr disable_intr = NULL;
+ 339 
+ 340   if ((DisableIntrinsic[0] != '\0'
+ 341        &amp;&amp; strstr(DisableIntrinsic, vmIntrinsics::name_at(id)) != NULL) ||
+ 342       (method_has_option_value("DisableIntrinsic", disable_intr)
+ 343        &amp;&amp; strstr(disable_intr, vmIntrinsics::name_at(id)) != NULL)) {
+ 344     // disabled by a user request on the command line:
+ 345     // example: -XX:DisableIntrinsic=_hashCode,_getClass
+ 346     return NULL;
+ 347   }
+ 348 
+ 349   if (!m-&gt;is_loaded()) {
+
+</pre><hr></hr><pre>
+ 502     break;
+ 503 
+ 504   case vmIntrinsics::_getAndSetInt:
+ 505     if (!Matcher::match_rule_supported(Op_GetAndSetI)) return NULL;
+ 506     break;
+ 507 
+ 508   case vmIntrinsics::_getAndSetLong:
+ 509     if (!Matcher::match_rule_supported(Op_GetAndSetL)) return NULL;
+ 510     break;
+ 511 
+ 512   case vmIntrinsics::_getAndSetObject:
+ 513 #ifdef _LP64
+ 514     if (!UseCompressedOops &amp;&amp; !Matcher::match_rule_supported(Op_GetAndSetP)) return NULL;
+ 515     if (UseCompressedOops &amp;&amp; !Matcher::match_rule_supported(Op_GetAndSetN)) return NULL;
+ 516     break;
+ 517 #else
+ 518     if (!Matcher::match_rule_supported(Op_GetAndSetP)) return NULL;
+ 519     break;
+ 520 #endif
+ 521 
+<span class="new"> 522   case vmIntrinsics::_deriveContainedObjectAtOffset:</span>
+<span class="new"> 523     if (!UseObjectLayoutIntrinsics) return NULL;</span>
+<span class="new"> 524     break;</span>
+<span class="new"> 525 </span>
+ 526   case vmIntrinsics::_aescrypt_encryptBlock:
+ 527   case vmIntrinsics::_aescrypt_decryptBlock:
+ 528     if (!UseAESIntrinsics) return NULL;
+ 529     break;
+ 530 
+ 531   case vmIntrinsics::_multiplyToLen:
+ 532     if (!UseMultiplyToLenIntrinsic) return NULL;
+ 533     break;
+ 534 
+ 535   case vmIntrinsics::_cipherBlockChaining_encryptAESCrypt:
+ 536   case vmIntrinsics::_cipherBlockChaining_decryptAESCrypt:
+ 537     if (!UseAESIntrinsics) return NULL;
+ 538     // these two require the predicated logic
+ 539     predicates = 1;
+ 540     break;
+ 541 
+ 542   case vmIntrinsics::_sha_implCompress:
+ 543     if (!UseSHA1Intrinsics) return NULL;
+ 544     break;
+ 545 
+
+</pre><hr></hr><pre>
+ 897   case vmIntrinsics::_intBitsToFloat:
+ 898   case vmIntrinsics::_doubleToRawLongBits:
+ 899   case vmIntrinsics::_doubleToLongBits:
+ 900   case vmIntrinsics::_longBitsToDouble:         return inline_fp_conversions(intrinsic_id());
+ 901 
+ 902   case vmIntrinsics::_numberOfLeadingZeros_i:
+ 903   case vmIntrinsics::_numberOfLeadingZeros_l:
+ 904   case vmIntrinsics::_numberOfTrailingZeros_i:
+ 905   case vmIntrinsics::_numberOfTrailingZeros_l:
+ 906   case vmIntrinsics::_bitCount_i:
+ 907   case vmIntrinsics::_bitCount_l:
+ 908   case vmIntrinsics::_reverseBytes_i:
+ 909   case vmIntrinsics::_reverseBytes_l:
+ 910   case vmIntrinsics::_reverseBytes_s:
+ 911   case vmIntrinsics::_reverseBytes_c:           return inline_number_methods(intrinsic_id());
+ 912 
+ 913   case vmIntrinsics::_getCallerClass:           return inline_native_Reflection_getCallerClass();
+ 914 
+ 915   case vmIntrinsics::_Reference_get:            return inline_reference_get();
+ 916 
+<span class="new"> 917   case vmIntrinsics::_deriveContainedObjectAtOffset:</span>
+<span class="new"> 918                                                 return inline_unsafe_deriveContainedObjectAtOffset();</span>
+<span class="new"> 919 </span>
+ 920   case vmIntrinsics::_aescrypt_encryptBlock:
+ 921   case vmIntrinsics::_aescrypt_decryptBlock:    return inline_aescrypt_Block(intrinsic_id());
+ 922 
+ 923   case vmIntrinsics::_cipherBlockChaining_encryptAESCrypt:
+ 924   case vmIntrinsics::_cipherBlockChaining_decryptAESCrypt:
+ 925     return inline_cipherBlockChaining_AESCrypt(intrinsic_id());
+ 926 
+ 927   case vmIntrinsics::_sha_implCompress:
+ 928   case vmIntrinsics::_sha2_implCompress:
+ 929   case vmIntrinsics::_sha5_implCompress:
+ 930     return inline_sha_implCompress(intrinsic_id());
+ 931 
+ 932   case vmIntrinsics::_digestBase_implCompressMB:
+ 933     return inline_digestBase_implCompressMB(predicate);
+ 934 
+ 935   case vmIntrinsics::_multiplyToLen:
+ 936     return inline_multiplyToLen();
+ 937 
+ 938   case vmIntrinsics::_encodeISOArray:
+ 939     return inline_encodeISOArray();
+ 940 
+ 941   case vmIntrinsics::_updateCRC32:
+ 942     return inline_updateCRC32();
+ 943   case vmIntrinsics::_updateBytesCRC32:
+ 944     return inline_updateBytesCRC32();
+ 945   case vmIntrinsics::_updateByteBufferCRC32:
+ 946     return inline_updateByteBufferCRC32();
+ 947 
+
+
+
+ 948   default:
+ 949     // If you get here, it may be that someone has added a new intrinsic
+ 950     // to the list in vmSymbols.hpp without implementing it here.
+ 951 #ifndef PRODUCT
+ 952     if ((PrintMiscellaneous &amp;&amp; (Verbose || WizardMode)) || PrintOpto) {
+ 953       tty-&gt;print_cr("*** Warning: Unimplemented intrinsic %s(%d)",
+ 954                     vmIntrinsics::name_at(intrinsic_id()), intrinsic_id());
+ 955     }
+ 956 #endif
+ 957     return false;
+ 958   }
+ 959 }
+ 960 
+ 961 Node* LibraryCallKit::try_to_predicate(int predicate) {
+ 962   if (!jvms()-&gt;has_method()) {
+ 963     // Root JVMState has a null method.
+ 964     assert(map()-&gt;memory()-&gt;Opcode() == Op_Parm, "");
+ 965     // Insert the memory aliasing node
+ 966     set_all_memory(reset_memory());
+ 967   }
+
+</pre><hr></hr><pre>
+2366 bool LibraryCallKit::inline_number_methods(vmIntrinsics::ID id) {
+2367   Node* arg = argument(0);
+2368   Node* n;
+2369   switch (id) {
+2370   case vmIntrinsics::_numberOfLeadingZeros_i:   n = new (C) CountLeadingZerosINode( arg);  break;
+2371   case vmIntrinsics::_numberOfLeadingZeros_l:   n = new (C) CountLeadingZerosLNode( arg);  break;
+2372   case vmIntrinsics::_numberOfTrailingZeros_i:  n = new (C) CountTrailingZerosINode(arg);  break;
+2373   case vmIntrinsics::_numberOfTrailingZeros_l:  n = new (C) CountTrailingZerosLNode(arg);  break;
+2374   case vmIntrinsics::_bitCount_i:               n = new (C) PopCountINode(          arg);  break;
+2375   case vmIntrinsics::_bitCount_l:               n = new (C) PopCountLNode(          arg);  break;
+2376   case vmIntrinsics::_reverseBytes_c:           n = new (C) ReverseBytesUSNode(0,   arg);  break;
+2377   case vmIntrinsics::_reverseBytes_s:           n = new (C) ReverseBytesSNode( 0,   arg);  break;
+2378   case vmIntrinsics::_reverseBytes_i:           n = new (C) ReverseBytesINode( 0,   arg);  break;
+2379   case vmIntrinsics::_reverseBytes_l:           n = new (C) ReverseBytesLNode( 0,   arg);  break;
+2380   default:  fatal_unexpected_iid(id);  break;
+2381   }
+2382   set_result(_gvn.transform(n));
+2383   return true;
+2384 }
+2385 
+<span class="new">2386 //------------------inline_unsafe_deriveContainedObjectAtOffset---------------</span>
+<span class="new">2387 </span>
+<span class="new">2388 bool LibraryCallKit::inline_unsafe_deriveContainedObjectAtOffset() {</span>
+<span class="new">2389   Node* receiver = argument(0); // the unsafe instance</span>
+<span class="new">2390   Node* base     = argument(1);</span>
+<span class="new">2391   Node* offset   = argument(2);</span>
+<span class="new">2392 </span>
+<span class="new">2393   // null check unsafe: must have capability</span>
+<span class="new">2394   receiver = null_check(receiver);</span>
+<span class="new">2395   if (stopped()) {</span>
+<span class="new">2396     return true;</span>
+<span class="new">2397   }</span>
+<span class="new">2398 </span>
+<span class="new">2399   // null check base</span>
+<span class="new">2400   base = null_check(base);</span>
+<span class="new">2401   if (stopped()) {</span>
+<span class="new">2402     return true;</span>
+<span class="new">2403   }</span>
+<span class="new">2404 </span>
+<span class="new">2405   // if (!is_size_aligned((size_t) offset, HeapWordSize))</span>
+<span class="new">2406   //   throw new IllegalArgumentException();</span>
+<span class="new">2407   // TODO</span>
+<span class="new">2408 </span>
+<span class="new">2409   Node* adr = basic_plus_adr(top(), base, offset); // don't want to keep base-derived relationship here</span>
+<span class="new">2410   Node* cast = new (C) CastDerivedNode(adr, TypeInstPtr::NOTNULL); // assuming a non-null Object</span>
+<span class="new">2411   cast = _gvn.transform(cast);</span>
+<span class="new">2412   set_result(cast);</span>
+<span class="new">2413   return true;</span>
+<span class="new">2414 }</span>
+<span class="new">2415 </span>
+2416 //----------------------------inline_unsafe_access----------------------------
+2417 
+2418 const static BasicType T_ADDRESS_HOLDER = T_LONG;
+2419 
+2420 // Helper that guards and inserts a pre-barrier.
+2421 void LibraryCallKit::insert_pre_barrier(Node* base_oop, Node* offset,
+2422                                         Node* pre_val, bool need_mem_bar) {
+2423   // We could be accessing the referent field of a reference object. If so, when G1
+2424   // is enabled, we need to log the value in the referent field in an SATB buffer.
+2425   // This routine performs some compile time filters and generates suitable
+2426   // runtime filters that guard the pre-barrier code.
+2427   // Also add memory barrier for non volatile load from the referent field
+2428   // to prevent commoning of loads across safepoint.
+2429   if (!UseG1GC &amp;&amp; !need_mem_bar)
+2430     return;
+2431 
+2432   // Some compile time checks.
+2433 
+2434   // If offset is a constant, is it java_lang_ref_Reference::_reference_offset?
+2435   const TypeX* otype = offset-&gt;find_intptr_t_type();
+
+</pre><hr></hr><pre>
+6067   } else {
+6068     type = Type::get_const_basic_type(bt);
+6069   }
+6070 
+6071   if (support_IRIW_for_not_multiple_copy_atomic_cpu &amp;&amp; is_vol) {
+6072     insert_mem_bar(Op_MemBarVolatile);   // StoreLoad barrier
+6073   }
+6074   // Build the load.
+6075   MemNode::MemOrd mo = is_vol ? MemNode::acquire : MemNode::unordered;
+6076   Node* loadedField = make_load(NULL, adr, type, bt, adr_type, mo, is_vol);
+6077   // If reference is volatile, prevent following memory ops from
+6078   // floating up past the volatile read.  Also prevents commoning
+6079   // another volatile read.
+6080   if (is_vol) {
+6081     // Memory barrier includes bogus read of value to force load BEFORE membar
+6082     insert_mem_bar(Op_MemBarAcquire, loadedField);
+6083   }
+6084   return loadedField;
+6085 }
+6086 
+<span class="new">6087 Node * LibraryCallKit::load_container_class(Node* ctrObj) {</span>
+<span class="new">6088 </span>
+<span class="new">6089   const TypeInstPtr* tinst = _gvn.type(ctrObj)-&gt;isa_instptr();</span>
+<span class="new">6090   assert(tinst != NULL, "obj is null");</span>
+<span class="new">6091   assert(tinst-&gt;klass()-&gt;is_loaded(), "obj is not loaded");</span>
+<span class="new">6092 </span>
+<span class="new">6093   ciField* field = tinst-&gt;klass()-&gt;as_instance_klass()-&gt;get_field_by_name(</span>
+<span class="new">6094           ciSymbol::make("elementClass"), ciSymbol::make("Ljava/lang/Class;"), false);</span>
+<span class="new">6095   if (field == NULL) return (Node *) NULL;</span>
+<span class="new">6096   assert (field != NULL, "undefined field");</span>
+<span class="new">6097 </span>
+<span class="new">6098   ciType* field_klass = field-&gt;type();</span>
+<span class="new">6099   assert(field_klass-&gt;is_loaded(), "should be loaded");</span>
+<span class="new">6100   const TypePtr* adr_type = C-&gt;alias_type(field)-&gt;adr_type();</span>
+<span class="new">6101   int offset  = field-&gt;offset_in_bytes();</span>
+<span class="new">6102   Node* adr = basic_plus_adr(ctrObj, ctrObj, offset);</span>
+<span class="new">6103   BasicType bt = field-&gt;layout_type();</span>
+<span class="new">6104   assert(bt == T_OBJECT, "");</span>
+<span class="new">6105 </span>
+<span class="new">6106   const Type* type = TypeOopPtr::make_from_klass(field_klass-&gt;as_klass());</span>
+<span class="new">6107   Node* loadedField = make_load(NULL, adr, type, bt, adr_type, MemNode::unordered, false);</span>
+<span class="new">6108   return loadedField;</span>
+<span class="new">6109 }</span>
+<span class="new">6110 </span>
+<span class="new">6111 bool LibraryCallKit::inline_asa_get() {</span>
+<span class="new">6112     assert(UseObjectLayoutIntrinsics, "not implemented on this platform");</span>
+<span class="new">6113 </span>
+<span class="new">6114 #ifndef PRODUCT</span>
+<span class="new">6115   tty-&gt;print_cr("Attempting to inline org.ObjectLayout.AbstractStructuredArray.get(long) ...");</span>
+<span class="new">6116   {</span>
+<span class="new">6117     ResourceMark rm;</span>
+<span class="new">6118     // Check the signature</span>
+<span class="new">6119     ciSignature* sig = callee()-&gt;signature();</span>
+<span class="new">6120     BasicType rtype = sig-&gt;return_type()-&gt;basic_type();</span>
+<span class="new">6121     assert(rtype == T_OBJECT, "return value is object");</span>
+<span class="new">6122     assert(sig-&gt;count() == 1, "1 arguments");</span>
+<span class="new">6123     assert(sig-&gt;type_at(0)-&gt;basic_type() == T_LONG,   "sanity");</span>
+<span class="new">6124   }</span>
+<span class="new">6125 #endif // PRODUCT</span>
+<span class="new">6126   Node* receiver = argument(0);</span>
+<span class="new">6127   Node* index    = argument(1);</span>
+<span class="new">6128 </span>
+<span class="new">6129   receiver = null_check_receiver();</span>
+<span class="new">6130   if (stopped()) return true;</span>
+<span class="new">6131 </span>
+<span class="new">6132   Node* bodySize = NULL;</span>
+<span class="new">6133   Node* elemtSize = NULL;</span>
+<span class="new">6134   Node* padSize = NULL;</span>
+<span class="new">6135 </span>
+<span class="new">6136   int len_off = org_ObjectLayout_AbstractStructuredArray::length_offset();</span>
+<span class="new">6137   int bs_off  = org_ObjectLayout_AbstractStructuredArray::bodySize_offset();</span>
+<span class="new">6138   int es_off  = org_ObjectLayout_AbstractStructuredArray::elementSize_offset();</span>
+<span class="new">6139   int ps_off  = org_ObjectLayout_AbstractStructuredArray::paddingSize_offset();</span>
+<span class="new">6140 </span>
+<span class="new">6141   Node* lnp = basic_plus_adr(top(), receiver, len_off);</span>
+<span class="new">6142   if (lnp == NULL) return false; // cannot happen?</span>
+<span class="new">6143   Node* lnv = make_load(NULL, lnp, TypeLong::LONG, T_LONG, MemNode::unordered);</span>
+<span class="new">6144 </span>
+<span class="new">6145   Node* bsp = basic_plus_adr(top(), receiver, bs_off);</span>
+<span class="new">6146   if (bsp == NULL) return false; // cannot happen?</span>
+<span class="new">6147   Node* bsv = make_load(NULL, bsp, TypeInt::INT, T_INT, MemNode::unordered);</span>
+<span class="new">6148 </span>
+<span class="new">6149   Node* esp = basic_plus_adr(top(), receiver, es_off);</span>
+<span class="new">6150   if (esp == NULL) return false; // cannot happen?</span>
+<span class="new">6151   Node* esv = make_load(NULL, esp, TypeLong::LONG, T_LONG, MemNode::unordered);</span>
+<span class="new">6152 </span>
+<span class="new">6153   Node* psp = basic_plus_adr(top(), receiver, ps_off);</span>
+<span class="new">6154   if (psp == NULL) return false; // cannot happen?</span>
+<span class="new">6155   Node* psv = make_load(NULL, psp, TypeLong::LONG, T_LONG, MemNode::unordered);</span>
+<span class="new">6156 </span>
+<span class="new">6157   /* long offset = getBodySize() + index*getElementSize() + getPaddingSize(); */</span>
+<span class="new">6158 </span>
+<span class="new">6159   Node* bs_ps_sum = _gvn.transform(new (C) AddLNode(bsv, psv));</span>
+<span class="new">6160   Node* idx_es_mul = _gvn.transform(new (C) MulLNode(index, esv));</span>
+<span class="new">6161   Node* offset = _gvn.transform(new (C) AddLNode(bs_ps_sum, idx_es_mul));</span>
+<span class="new">6162 </span>
+<span class="new">6163   const Type* t = TypeOopPtr::BOTTOM; // FIXME</span>
+<span class="new">6164 </span>
+<span class="new">6165   Node* result = make_load(NULL, offset, t, T_OBJECT, MemNode::unordered);</span>
+<span class="new">6166 </span>
+<span class="new">6167   _gvn.set_type(result, t);</span>
+<span class="new">6168 </span>
+<span class="new">6169   set_result(result);</span>
+<span class="new">6170 #ifndef PRODUCT</span>
+<span class="new">6171   tty-&gt;print_cr("Done.");</span>
+<span class="new">6172 #endif</span>
+<span class="new">6173   return false;</span>
+<span class="new">6174 }</span>
+<span class="new">6175 </span>
+<span class="new">6176 /*</span>
+<span class="new">6177  * Derive contained object at offset.</span>
+<span class="new">6178  * Object deriveContainedObjectAtOffset(Object container, long index)</span>
+<span class="new">6179  */</span>
+<span class="new">6180 bool LibraryCallKit::inline_derive_contained_object() {</span>
+<span class="new">6181     assert(UseObjectLayoutIntrinsics, "not implemented on this platform");</span>
+<span class="new">6182 </span>
+<span class="new">6183 #ifndef PRODUCT</span>
+<span class="new">6184   tty-&gt;print_cr("Attempting to inline sun.misc.Unsafe.deriveContainedObjectAtOffset(Object,long) ...");</span>
+<span class="new">6185   {</span>
+<span class="new">6186     ResourceMark rm;</span>
+<span class="new">6187     // Check the signature</span>
+<span class="new">6188     ciSignature* sig = callee()-&gt;signature();</span>
+<span class="new">6189     BasicType rtype = sig-&gt;return_type()-&gt;basic_type();</span>
+<span class="new">6190     assert(rtype == T_OBJECT, "return value is object");</span>
+<span class="new">6191     assert(sig-&gt;count() == 2, "2 arguments");</span>
+<span class="new">6192     assert(sig-&gt;type_at(0)-&gt;basic_type() == T_OBJECT, "sanity");</span>
+<span class="new">6193     assert(sig-&gt;type_at(1)-&gt;basic_type() == T_LONG,   "sanity");</span>
+<span class="new">6194   }</span>
+<span class="new">6195 #endif // PRODUCT</span>
+<span class="new">6196 </span>
+<span class="new">6197   Node* receiver = argument(0); // type: oop</span>
+<span class="new">6198   Node* container = argument(1); // type: oop</span>
+<span class="new">6199   Node* offset = argument(2); // type: long</span>
+<span class="new">6200 </span>
+<span class="new">6201   receiver  = null_check(receiver);</span>
+<span class="new">6202   container = null_check(container);</span>
+<span class="new">6203   if (stopped()) {</span>
+<span class="new">6204     return true;</span>
+<span class="new">6205   }</span>
+<span class="new">6206 </span>
+<span class="new">6207   Node* result = basic_plus_adr(container, container, offset);</span>
+<span class="new">6208 </span>
+<span class="new">6209   const TypePtr *adr_type = _gvn.type(result)-&gt;isa_ptr();</span>
+<span class="new">6210   Compile::AliasType* alias_type = C-&gt;alias_type(adr_type);</span>
+<span class="new">6211   assert(alias_type-&gt;index() != Compile::AliasIdxBot, "no bare pointers here");</span>
+<span class="new">6212 </span>
+<span class="new">6213   bool need_mem_bar = (alias_type-&gt;adr_type() == TypeOopPtr::BOTTOM); // it's true</span>
+<span class="new">6214   </span>
+<span class="new">6215   Node* heap_base_oop = container;</span>
+<span class="new">6216   bool need_read_barrier = offset != top() &amp;&amp; heap_base_oop != top(); // it's true</span>
+<span class="new">6217   </span>
+<span class="new">6218   if (need_mem_bar) insert_mem_bar(Op_MemBarCPUOrder);</span>
+<span class="new">6219 </span>
+<span class="new">6220   if (need_read_barrier) {</span>
+<span class="new">6221     insert_pre_barrier(heap_base_oop, offset, result, !(need_mem_bar));</span>
+<span class="new">6222   }</span>
+<span class="new">6223 </span>
+<span class="new">6224   set_result(result);</span>
+<span class="new">6225 </span>
+<span class="new">6226   if (need_mem_bar) insert_mem_bar(Op_MemBarCPUOrder);</span>
+<span class="new">6227 #ifndef PRODUCT</span>
+<span class="new">6228   tty-&gt;print_cr("Done.");</span>
+<span class="new">6229 #endif</span>
+<span class="new">6230   return true;</span>
+<span class="new">6231 }</span>
+6232 
+6233 //------------------------------inline_aescrypt_Block-----------------------
+6234 bool LibraryCallKit::inline_aescrypt_Block(vmIntrinsics::ID id) {
+6235   address stubAddr;
+6236   const char *stubName;
+6237   assert(UseAES, "need AES instruction support");
+6238 
+6239   switch(id) {
+6240   case vmIntrinsics::_aescrypt_encryptBlock:
+6241     stubAddr = StubRoutines::aescrypt_encryptBlock();
+6242     stubName = "aescrypt_encryptBlock";
+6243     break;
+6244   case vmIntrinsics::_aescrypt_decryptBlock:
+6245     stubAddr = StubRoutines::aescrypt_decryptBlock();
+6246     stubName = "aescrypt_decryptBlock";
+6247     break;
+6248   }
+6249   if (stubAddr == NULL) return false;
+6250 
+6251   Node* aescrypt_object = argument(0);
+
+</pre><hr></hr><pre>
+6712   }
+6713 
+6714   ciKlass* klass_SHA = NULL;
+6715   if (klass_SHA_name != NULL) {
+6716     klass_SHA = tinst-&gt;klass()-&gt;as_instance_klass()-&gt;find_klass(ciSymbol::make(klass_SHA_name));
+6717   }
+6718   if ((klass_SHA == NULL) || !klass_SHA-&gt;is_loaded()) {
+6719     // if none of SHA/SHA2/SHA5 is loaded, we never take the intrinsic fast path
+6720     Node* ctrl = control();
+6721     set_control(top()); // no intrinsic path
+6722     return ctrl;
+6723   }
+6724   ciInstanceKlass* instklass_SHA = klass_SHA-&gt;as_instance_klass();
+6725 
+6726   Node* instofSHA = gen_instanceof(digestBaseObj, makecon(TypeKlassPtr::make(instklass_SHA)));
+6727   Node* cmp_instof = _gvn.transform(new (C) CmpINode(instofSHA, intcon(1)));
+6728   Node* bool_instof = _gvn.transform(new (C) BoolNode(cmp_instof, BoolTest::ne));
+6729   Node* instof_false = generate_guard(bool_instof, NULL, PROB_MIN);
+6730 
+6731   return instof_false;  // even if it is NULL
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+6732 }
+</pre></td>
+</tr></table>
+</body></html>

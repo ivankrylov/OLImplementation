@@ -1,0 +1,29 @@
+--- old/src/share/vm/runtime/arguments.hpp	2015-06-16 10:25:49.214319272 -0700
++++ new/src/share/vm/runtime/arguments.hpp	2015-06-16 10:25:49.146320926 -0700
+@@ -342,6 +342,7 @@
+   static void select_gc();
+   static void set_ergonomics_flags();
+   static void set_shared_spaces_flags();
++  static void set_object_layout_flags();
+   // limits the given memory size by the maximum amount of memory this process is
+   // currently allowed to allocate or reserve.
+   static julong limit_by_allocatable_memory(julong size);
+@@ -466,7 +467,8 @@
+   static bool verify_MaxHeapFreeRatio(FormatBuffer<80>& err_msg, uintx max_heap_free_ratio);
+ 
+   // Check for consistency in the selection of the garbage collector.
+-  static bool check_gc_consistency();        // Check user-selected gc
++  static bool check_gc_consistency_user();        // Check user-selected gc
++  static inline bool check_gc_consistency_ergo(); // Check ergonomic-selected gc
+   static void check_deprecated_gcs();
+   static void check_deprecated_gc_flags();
+   // Check consistecy or otherwise of VM argument settings
+@@ -614,4 +616,8 @@
+     UseParNewGC || UseSerialGC;
+ }
+ 
++bool Arguments::check_gc_consistency_ergo() {
++  return check_gc_consistency_user();
++}
++
+ #endif // SHARE_VM_RUNTIME_ARGUMENTS_HPP

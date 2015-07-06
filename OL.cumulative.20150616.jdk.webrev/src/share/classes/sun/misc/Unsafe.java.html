@@ -1,0 +1,1301 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>New src/share/classes/sun/misc/Unsafe.java</title>
+<body id="SUNWwebrev">
+<pre>
+   1 /*
+   2  * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.  Oracle designates this
+   8  * particular file as subject to the "Classpath" exception as provided
+   9  * by Oracle in the LICENSE file that accompanied this code.
+  10  *
+  11  * This code is distributed in the hope that it will be useful, but WITHOUT
+  12  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  13  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  14  * version 2 for more details (a copy is included in the LICENSE file that
+  15  * accompanied this code).
+  16  *
+  17  * You should have received a copy of the GNU General Public License version
+  18  * 2 along with this work; if not, write to the Free Software Foundation,
+  19  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  20  *
+  21  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  22  * or visit www.oracle.com if you need additional information or have any
+  23  * questions.
+  24  */
+  25 
+  26 /*
+  27  * This file has been modified by Azul Systems, Inc. in 2014. These
+  28  * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+  29  * available on the same license terms set forth above.
+  30  */
+  31 
+  32 package sun.misc;
+  33 
+  34 import java.lang.reflect.*;
+  35 import java.security.*;
+  36 
+  37 import sun.reflect.CallerSensitive;
+  38 import sun.reflect.Reflection;
+  39 
+  40 /**
+  41  * A collection of methods for performing low-level, unsafe operations.
+  42  * Although the class and all methods are public, use of this class is
+  43  * limited because only trusted code can obtain instances of it.
+  44  *
+  45  * @author John R. Rose
+  46  * @see #getUnsafe
+  47  */
+  48 
+  49 public final class Unsafe {
+  50 
+  51     private static native void registerNatives();
+  52     static {
+  53         registerNatives();
+  54         sun.reflect.Reflection.registerMethodsToFilter(Unsafe.class, "getUnsafe");
+  55     }
+  56 
+  57     private Unsafe() {}
+  58 
+  59     private static final Unsafe theUnsafe = new Unsafe();
+  60 
+  61     /**
+  62      * Provides the caller with the capability of performing unsafe
+  63      * operations.
+  64      *
+  65      * &lt;p&gt; The returned &lt;code&gt;Unsafe&lt;/code&gt; object should be carefully guarded
+  66      * by the caller, since it can be used to read and write data at arbitrary
+  67      * memory addresses.  It must never be passed to untrusted code.
+  68      *
+  69      * &lt;p&gt; Most methods in this class are very low-level, and correspond to a
+  70      * small number of hardware instructions (on typical machines).  Compilers
+  71      * are encouraged to optimize these methods accordingly.
+  72      *
+  73      * &lt;p&gt; Here is a suggested idiom for using unsafe operations:
+  74      *
+  75      * &lt;blockquote&gt;&lt;pre&gt;
+  76      * class MyTrustedClass {
+  77      *   private static final Unsafe unsafe = Unsafe.getUnsafe();
+  78      *   ...
+  79      *   private long myCountAddress = ...;
+  80      *   public int getCount() { return unsafe.getByte(myCountAddress); }
+  81      * }
+  82      * &lt;/pre&gt;&lt;/blockquote&gt;
+  83      *
+  84      * (It may assist compilers to make the local variable be
+  85      * &lt;code&gt;final&lt;/code&gt;.)
+  86      *
+  87      * @exception  SecurityException  if a security manager exists and its
+  88      *             &lt;code&gt;checkPropertiesAccess&lt;/code&gt; method doesn't allow
+  89      *             access to the system properties.
+  90      */
+  91     @CallerSensitive
+  92     public static Unsafe getUnsafe() {
+  93         Class&lt;?&gt; caller = Reflection.getCallerClass();
+  94         if (!VM.isSystemDomainLoader(caller.getClassLoader()))
+  95             throw new SecurityException("Unsafe");
+  96         return theUnsafe;
+  97     }
+  98 
+  99     /// peek and poke operations
+ 100     /// (compilers should optimize these to memory ops)
+ 101 
+ 102     // These work on object fields in the Java heap.
+ 103     // They will not work on elements of packed arrays.
+ 104 
+ 105     /**
+ 106      * Fetches a value from a given Java variable.
+ 107      * More specifically, fetches a field or array element within the given
+ 108      * object &lt;code&gt;o&lt;/code&gt; at the given offset, or (if &lt;code&gt;o&lt;/code&gt; is
+ 109      * null) from the memory address whose numerical value is the given
+ 110      * offset.
+ 111      * &lt;p&gt;
+ 112      * The results are undefined unless one of the following cases is true:
+ 113      * &lt;ul&gt;
+ 114      * &lt;li&gt;The offset was obtained from {@link #objectFieldOffset} on
+ 115      * the {@link java.lang.reflect.Field} of some Java field and the object
+ 116      * referred to by &lt;code&gt;o&lt;/code&gt; is of a class compatible with that
+ 117      * field's class.
+ 118      *
+ 119      * &lt;li&gt;The offset and object reference &lt;code&gt;o&lt;/code&gt; (either null or
+ 120      * non-null) were both obtained via {@link #staticFieldOffset}
+ 121      * and {@link #staticFieldBase} (respectively) from the
+ 122      * reflective {@link Field} representation of some Java field.
+ 123      *
+ 124      * &lt;li&gt;The object referred to by &lt;code&gt;o&lt;/code&gt; is an array, and the offset
+ 125      * is an integer of the form &lt;code&gt;B+N*S&lt;/code&gt;, where &lt;code&gt;N&lt;/code&gt; is
+ 126      * a valid index into the array, and &lt;code&gt;B&lt;/code&gt; and &lt;code&gt;S&lt;/code&gt; are
+ 127      * the values obtained by {@link #arrayBaseOffset} and {@link
+ 128      * #arrayIndexScale} (respectively) from the array's class.  The value
+ 129      * referred to is the &lt;code&gt;N&lt;/code&gt;&lt;em&gt;th&lt;/em&gt; element of the array.
+ 130      *
+ 131      * &lt;/ul&gt;
+ 132      * &lt;p&gt;
+ 133      * If one of the above cases is true, the call references a specific Java
+ 134      * variable (field or array element).  However, the results are undefined
+ 135      * if that variable is not in fact of the type returned by this method.
+ 136      * &lt;p&gt;
+ 137      * This method refers to a variable by means of two parameters, and so
+ 138      * it provides (in effect) a &lt;em&gt;double-register&lt;/em&gt; addressing mode
+ 139      * for Java variables.  When the object reference is null, this method
+ 140      * uses its offset as an absolute address.  This is similar in operation
+ 141      * to methods such as {@link #getInt(long)}, which provide (in effect) a
+ 142      * &lt;em&gt;single-register&lt;/em&gt; addressing mode for non-Java variables.
+ 143      * However, because Java variables may have a different layout in memory
+ 144      * from non-Java variables, programmers should not assume that these
+ 145      * two addressing modes are ever equivalent.  Also, programmers should
+ 146      * remember that offsets from the double-register addressing mode cannot
+ 147      * be portably confused with longs used in the single-register addressing
+ 148      * mode.
+ 149      *
+ 150      * @param o Java heap object in which the variable resides, if any, else
+ 151      *        null
+ 152      * @param offset indication of where the variable resides in a Java heap
+ 153      *        object, if any, else a memory address locating the variable
+ 154      *        statically
+ 155      * @return the value fetched from the indicated Java variable
+ 156      * @throws RuntimeException No defined exceptions are thrown, not even
+ 157      *         {@link NullPointerException}
+ 158      */
+ 159     public native int getInt(Object o, long offset);
+ 160 
+ 161     /**
+ 162      * Stores a value into a given Java variable.
+ 163      * &lt;p&gt;
+ 164      * The first two parameters are interpreted exactly as with
+ 165      * {@link #getInt(Object, long)} to refer to a specific
+ 166      * Java variable (field or array element).  The given value
+ 167      * is stored into that variable.
+ 168      * &lt;p&gt;
+ 169      * The variable must be of the same type as the method
+ 170      * parameter &lt;code&gt;x&lt;/code&gt;.
+ 171      *
+ 172      * @param o Java heap object in which the variable resides, if any, else
+ 173      *        null
+ 174      * @param offset indication of where the variable resides in a Java heap
+ 175      *        object, if any, else a memory address locating the variable
+ 176      *        statically
+ 177      * @param x the value to store into the indicated Java variable
+ 178      * @throws RuntimeException No defined exceptions are thrown, not even
+ 179      *         {@link NullPointerException}
+ 180      */
+ 181     public native void putInt(Object o, long offset, int x);
+ 182 
+ 183     /**
+ 184      * Fetches a reference value from a given Java variable.
+ 185      * @see #getInt(Object, long)
+ 186      */
+ 187     public native Object getObject(Object o, long offset);
+ 188 
+ 189     /**
+ 190      * Stores a reference value into a given Java variable.
+ 191      * &lt;p&gt;
+ 192      * Unless the reference &lt;code&gt;x&lt;/code&gt; being stored is either null
+ 193      * or matches the field type, the results are undefined.
+ 194      * If the reference &lt;code&gt;o&lt;/code&gt; is non-null, car marks or
+ 195      * other store barriers for that object (if the VM requires them)
+ 196      * are updated.
+ 197      * @see #putInt(Object, int, int)
+ 198      */
+ 199     public native void putObject(Object o, long offset, Object x);
+ 200 
+ 201     /** @see #getInt(Object, long) */
+ 202     public native boolean getBoolean(Object o, long offset);
+ 203     /** @see #putInt(Object, int, int) */
+ 204     public native void    putBoolean(Object o, long offset, boolean x);
+ 205     /** @see #getInt(Object, long) */
+ 206     public native byte    getByte(Object o, long offset);
+ 207     /** @see #putInt(Object, int, int) */
+ 208     public native void    putByte(Object o, long offset, byte x);
+ 209     /** @see #getInt(Object, long) */
+ 210     public native short   getShort(Object o, long offset);
+ 211     /** @see #putInt(Object, int, int) */
+ 212     public native void    putShort(Object o, long offset, short x);
+ 213     /** @see #getInt(Object, long) */
+ 214     public native char    getChar(Object o, long offset);
+ 215     /** @see #putInt(Object, int, int) */
+ 216     public native void    putChar(Object o, long offset, char x);
+ 217     /** @see #getInt(Object, long) */
+ 218     public native long    getLong(Object o, long offset);
+ 219     /** @see #putInt(Object, int, int) */
+ 220     public native void    putLong(Object o, long offset, long x);
+ 221     /** @see #getInt(Object, long) */
+ 222     public native float   getFloat(Object o, long offset);
+ 223     /** @see #putInt(Object, int, int) */
+ 224     public native void    putFloat(Object o, long offset, float x);
+ 225     /** @see #getInt(Object, long) */
+ 226     public native double  getDouble(Object o, long offset);
+ 227     /** @see #putInt(Object, int, int) */
+ 228     public native void    putDouble(Object o, long offset, double x);
+ 229 
+ 230     /**
+ 231      * This method, like all others with 32-bit offsets, was native
+ 232      * in a previous release but is now a wrapper which simply casts
+ 233      * the offset to a long value.  It provides backward compatibility
+ 234      * with bytecodes compiled against 1.4.
+ 235      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 236      * See {@link #staticFieldOffset}.
+ 237      */
+ 238     @Deprecated
+ 239     public int getInt(Object o, int offset) {
+ 240         return getInt(o, (long)offset);
+ 241     }
+ 242 
+ 243     /**
+ 244      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 245      * See {@link #staticFieldOffset}.
+ 246      */
+ 247     @Deprecated
+ 248     public void putInt(Object o, int offset, int x) {
+ 249         putInt(o, (long)offset, x);
+ 250     }
+ 251 
+ 252     /**
+ 253      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 254      * See {@link #staticFieldOffset}.
+ 255      */
+ 256     @Deprecated
+ 257     public Object getObject(Object o, int offset) {
+ 258         return getObject(o, (long)offset);
+ 259     }
+ 260 
+ 261     /**
+ 262      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 263      * See {@link #staticFieldOffset}.
+ 264      */
+ 265     @Deprecated
+ 266     public void putObject(Object o, int offset, Object x) {
+ 267         putObject(o, (long)offset, x);
+ 268     }
+ 269 
+ 270     /**
+ 271      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 272      * See {@link #staticFieldOffset}.
+ 273      */
+ 274     @Deprecated
+ 275     public boolean getBoolean(Object o, int offset) {
+ 276         return getBoolean(o, (long)offset);
+ 277     }
+ 278 
+ 279     /**
+ 280      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 281      * See {@link #staticFieldOffset}.
+ 282      */
+ 283     @Deprecated
+ 284     public void putBoolean(Object o, int offset, boolean x) {
+ 285         putBoolean(o, (long)offset, x);
+ 286     }
+ 287 
+ 288     /**
+ 289      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 290      * See {@link #staticFieldOffset}.
+ 291      */
+ 292     @Deprecated
+ 293     public byte getByte(Object o, int offset) {
+ 294         return getByte(o, (long)offset);
+ 295     }
+ 296 
+ 297     /**
+ 298      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 299      * See {@link #staticFieldOffset}.
+ 300      */
+ 301     @Deprecated
+ 302     public void putByte(Object o, int offset, byte x) {
+ 303         putByte(o, (long)offset, x);
+ 304     }
+ 305 
+ 306     /**
+ 307      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 308      * See {@link #staticFieldOffset}.
+ 309      */
+ 310     @Deprecated
+ 311     public short getShort(Object o, int offset) {
+ 312         return getShort(o, (long)offset);
+ 313     }
+ 314 
+ 315     /**
+ 316      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 317      * See {@link #staticFieldOffset}.
+ 318      */
+ 319     @Deprecated
+ 320     public void putShort(Object o, int offset, short x) {
+ 321         putShort(o, (long)offset, x);
+ 322     }
+ 323 
+ 324     /**
+ 325      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 326      * See {@link #staticFieldOffset}.
+ 327      */
+ 328     @Deprecated
+ 329     public char getChar(Object o, int offset) {
+ 330         return getChar(o, (long)offset);
+ 331     }
+ 332 
+ 333     /**
+ 334      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 335      * See {@link #staticFieldOffset}.
+ 336      */
+ 337     @Deprecated
+ 338     public void putChar(Object o, int offset, char x) {
+ 339         putChar(o, (long)offset, x);
+ 340     }
+ 341 
+ 342     /**
+ 343      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 344      * See {@link #staticFieldOffset}.
+ 345      */
+ 346     @Deprecated
+ 347     public long getLong(Object o, int offset) {
+ 348         return getLong(o, (long)offset);
+ 349     }
+ 350 
+ 351     /**
+ 352      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 353      * See {@link #staticFieldOffset}.
+ 354      */
+ 355     @Deprecated
+ 356     public void putLong(Object o, int offset, long x) {
+ 357         putLong(o, (long)offset, x);
+ 358     }
+ 359 
+ 360     /**
+ 361      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 362      * See {@link #staticFieldOffset}.
+ 363      */
+ 364     @Deprecated
+ 365     public float getFloat(Object o, int offset) {
+ 366         return getFloat(o, (long)offset);
+ 367     }
+ 368 
+ 369     /**
+ 370      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 371      * See {@link #staticFieldOffset}.
+ 372      */
+ 373     @Deprecated
+ 374     public void putFloat(Object o, int offset, float x) {
+ 375         putFloat(o, (long)offset, x);
+ 376     }
+ 377 
+ 378     /**
+ 379      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 380      * See {@link #staticFieldOffset}.
+ 381      */
+ 382     @Deprecated
+ 383     public double getDouble(Object o, int offset) {
+ 384         return getDouble(o, (long)offset);
+ 385     }
+ 386 
+ 387     /**
+ 388      * @deprecated As of 1.4.1, cast the 32-bit offset argument to a long.
+ 389      * See {@link #staticFieldOffset}.
+ 390      */
+ 391     @Deprecated
+ 392     public void putDouble(Object o, int offset, double x) {
+ 393         putDouble(o, (long)offset, x);
+ 394     }
+ 395 
+ 396     // These work on values in the C heap.
+ 397 
+ 398     /**
+ 399      * Fetches a value from a given memory address.  If the address is zero, or
+ 400      * does not point into a block obtained from {@link #allocateMemory}, the
+ 401      * results are undefined.
+ 402      *
+ 403      * @see #allocateMemory
+ 404      */
+ 405     public native byte    getByte(long address);
+ 406 
+ 407     /**
+ 408      * Stores a value into a given memory address.  If the address is zero, or
+ 409      * does not point into a block obtained from {@link #allocateMemory}, the
+ 410      * results are undefined.
+ 411      *
+ 412      * @see #getByte(long)
+ 413      */
+ 414     public native void    putByte(long address, byte x);
+ 415 
+ 416     /** @see #getByte(long) */
+ 417     public native short   getShort(long address);
+ 418     /** @see #putByte(long, byte) */
+ 419     public native void    putShort(long address, short x);
+ 420     /** @see #getByte(long) */
+ 421     public native char    getChar(long address);
+ 422     /** @see #putByte(long, byte) */
+ 423     public native void    putChar(long address, char x);
+ 424     /** @see #getByte(long) */
+ 425     public native int     getInt(long address);
+ 426     /** @see #putByte(long, byte) */
+ 427     public native void    putInt(long address, int x);
+ 428     /** @see #getByte(long) */
+ 429     public native long    getLong(long address);
+ 430     /** @see #putByte(long, byte) */
+ 431     public native void    putLong(long address, long x);
+ 432     /** @see #getByte(long) */
+ 433     public native float   getFloat(long address);
+ 434     /** @see #putByte(long, byte) */
+ 435     public native void    putFloat(long address, float x);
+ 436     /** @see #getByte(long) */
+ 437     public native double  getDouble(long address);
+ 438     /** @see #putByte(long, byte) */
+ 439     public native void    putDouble(long address, double x);
+ 440 
+ 441     /**
+ 442      * Fetches a native pointer from a given memory address.  If the address is
+ 443      * zero, or does not point into a block obtained from {@link
+ 444      * #allocateMemory}, the results are undefined.
+ 445      *
+ 446      * &lt;p&gt; If the native pointer is less than 64 bits wide, it is extended as
+ 447      * an unsigned number to a Java long.  The pointer may be indexed by any
+ 448      * given byte offset, simply by adding that offset (as a simple integer) to
+ 449      * the long representing the pointer.  The number of bytes actually read
+ 450      * from the target address maybe determined by consulting {@link
+ 451      * #addressSize}.
+ 452      *
+ 453      * @see #allocateMemory
+ 454      */
+ 455     public native long getAddress(long address);
+ 456 
+ 457     /**
+ 458      * Stores a native pointer into a given memory address.  If the address is
+ 459      * zero, or does not point into a block obtained from {@link
+ 460      * #allocateMemory}, the results are undefined.
+ 461      *
+ 462      * &lt;p&gt; The number of bytes actually written at the target address maybe
+ 463      * determined by consulting {@link #addressSize}.
+ 464      *
+ 465      * @see #getAddress(long)
+ 466      */
+ 467     public native void putAddress(long address, long x);
+ 468 
+ 469     /// wrappers for malloc, realloc, free:
+ 470 
+ 471     /**
+ 472      * Allocates a new block of native memory, of the given size in bytes.  The
+ 473      * contents of the memory are uninitialized; they will generally be
+ 474      * garbage.  The resulting native pointer will never be zero, and will be
+ 475      * aligned for all value types.  Dispose of this memory by calling {@link
+ 476      * #freeMemory}, or resize it with {@link #reallocateMemory}.
+ 477      *
+ 478      * @throws IllegalArgumentException if the size is negative or too large
+ 479      *         for the native size_t type
+ 480      *
+ 481      * @throws OutOfMemoryError if the allocation is refused by the system
+ 482      *
+ 483      * @see #getByte(long)
+ 484      * @see #putByte(long, byte)
+ 485      */
+ 486     public native long allocateMemory(long bytes);
+ 487 
+ 488     /**
+ 489      * Resizes a new block of native memory, to the given size in bytes.  The
+ 490      * contents of the new block past the size of the old block are
+ 491      * uninitialized; they will generally be garbage.  The resulting native
+ 492      * pointer will be zero if and only if the requested size is zero.  The
+ 493      * resulting native pointer will be aligned for all value types.  Dispose
+ 494      * of this memory by calling {@link #freeMemory}, or resize it with {@link
+ 495      * #reallocateMemory}.  The address passed to this method may be null, in
+ 496      * which case an allocation will be performed.
+ 497      *
+ 498      * @throws IllegalArgumentException if the size is negative or too large
+ 499      *         for the native size_t type
+ 500      *
+ 501      * @throws OutOfMemoryError if the allocation is refused by the system
+ 502      *
+ 503      * @see #allocateMemory
+ 504      */
+ 505     public native long reallocateMemory(long address, long bytes);
+ 506 
+ 507     /**
+ 508      * Sets all bytes in a given block of memory to a fixed value
+ 509      * (usually zero).
+ 510      *
+ 511      * &lt;p&gt;This method determines a block's base address by means of two parameters,
+ 512      * and so it provides (in effect) a &lt;em&gt;double-register&lt;/em&gt; addressing mode,
+ 513      * as discussed in {@link #getInt(Object,long)}.  When the object reference is null,
+ 514      * the offset supplies an absolute base address.
+ 515      *
+ 516      * &lt;p&gt;The stores are in coherent (atomic) units of a size determined
+ 517      * by the address and length parameters.  If the effective address and
+ 518      * length are all even modulo 8, the stores take place in 'long' units.
+ 519      * If the effective address and length are (resp.) even modulo 4 or 2,
+ 520      * the stores take place in units of 'int' or 'short'.
+ 521      *
+ 522      * @since 1.7
+ 523      */
+ 524     public native void setMemory(Object o, long offset, long bytes, byte value);
+ 525 
+ 526     /**
+ 527      * Sets all bytes in a given block of memory to a fixed value
+ 528      * (usually zero).  This provides a &lt;em&gt;single-register&lt;/em&gt; addressing mode,
+ 529      * as discussed in {@link #getInt(Object,long)}.
+ 530      *
+ 531      * &lt;p&gt;Equivalent to &lt;code&gt;setMemory(null, address, bytes, value)&lt;/code&gt;.
+ 532      */
+ 533     public void setMemory(long address, long bytes, byte value) {
+ 534         setMemory(null, address, bytes, value);
+ 535     }
+ 536 
+ 537     /**
+ 538      * Sets all bytes in a given block of memory to a copy of another
+ 539      * block.
+ 540      *
+ 541      * &lt;p&gt;This method determines each block's base address by means of two parameters,
+ 542      * and so it provides (in effect) a &lt;em&gt;double-register&lt;/em&gt; addressing mode,
+ 543      * as discussed in {@link #getInt(Object,long)}.  When the object reference is null,
+ 544      * the offset supplies an absolute base address.
+ 545      *
+ 546      * &lt;p&gt;The transfers are in coherent (atomic) units of a size determined
+ 547      * by the address and length parameters.  If the effective addresses and
+ 548      * length are all even modulo 8, the transfer takes place in 'long' units.
+ 549      * If the effective addresses and length are (resp.) even modulo 4 or 2,
+ 550      * the transfer takes place in units of 'int' or 'short'.
+ 551      *
+ 552      * @since 1.7
+ 553      */
+ 554     public native void copyMemory(Object srcBase, long srcOffset,
+ 555                                   Object destBase, long destOffset,
+ 556                                   long bytes);
+ 557     /**
+ 558      * Sets all bytes in a given block of memory to a copy of another
+ 559      * block.  This provides a &lt;em&gt;single-register&lt;/em&gt; addressing mode,
+ 560      * as discussed in {@link #getInt(Object,long)}.
+ 561      *
+ 562      * Equivalent to &lt;code&gt;copyMemory(null, srcAddress, null, destAddress, bytes)&lt;/code&gt;.
+ 563      */
+ 564     public void copyMemory(long srcAddress, long destAddress, long bytes) {
+ 565         copyMemory(null, srcAddress, null, destAddress, bytes);
+ 566     }
+ 567 
+ 568     /**
+ 569      * Disposes of a block of native memory, as obtained from {@link
+ 570      * #allocateMemory} or {@link #reallocateMemory}.  The address passed to
+ 571      * this method may be null, in which case no action is taken.
+ 572      *
+ 573      * @see #allocateMemory
+ 574      */
+ 575     public native void freeMemory(long address);
+ 576 
+ 577     /// random queries
+ 578 
+ 579     /**
+ 580      * This constant differs from all results that will ever be returned from
+ 581      * {@link #staticFieldOffset}, {@link #objectFieldOffset},
+ 582      * or {@link #arrayBaseOffset}.
+ 583      */
+ 584     public static final int INVALID_FIELD_OFFSET   = -1;
+ 585 
+ 586     /**
+ 587      * Returns the offset of a field, truncated to 32 bits.
+ 588      * This method is implemented as follows:
+ 589      * &lt;blockquote&gt;&lt;pre&gt;
+ 590      * public int fieldOffset(Field f) {
+ 591      *     if (Modifier.isStatic(f.getModifiers()))
+ 592      *         return (int) staticFieldOffset(f);
+ 593      *     else
+ 594      *         return (int) objectFieldOffset(f);
+ 595      * }
+ 596      * &lt;/pre&gt;&lt;/blockquote&gt;
+ 597      * @deprecated As of 1.4.1, use {@link #staticFieldOffset} for static
+ 598      * fields and {@link #objectFieldOffset} for non-static fields.
+ 599      */
+ 600     @Deprecated
+ 601     public int fieldOffset(Field f) {
+ 602         if (Modifier.isStatic(f.getModifiers()))
+ 603             return (int) staticFieldOffset(f);
+ 604         else
+ 605             return (int) objectFieldOffset(f);
+ 606     }
+ 607 
+ 608     /**
+ 609      * Returns the base address for accessing some static field
+ 610      * in the given class.  This method is implemented as follows:
+ 611      * &lt;blockquote&gt;&lt;pre&gt;
+ 612      * public Object staticFieldBase(Class c) {
+ 613      *     Field[] fields = c.getDeclaredFields();
+ 614      *     for (int i = 0; i &lt; fields.length; i++) {
+ 615      *         if (Modifier.isStatic(fields[i].getModifiers())) {
+ 616      *             return staticFieldBase(fields[i]);
+ 617      *         }
+ 618      *     }
+ 619      *     return null;
+ 620      * }
+ 621      * &lt;/pre&gt;&lt;/blockquote&gt;
+ 622      * @deprecated As of 1.4.1, use {@link #staticFieldBase(Field)}
+ 623      * to obtain the base pertaining to a specific {@link Field}.
+ 624      * This method works only for JVMs which store all statics
+ 625      * for a given class in one place.
+ 626      */
+ 627     @Deprecated
+ 628     public Object staticFieldBase(Class&lt;?&gt; c) {
+ 629         Field[] fields = c.getDeclaredFields();
+ 630         for (int i = 0; i &lt; fields.length; i++) {
+ 631             if (Modifier.isStatic(fields[i].getModifiers())) {
+ 632                 return staticFieldBase(fields[i]);
+ 633             }
+ 634         }
+ 635         return null;
+ 636     }
+ 637 
+ 638     /**
+ 639      * Report the location of a given field in the storage allocation of its
+ 640      * class.  Do not expect to perform any sort of arithmetic on this offset;
+ 641      * it is just a cookie which is passed to the unsafe heap memory accessors.
+ 642      *
+ 643      * &lt;p&gt;Any given field will always have the same offset and base, and no
+ 644      * two distinct fields of the same class will ever have the same offset
+ 645      * and base.
+ 646      *
+ 647      * &lt;p&gt;As of 1.4.1, offsets for fields are represented as long values,
+ 648      * although the Sun JVM does not use the most significant 32 bits.
+ 649      * However, JVM implementations which store static fields at absolute
+ 650      * addresses can use long offsets and null base pointers to express
+ 651      * the field locations in a form usable by {@link #getInt(Object,long)}.
+ 652      * Therefore, code which will be ported to such JVMs on 64-bit platforms
+ 653      * must preserve all bits of static field offsets.
+ 654      * @see #getInt(Object, long)
+ 655      */
+ 656     public native long staticFieldOffset(Field f);
+ 657 
+ 658     /**
+ 659      * Report the location of a given static field, in conjunction with {@link
+ 660      * #staticFieldBase}.
+ 661      * &lt;p&gt;Do not expect to perform any sort of arithmetic on this offset;
+ 662      * it is just a cookie which is passed to the unsafe heap memory accessors.
+ 663      *
+ 664      * &lt;p&gt;Any given field will always have the same offset, and no two distinct
+ 665      * fields of the same class will ever have the same offset.
+ 666      *
+ 667      * &lt;p&gt;As of 1.4.1, offsets for fields are represented as long values,
+ 668      * although the Sun JVM does not use the most significant 32 bits.
+ 669      * It is hard to imagine a JVM technology which needs more than
+ 670      * a few bits to encode an offset within a non-array object,
+ 671      * However, for consistency with other methods in this class,
+ 672      * this method reports its result as a long value.
+ 673      * @see #getInt(Object, long)
+ 674      */
+ 675     public native long objectFieldOffset(Field f);
+ 676 
+ 677     /**
+ 678      * Report the location of a given static field, in conjunction with {@link
+ 679      * #staticFieldOffset}.
+ 680      * &lt;p&gt;Fetch the base "Object", if any, with which static fields of the
+ 681      * given class can be accessed via methods like {@link #getInt(Object,
+ 682      * long)}.  This value may be null.  This value may refer to an object
+ 683      * which is a "cookie", not guaranteed to be a real Object, and it should
+ 684      * not be used in any way except as argument to the get and put routines in
+ 685      * this class.
+ 686      */
+ 687     public native Object staticFieldBase(Field f);
+ 688 
+ 689     /**
+ 690      * Detect if the given class may need to be initialized. This is often
+ 691      * needed in conjunction with obtaining the static field base of a
+ 692      * class.
+ 693      * @return false only if a call to {@code ensureClassInitialized} would have no effect
+ 694      */
+ 695     public native boolean shouldBeInitialized(Class&lt;?&gt; c);
+ 696 
+ 697     /**
+ 698      * Ensure the given class has been initialized. This is often
+ 699      * needed in conjunction with obtaining the static field base of a
+ 700      * class.
+ 701      */
+ 702     public native void ensureClassInitialized(Class&lt;?&gt; c);
+ 703 
+ 704     /**
+ 705      * Report the offset of the first element in the storage allocation of a
+ 706      * given array class.  If {@link #arrayIndexScale} returns a non-zero value
+ 707      * for the same class, you may use that scale factor, together with this
+ 708      * base offset, to form new offsets to access elements of arrays of the
+ 709      * given class.
+ 710      *
+ 711      * @see #getInt(Object, long)
+ 712      * @see #putInt(Object, long, int)
+ 713      */
+ 714     public native int arrayBaseOffset(Class&lt;?&gt; arrayClass);
+ 715 
+ 716     /** The value of {@code arrayBaseOffset(boolean[].class)} */
+ 717     public static final int ARRAY_BOOLEAN_BASE_OFFSET
+ 718             = theUnsafe.arrayBaseOffset(boolean[].class);
+ 719 
+ 720     /** The value of {@code arrayBaseOffset(byte[].class)} */
+ 721     public static final int ARRAY_BYTE_BASE_OFFSET
+ 722             = theUnsafe.arrayBaseOffset(byte[].class);
+ 723 
+ 724     /** The value of {@code arrayBaseOffset(short[].class)} */
+ 725     public static final int ARRAY_SHORT_BASE_OFFSET
+ 726             = theUnsafe.arrayBaseOffset(short[].class);
+ 727 
+ 728     /** The value of {@code arrayBaseOffset(char[].class)} */
+ 729     public static final int ARRAY_CHAR_BASE_OFFSET
+ 730             = theUnsafe.arrayBaseOffset(char[].class);
+ 731 
+ 732     /** The value of {@code arrayBaseOffset(int[].class)} */
+ 733     public static final int ARRAY_INT_BASE_OFFSET
+ 734             = theUnsafe.arrayBaseOffset(int[].class);
+ 735 
+ 736     /** The value of {@code arrayBaseOffset(long[].class)} */
+ 737     public static final int ARRAY_LONG_BASE_OFFSET
+ 738             = theUnsafe.arrayBaseOffset(long[].class);
+ 739 
+ 740     /** The value of {@code arrayBaseOffset(float[].class)} */
+ 741     public static final int ARRAY_FLOAT_BASE_OFFSET
+ 742             = theUnsafe.arrayBaseOffset(float[].class);
+ 743 
+ 744     /** The value of {@code arrayBaseOffset(double[].class)} */
+ 745     public static final int ARRAY_DOUBLE_BASE_OFFSET
+ 746             = theUnsafe.arrayBaseOffset(double[].class);
+ 747 
+ 748     /** The value of {@code arrayBaseOffset(Object[].class)} */
+ 749     public static final int ARRAY_OBJECT_BASE_OFFSET
+ 750             = theUnsafe.arrayBaseOffset(Object[].class);
+ 751 
+ 752     /**
+ 753      * Report the scale factor for addressing elements in the storage
+ 754      * allocation of a given array class.  However, arrays of "narrow" types
+ 755      * will generally not work properly with accessors like {@link
+ 756      * #getByte(Object, int)}, so the scale factor for such classes is reported
+ 757      * as zero.
+ 758      *
+ 759      * @see #arrayBaseOffset
+ 760      * @see #getInt(Object, long)
+ 761      * @see #putInt(Object, long, int)
+ 762      */
+ 763     public native int arrayIndexScale(Class&lt;?&gt; arrayClass);
+ 764 
+ 765     /** The value of {@code arrayIndexScale(boolean[].class)} */
+ 766     public static final int ARRAY_BOOLEAN_INDEX_SCALE
+ 767             = theUnsafe.arrayIndexScale(boolean[].class);
+ 768 
+ 769     /** The value of {@code arrayIndexScale(byte[].class)} */
+ 770     public static final int ARRAY_BYTE_INDEX_SCALE
+ 771             = theUnsafe.arrayIndexScale(byte[].class);
+ 772 
+ 773     /** The value of {@code arrayIndexScale(short[].class)} */
+ 774     public static final int ARRAY_SHORT_INDEX_SCALE
+ 775             = theUnsafe.arrayIndexScale(short[].class);
+ 776 
+ 777     /** The value of {@code arrayIndexScale(char[].class)} */
+ 778     public static final int ARRAY_CHAR_INDEX_SCALE
+ 779             = theUnsafe.arrayIndexScale(char[].class);
+ 780 
+ 781     /** The value of {@code arrayIndexScale(int[].class)} */
+ 782     public static final int ARRAY_INT_INDEX_SCALE
+ 783             = theUnsafe.arrayIndexScale(int[].class);
+ 784 
+ 785     /** The value of {@code arrayIndexScale(long[].class)} */
+ 786     public static final int ARRAY_LONG_INDEX_SCALE
+ 787             = theUnsafe.arrayIndexScale(long[].class);
+ 788 
+ 789     /** The value of {@code arrayIndexScale(float[].class)} */
+ 790     public static final int ARRAY_FLOAT_INDEX_SCALE
+ 791             = theUnsafe.arrayIndexScale(float[].class);
+ 792 
+ 793     /** The value of {@code arrayIndexScale(double[].class)} */
+ 794     public static final int ARRAY_DOUBLE_INDEX_SCALE
+ 795             = theUnsafe.arrayIndexScale(double[].class);
+ 796 
+ 797     /** The value of {@code arrayIndexScale(Object[].class)} */
+ 798     public static final int ARRAY_OBJECT_INDEX_SCALE
+ 799             = theUnsafe.arrayIndexScale(Object[].class);
+ 800 
+ 801     /**
+ 802      * Report the size in bytes of a native pointer, as stored via {@link
+ 803      * #putAddress}.  This value will be either 4 or 8.  Note that the sizes of
+ 804      * other primitive types (as stored in native memory blocks) is determined
+ 805      * fully by their information content.
+ 806      */
+ 807     public native int addressSize();
+ 808 
+ 809     /** The value of {@code addressSize()} */
+ 810     public static final int ADDRESS_SIZE = theUnsafe.addressSize();
+ 811 
+ 812     /**
+ 813      * Report the size in bytes of a native memory page (whatever that is).
+ 814      * This value will always be a power of two.
+ 815      */
+ 816     public native int pageSize();
+ 817 
+ 818 
+ 819     /// random trusted operations from JNI:
+ 820 
+ 821     /**
+ 822      * Tell the VM to define a class, without security checks.  By default, the
+ 823      * class loader and protection domain come from the caller's class.
+ 824      */
+ 825     public native Class&lt;?&gt; defineClass(String name, byte[] b, int off, int len,
+ 826                                        ClassLoader loader,
+ 827                                        ProtectionDomain protectionDomain);
+ 828 
+ 829     /**
+ 830      * Define a class but do not make it known to the class loader or system dictionary.
+ 831      * &lt;p&gt;
+ 832      * For each CP entry, the corresponding CP patch must either be null or have
+ 833      * the a format that matches its tag:
+ 834      * &lt;ul&gt;
+ 835      * &lt;li&gt;Integer, Long, Float, Double: the corresponding wrapper object type from java.lang
+ 836      * &lt;li&gt;Utf8: a string (must have suitable syntax if used as signature or name)
+ 837      * &lt;li&gt;Class: any java.lang.Class object
+ 838      * &lt;li&gt;String: any object (not just a java.lang.String)
+ 839      * &lt;li&gt;InterfaceMethodRef: (NYI) a method handle to invoke on that call site's arguments
+ 840      * &lt;/ul&gt;
+ 841      * @params hostClass context for linkage, access control, protection domain, and class loader
+ 842      * @params data      bytes of a class file
+ 843      * @params cpPatches where non-null entries exist, they replace corresponding CP entries in data
+ 844      */
+ 845     public native Class&lt;?&gt; defineAnonymousClass(Class&lt;?&gt; hostClass, byte[] data, Object[] cpPatches);
+ 846 
+ 847 
+ 848     /** Allocate an instance but do not run any constructor.
+ 849         Initializes the class if it has not yet been. */
+ 850     public native Object allocateInstance(Class&lt;?&gt; cls)
+ 851         throws InstantiationException;
+ 852 
+ 853     /** Lock the object.  It must get unlocked via {@link #monitorExit}. */
+ 854     public native void monitorEnter(Object o);
+ 855 
+ 856     /**
+ 857      * Unlock the object.  It must have been locked via {@link
+ 858      * #monitorEnter}.
+ 859      */
+ 860     public native void monitorExit(Object o);
+ 861 
+ 862     /**
+ 863      * Tries to lock the object.  Returns true or false to indicate
+ 864      * whether the lock succeeded.  If it did, the object must be
+ 865      * unlocked via {@link #monitorExit}.
+ 866      */
+ 867     public native boolean tryMonitorEnter(Object o);
+ 868 
+ 869     /** Throw the exception without telling the verifier. */
+ 870     public native void throwException(Throwable ee);
+ 871 
+ 872 
+ 873     /**
+ 874      * Atomically update Java variable to &lt;tt&gt;x&lt;/tt&gt; if it is currently
+ 875      * holding &lt;tt&gt;expected&lt;/tt&gt;.
+ 876      * @return &lt;tt&gt;true&lt;/tt&gt; if successful
+ 877      */
+ 878     public final native boolean compareAndSwapObject(Object o, long offset,
+ 879                                                      Object expected,
+ 880                                                      Object x);
+ 881 
+ 882     /**
+ 883      * Atomically update Java variable to &lt;tt&gt;x&lt;/tt&gt; if it is currently
+ 884      * holding &lt;tt&gt;expected&lt;/tt&gt;.
+ 885      * @return &lt;tt&gt;true&lt;/tt&gt; if successful
+ 886      */
+ 887     public final native boolean compareAndSwapInt(Object o, long offset,
+ 888                                                   int expected,
+ 889                                                   int x);
+ 890 
+ 891     /**
+ 892      * Atomically update Java variable to &lt;tt&gt;x&lt;/tt&gt; if it is currently
+ 893      * holding &lt;tt&gt;expected&lt;/tt&gt;.
+ 894      * @return &lt;tt&gt;true&lt;/tt&gt; if successful
+ 895      */
+ 896     public final native boolean compareAndSwapLong(Object o, long offset,
+ 897                                                    long expected,
+ 898                                                    long x);
+ 899 
+ 900     /**
+ 901      * Fetches a reference value from a given Java variable, with volatile
+ 902      * load semantics. Otherwise identical to {@link #getObject(Object, long)}
+ 903      */
+ 904     public native Object getObjectVolatile(Object o, long offset);
+ 905 
+ 906     /**
+ 907      * Stores a reference value into a given Java variable, with
+ 908      * volatile store semantics. Otherwise identical to {@link #putObject(Object, long, Object)}
+ 909      */
+ 910     public native void    putObjectVolatile(Object o, long offset, Object x);
+ 911 
+ 912     /** Volatile version of {@link #getInt(Object, long)}  */
+ 913     public native int     getIntVolatile(Object o, long offset);
+ 914 
+ 915     /** Volatile version of {@link #putInt(Object, long, int)}  */
+ 916     public native void    putIntVolatile(Object o, long offset, int x);
+ 917 
+ 918     /** Volatile version of {@link #getBoolean(Object, long)}  */
+ 919     public native boolean getBooleanVolatile(Object o, long offset);
+ 920 
+ 921     /** Volatile version of {@link #putBoolean(Object, long, boolean)}  */
+ 922     public native void    putBooleanVolatile(Object o, long offset, boolean x);
+ 923 
+ 924     /** Volatile version of {@link #getByte(Object, long)}  */
+ 925     public native byte    getByteVolatile(Object o, long offset);
+ 926 
+ 927     /** Volatile version of {@link #putByte(Object, long, byte)}  */
+ 928     public native void    putByteVolatile(Object o, long offset, byte x);
+ 929 
+ 930     /** Volatile version of {@link #getShort(Object, long)}  */
+ 931     public native short   getShortVolatile(Object o, long offset);
+ 932 
+ 933     /** Volatile version of {@link #putShort(Object, long, short)}  */
+ 934     public native void    putShortVolatile(Object o, long offset, short x);
+ 935 
+ 936     /** Volatile version of {@link #getChar(Object, long)}  */
+ 937     public native char    getCharVolatile(Object o, long offset);
+ 938 
+ 939     /** Volatile version of {@link #putChar(Object, long, char)}  */
+ 940     public native void    putCharVolatile(Object o, long offset, char x);
+ 941 
+ 942     /** Volatile version of {@link #getLong(Object, long)}  */
+ 943     public native long    getLongVolatile(Object o, long offset);
+ 944 
+ 945     /** Volatile version of {@link #putLong(Object, long, long)}  */
+ 946     public native void    putLongVolatile(Object o, long offset, long x);
+ 947 
+ 948     /** Volatile version of {@link #getFloat(Object, long)}  */
+ 949     public native float   getFloatVolatile(Object o, long offset);
+ 950 
+ 951     /** Volatile version of {@link #putFloat(Object, long, float)}  */
+ 952     public native void    putFloatVolatile(Object o, long offset, float x);
+ 953 
+ 954     /** Volatile version of {@link #getDouble(Object, long)}  */
+ 955     public native double  getDoubleVolatile(Object o, long offset);
+ 956 
+ 957     /** Volatile version of {@link #putDouble(Object, long, double)}  */
+ 958     public native void    putDoubleVolatile(Object o, long offset, double x);
+ 959 
+ 960     /**
+ 961      * Version of {@link #putObjectVolatile(Object, long, Object)}
+ 962      * that does not guarantee immediate visibility of the store to
+ 963      * other threads. This method is generally only useful if the
+ 964      * underlying field is a Java volatile (or if an array cell, one
+ 965      * that is otherwise only accessed using volatile accesses).
+ 966      */
+ 967     public native void    putOrderedObject(Object o, long offset, Object x);
+ 968 
+ 969     /** Ordered/Lazy version of {@link #putIntVolatile(Object, long, int)}  */
+ 970     public native void    putOrderedInt(Object o, long offset, int x);
+ 971 
+ 972     /** Ordered/Lazy version of {@link #putLongVolatile(Object, long, long)} */
+ 973     public native void    putOrderedLong(Object o, long offset, long x);
+ 974 
+ 975     /**
+ 976      * Unblock the given thread blocked on &lt;tt&gt;park&lt;/tt&gt;, or, if it is
+ 977      * not blocked, cause the subsequent call to &lt;tt&gt;park&lt;/tt&gt; not to
+ 978      * block.  Note: this operation is "unsafe" solely because the
+ 979      * caller must somehow ensure that the thread has not been
+ 980      * destroyed. Nothing special is usually required to ensure this
+ 981      * when called from Java (in which there will ordinarily be a live
+ 982      * reference to the thread) but this is not nearly-automatically
+ 983      * so when calling from native code.
+ 984      * @param thread the thread to unpark.
+ 985      *
+ 986      */
+ 987     public native void unpark(Object thread);
+ 988 
+ 989     /**
+ 990      * Block current thread, returning when a balancing
+ 991      * &lt;tt&gt;unpark&lt;/tt&gt; occurs, or a balancing &lt;tt&gt;unpark&lt;/tt&gt; has
+ 992      * already occurred, or the thread is interrupted, or, if not
+ 993      * absolute and time is not zero, the given time nanoseconds have
+ 994      * elapsed, or if absolute, the given deadline in milliseconds
+ 995      * since Epoch has passed, or spuriously (i.e., returning for no
+ 996      * "reason"). Note: This operation is in the Unsafe class only
+ 997      * because &lt;tt&gt;unpark&lt;/tt&gt; is, so it would be strange to place it
+ 998      * elsewhere.
+ 999      */
+1000     public native void park(boolean isAbsolute, long time);
+1001 
+1002     /**
+1003      * Gets the load average in the system run queue assigned
+1004      * to the available processors averaged over various periods of time.
+1005      * This method retrieves the given &lt;tt&gt;nelem&lt;/tt&gt; samples and
+1006      * assigns to the elements of the given &lt;tt&gt;loadavg&lt;/tt&gt; array.
+1007      * The system imposes a maximum of 3 samples, representing
+1008      * averages over the last 1,  5,  and  15 minutes, respectively.
+1009      *
+1010      * @params loadavg an array of double of size nelems
+1011      * @params nelems the number of samples to be retrieved and
+1012      *         must be 1 to 3.
+1013      *
+1014      * @return the number of samples actually retrieved; or -1
+1015      *         if the load average is unobtainable.
+1016      */
+1017     public native int getLoadAverage(double[] loadavg, int nelems);
+1018 
+1019     // The following contain CAS-based Java implementations used on
+1020     // platforms not supporting native instructions
+1021 
+1022     /**
+1023      * Atomically adds the given value to the current value of a field
+1024      * or array element within the given object &lt;code&gt;o&lt;/code&gt;
+1025      * at the given &lt;code&gt;offset&lt;/code&gt;.
+1026      *
+1027      * @param o object/array to update the field/element in
+1028      * @param offset field/element offset
+1029      * @param delta the value to add
+1030      * @return the previous value
+1031      * @since 1.8
+1032      */
+1033     public final int getAndAddInt(Object o, long offset, int delta) {
+1034         int v;
+1035         do {
+1036             v = getIntVolatile(o, offset);
+1037         } while (!compareAndSwapInt(o, offset, v, v + delta));
+1038         return v;
+1039     }
+1040 
+1041     /**
+1042      * Atomically adds the given value to the current value of a field
+1043      * or array element within the given object &lt;code&gt;o&lt;/code&gt;
+1044      * at the given &lt;code&gt;offset&lt;/code&gt;.
+1045      *
+1046      * @param o object/array to update the field/element in
+1047      * @param offset field/element offset
+1048      * @param delta the value to add
+1049      * @return the previous value
+1050      * @since 1.8
+1051      */
+1052     public final long getAndAddLong(Object o, long offset, long delta) {
+1053         long v;
+1054         do {
+1055             v = getLongVolatile(o, offset);
+1056         } while (!compareAndSwapLong(o, offset, v, v + delta));
+1057         return v;
+1058     }
+1059 
+1060     /**
+1061      * Atomically exchanges the given value with the current value of
+1062      * a field or array element within the given object &lt;code&gt;o&lt;/code&gt;
+1063      * at the given &lt;code&gt;offset&lt;/code&gt;.
+1064      *
+1065      * @param o object/array to update the field/element in
+1066      * @param offset field/element offset
+1067      * @param newValue new value
+1068      * @return the previous value
+1069      * @since 1.8
+1070      */
+1071     public final int getAndSetInt(Object o, long offset, int newValue) {
+1072         int v;
+1073         do {
+1074             v = getIntVolatile(o, offset);
+1075         } while (!compareAndSwapInt(o, offset, v, newValue));
+1076         return v;
+1077     }
+1078 
+1079     /**
+1080      * Atomically exchanges the given value with the current value of
+1081      * a field or array element within the given object &lt;code&gt;o&lt;/code&gt;
+1082      * at the given &lt;code&gt;offset&lt;/code&gt;.
+1083      *
+1084      * @param o object/array to update the field/element in
+1085      * @param offset field/element offset
+1086      * @param newValue new value
+1087      * @return the previous value
+1088      * @since 1.8
+1089      */
+1090     public final long getAndSetLong(Object o, long offset, long newValue) {
+1091         long v;
+1092         do {
+1093             v = getLongVolatile(o, offset);
+1094         } while (!compareAndSwapLong(o, offset, v, newValue));
+1095         return v;
+1096     }
+1097 
+1098     /**
+1099      * Atomically exchanges the given reference value with the current
+1100      * reference value of a field or array element within the given
+1101      * object &lt;code&gt;o&lt;/code&gt; at the given &lt;code&gt;offset&lt;/code&gt;.
+1102      *
+1103      * @param o object/array to update the field/element in
+1104      * @param offset field/element offset
+1105      * @param newValue new value
+1106      * @return the previous value
+1107      * @since 1.8
+1108      */
+1109     public final Object getAndSetObject(Object o, long offset, Object newValue) {
+1110         Object v;
+1111         do {
+1112             v = getObjectVolatile(o, offset);
+1113         } while (!compareAndSwapObject(o, offset, v, newValue));
+1114         return v;
+1115     }
+1116 
+1117 
+1118     /**
+1119      * Ensures lack of reordering of loads before the fence
+1120      * with loads or stores after the fence.
+1121      * @since 1.8
+1122      */
+1123     public native void loadFence();
+1124 
+1125     /**
+1126      * Ensures lack of reordering of stores before the fence
+1127      * with loads or stores after the fence.
+1128      * @since 1.8
+1129      */
+1130     public native void storeFence();
+1131 
+1132     /**
+1133      * Ensures lack of reordering of loads or stores before the fence
+1134      * with loads or stores after the fence.
+1135      * @since 1.8
+1136      */
+1137     public native void fullFence();
+1138 
+1139     /**
+1140      * Throws IllegalAccessError; for use by the VM.
+1141      * @since 1.8
+1142      */
+1143     private static void throwIllegalAccessError() {
+1144        throw new IllegalAccessError();
+1145     }
+1146 
+1147     /**
+1148      * Return the size of a JVM-level object representing an instance
+1149      * of the given class.
+1150      */
+1151     public native long getInstanceSize(Class instanceClass);
+1152 
+1153     /**
+1154      * Return the footprint of a JVM-level representation of an instance
+1155      * of the given class when it is located inside a container (includes
+1156      * an object representing the instance itself, prepadding before
+1157      * the object, and padding after the object, whatever is applicable).
+1158      */
+1159     public native long getInstanceFootprintWhenContained(Class instanceClass);
+1160 
+1161     /**
+1162      * Return the footprint of a JVM-level representation of a container
+1163      * (includes an object representing an instance of the given container
+1164      * class and representations of the given number of contained elements,
+1165      * each having the given size).
+1166      */
+1167     public native long getContainingObjectFootprint(Class containerClass,
+1168             long containedElementSize, long numberOfElements);
+1169 
+1170     /**
+1171      * Return the footprint of a JVM-level representation of a container
+1172      * when it is located inside another container (includes a representation
+1173      * of the inner container having the given parameters, prepadding before
+1174      * the container, and padding after the container, whatever is applicable).
+1175      */
+1176     public native long getContainingObjectFootprintWhenContained(
+1177             Class containerClass, long containedElementSize,
+1178             long numberOfElements);
+1179 
+1180     /**
+1181      * Return the size of prepadding in the given object footprint.
+1182      */
+1183     public native long getPrePaddingInObjectFootprint(long objectFootprint);
+1184 
+1185     /**
+1186      * Allocate in the Java heap a memory region for an instance of the given
+1187      * container class and all its contents, which is described by the given
+1188      * specification. The elements of the container should be either plain
+1189      * Java objects or nested containers. The specification consists of two
+1190      * parallel arrays determining counts of the elements and their classes
+1191      * for all nesting levels, starting from the outermost one. The method
+1192      * does not construct any objects. The method returns the reference to
+1193      * the allocated memory region.
+1194      */
+1195     public native Object allocateHeapForElementArrayClass(Class instanceClass,
+1196             long[] elementCounts, Class[] elementClasses);
+1197 
+1198     /**
+1199      * Construct an object starting at the given offset from the beginning
+1200      * of the given containing object, using the supplied constructor and
+1201      * arguments. The object is constructed in place in a previously allocated
+1202      * memory region.
+1203      */
+1204     public native void constructObjectAtOffset(
+1205             Object containingObject, long offset,
+1206             long objectPrePadding, boolean isContained,
+1207             boolean isContainer, long objectFootprint,
+1208             Constructor constructor, Object[] constructorArgs)
+1209             throws InstantiationException, IllegalAccessException,
+1210             InvocationTargetException;
+1211 
+1212     /**
+1213      * Return an object starting at the given offset from the beginning
+1214      * of the given containing object.
+1215      */
+1216     public native Object deriveContainedObjectAtOffset(Object containingObject,
+1217             long offset);
+1218 }
+</pre></body></html>

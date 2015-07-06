@@ -1,0 +1,13 @@
+--- old/src/cpu/ppc/vm/stubGenerator_ppc.cpp	2015-06-16 10:25:38.678571782 -0700
++++ new/src/cpu/ppc/vm/stubGenerator_ppc.cpp	2015-06-16 10:25:38.610573386 -0700
+@@ -2087,6 +2087,10 @@
+       guarantee(!UseAESIntrinsics, "not yet implemented.");
+     }
+ 
++    if (UseObjectLayoutIntrinsics) {
++      guarantee(!UseObjectLayoutIntrinsics, "not yet implemented.");
++    }
++
+     // Safefetch stubs.
+     generate_safefetch("SafeFetch32", sizeof(int),     &StubRoutines::_safefetch32_entry,
+                                                        &StubRoutines::_safefetch32_fault_pc,

@@ -1,0 +1,824 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/prims/unsafe.cpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/prims/unsafe.cpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -320,37 +320,14 @@</span>
+   }
+   OrderAccess::fence();
+ UNSAFE_END
+ 
+ #ifndef SUPPORTS_NATIVE_CX8
+<span class="new">+// Keep old code for platforms which may not have atomic jlong (8 bytes) instructions</span>
+ 
+<span class="removed">-// VM_Version::supports_cx8() is a surrogate for 'supports atomic long memory ops'.</span>
+<span class="removed">-//</span>
+<span class="removed">-// On platforms which do not support atomic compare-and-swap of jlong (8 byte)</span>
+<span class="removed">-// values we have to use a lock-based scheme to enforce atomicity. This has to be</span>
+<span class="removed">-// applied to all Unsafe operations that set the value of a jlong field. Even so</span>
+<span class="removed">-// the compareAndSwapLong operation will not be atomic with respect to direct stores</span>
+<span class="removed">-// to the field from Java code. It is important therefore that any Java code that</span>
+<span class="removed">-// utilizes these Unsafe jlong operations does not perform direct stores. To permit</span>
+<span class="removed">-// direct loads of the field from Java code we must also use Atomic::store within the</span>
+<span class="removed">-// locked regions. And for good measure, in case there are direct stores, we also</span>
+<span class="removed">-// employ Atomic::load within those regions. Note that the field in question must be</span>
+<span class="removed">-// volatile and so must have atomic load/store accesses applied at the Java level.</span>
+<span class="removed">-//</span>
+<span class="removed">-// The locking scheme could utilize a range of strategies for controlling the locking</span>
+<span class="removed">-// granularity: from a lock per-field through to a single global lock. The latter is</span>
+<span class="removed">-// the simplest and is used for the current implementation. Note that the Java object</span>
+<span class="removed">-// that contains the field, can not, in general, be used for locking. To do so can lead</span>
+<span class="removed">-// to deadlocks as we may introduce locking into what appears to the Java code to be a</span>
+<span class="removed">-// lock-free path.</span>
+<span class="removed">-//</span>
+<span class="removed">-// As all the locked-regions are very short and themselves non-blocking we can treat</span>
+<span class="removed">-// them as leaf routines and elide safepoint checks (ie we don't perform any thread</span>
+<span class="removed">-// state transitions even when blocking for the lock). Note that if we do choose to</span>
+<span class="removed">-// add safepoint checks and thread state transitions, we must ensure that we calculate</span>
+<span class="removed">-// the address of the field _after_ we have acquired the lock, else the object may have</span>
+<span class="removed">-// been moved by the GC</span>
+<span class="new">+// Volatile long versions must use locks if !VM_Version::supports_cx8().</span>
+<span class="new">+// support_cx8 is a surrogate for 'supports atomic long memory ops'.</span>
+ 
+ UNSAFE_ENTRY(jlong, Unsafe_GetLongVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset))
+   UnsafeWrapper("Unsafe_GetLongVolatile");
+   {
+     if (VM_Version::supports_cx8()) {
+</pre><hr /><pre>
+<span class="newmarker">@@ -358,12 +335,12 @@</span>
+       return v;
+     }
+     else {
+       Handle p (THREAD, JNIHandles::resolve(obj));
+       jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+<span class="removed">-      MutexLockerEx mu(UnsafeJlong_lock, Mutex::_no_safepoint_check_flag);</span>
+<span class="removed">-      jlong value = Atomic::load(addr);</span>
+<span class="new">+      ObjectLocker ol(p, THREAD);</span>
+<span class="new">+      jlong value = *addr;</span>
+       return value;
+     }
+   }
+ UNSAFE_END
+ 
+</pre><hr /><pre>
+<span class="newmarker">@@ -374,12 +351,12 @@</span>
+       SET_FIELD_VOLATILE(obj, offset, jlong, x);
+     }
+     else {
+       Handle p (THREAD, JNIHandles::resolve(obj));
+       jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+<span class="removed">-      MutexLockerEx mu(UnsafeJlong_lock, Mutex::_no_safepoint_check_flag);</span>
+<span class="removed">-      Atomic::store(x, addr);</span>
+<span class="new">+      ObjectLocker ol(p, THREAD);</span>
+<span class="new">+      *addr = x;</span>
+     }
+   }
+ UNSAFE_END
+ 
+ #endif // not SUPPORTS_NATIVE_CX8
+</pre><hr /><pre>
+<span class="newmarker">@@ -484,12 +461,12 @@</span>
+       SET_FIELD_VOLATILE(obj, offset, jlong, x);
+     }
+     else {
+       Handle p (THREAD, JNIHandles::resolve(obj));
+       jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+<span class="removed">-      MutexLockerEx mu(UnsafeJlong_lock, Mutex::_no_safepoint_check_flag);</span>
+<span class="removed">-      Atomic::store(x, addr);</span>
+<span class="new">+      ObjectLocker ol(p, THREAD);</span>
+<span class="new">+      *addr = x;</span>
+     }
+   }
+ #endif
+ UNSAFE_END
+ 
+</pre><hr /><pre>
+<span class="newmarker">@@ -1234,23 +1211,18 @@</span>
+ 
+ UNSAFE_ENTRY(jboolean, Unsafe_CompareAndSwapLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong e, jlong x))
+   UnsafeWrapper("Unsafe_CompareAndSwapLong");
+   Handle p (THREAD, JNIHandles::resolve(obj));
+   jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+<span class="removed">-#ifdef SUPPORTS_NATIVE_CX8</span>
+<span class="removed">-  return (jlong)(Atomic::cmpxchg(x, addr, e)) == e;</span>
+<span class="removed">-#else</span>
+   if (VM_Version::supports_cx8())
+     return (jlong)(Atomic::cmpxchg(x, addr, e)) == e;
+   else {
+     jboolean success = false;
+<span class="removed">-    MutexLockerEx mu(UnsafeJlong_lock, Mutex::_no_safepoint_check_flag);</span>
+<span class="removed">-    jlong val = Atomic::load(addr);</span>
+<span class="removed">-    if (val == e) { Atomic::store(x, addr); success = true; }</span>
+<span class="new">+    ObjectLocker ol(p, THREAD);</span>
+<span class="new">+    if (*addr == e) { *addr = x; success = true; }</span>
+     return success;
+   }
+<span class="removed">-#endif</span>
+ UNSAFE_END
+ 
+ UNSAFE_ENTRY(void, Unsafe_Park(JNIEnv *env, jobject unsafe, jboolean isAbsolute, jlong time))
+   UnsafeWrapper("Unsafe_Park");
+   EventThreadPark event;
+</pre><hr /><pre>
+<span class="newmarker">@@ -1356,10 +1328,572 @@</span>
+   oop p = JNIHandles::resolve(obj);
+   void* addr = index_oop_from_field_offset_long(p, 0);
+   Prefetch::write(addr, (intx)offset);
+ UNSAFE_END
+ 
+<span class="new">+// Implementation of ObjectLayout intrinsics</span>
+<span class="new">+</span>
+<span class="new">+// Return the size, in words, of an instance of the given class. The class is</span>
+<span class="new">+// specified by the object that is an instance of java.lang.Class.</span>
+<span class="new">+static jlong get_instance_size_helper(oop obj, TRAPS) {</span>
+<span class="new">+  instanceKlassHandle h_klass(THREAD, java_lang_Class::as_Klass(obj));</span>
+<span class="new">+</span>
+<span class="new">+  // Make sure we are not fetching the instance size of an abstract klass</span>
+<span class="new">+  h_klass-&gt;check_valid_for_instantiation(true, CHECK_0);</span>
+<span class="new">+</span>
+<span class="new">+  // Make sure klass is initialized</span>
+<span class="new">+  h_klass-&gt;initialize(CHECK_0);</span>
+<span class="new">+</span>
+<span class="new">+  return (jlong) h_klass-&gt;size_helper();</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+// Return the size, in words, of an instance of the given class</span>
+<span class="new">+static jlong get_instance_size_helper(jclass cls, TRAPS) {</span>
+<span class="new">+  return get_instance_size_helper(JNIHandles::resolve_non_null(cls), THREAD);</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+// Return the size, in words, of prepadding for a contained object, which is</span>
+<span class="new">+// used to allocate the corresponding relative container offset (RCO) object.</span>
+<span class="new">+// RCO objects are implemented as standard filler objects (arrays of integers)</span>
+<span class="new">+// able to store the payload of 8 bytes.</span>
+<span class="new">+static jlong get_prepadding_helper() {</span>
+<span class="new">+  jlong size_in_bytes =</span>
+<span class="new">+      arrayOopDesc::base_offset_in_bytes(T_INT) + sizeof(jlong);</span>
+<span class="new">+  jlong size_in_words =</span>
+<span class="new">+      (size_in_bytes + (HeapWordSize - 1)) &gt;&gt; LogHeapWordSize;</span>
+<span class="new">+  return (jlong) align_object_size((intptr_t) size_in_words);</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+// Create the RCO object for the object that will be allocated at the given</span>
+<span class="new">+// address and initialize it with the given offset value</span>
+<span class="new">+static void create_rco_object(address obj_addr, jlong offset_in_bytes) {</span>
+<span class="new">+  // Create the RCO object</span>
+<span class="new">+  jlong prepadding_in_words = get_prepadding_helper();</span>
+<span class="new">+  address rco_obj_addr = obj_addr - (prepadding_in_words &lt;&lt; LogHeapWordSize);</span>
+<span class="new">+  CollectedHeap::fill_with_object((HeapWord*) rco_obj_addr,</span>
+<span class="new">+      (size_t) prepadding_in_words, false);</span>
+<span class="new">+</span>
+<span class="new">+  // Store the offset value in the last 8 bytes of the RCO object</span>
+<span class="new">+  *((jlong*) (obj_addr - sizeof(jlong))) = offset_in_bytes;</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+// Utility class describing the configuration of a structured array. It is used</span>
+<span class="new">+// to configure objects extending org.ObjectLayout.AbstractStructuredArray class</span>
+<span class="new">+// before their actual construction. All fields have exactly the same meanings</span>
+<span class="new">+// as the corresponding fields of org.ObjectLayout.AbstractStructuredArray</span>
+<span class="new">+// class. All sizes are in bytes.</span>
+<span class="new">+class AbstractStructuredArrayConfiguration VALUE_OBJ_CLASS_SPEC {</span>
+<span class="new">+ public:</span>
+<span class="new">+  jint body_size;</span>
+<span class="new">+  jlong length;</span>
+<span class="new">+  jlong element_size;</span>
+<span class="new">+  jlong padding_size;</span>
+<span class="new">+  instanceHandle h_element_class;</span>
+<span class="new">+</span>
+<span class="new">+ public:</span>
+<span class="new">+  // Configure the given object extending</span>
+<span class="new">+  // org.ObjectLayout.AbstractStructuredArray class</span>
+<span class="new">+  void configure_instance(oop obj) {</span>
+<span class="new">+    org_ObjectLayout_AbstractStructuredArray::set_bodySize(obj, body_size);</span>
+<span class="new">+    org_ObjectLayout_AbstractStructuredArray::set_length(obj, length);</span>
+<span class="new">+    org_ObjectLayout_AbstractStructuredArray::set_elementSize(</span>
+<span class="new">+        obj, element_size);</span>
+<span class="new">+    org_ObjectLayout_AbstractStructuredArray::set_paddingSize(</span>
+<span class="new">+        obj, padding_size);</span>
+<span class="new">+    org_ObjectLayout_AbstractStructuredArray::set_elementClass(</span>
+<span class="new">+        obj, h_element_class());</span>
+<span class="new">+  }</span>
+<span class="new">+};</span>
+<span class="new">+</span>
+<span class="new">+// Utility class describing the configurations of all nesting levels of</span>
+<span class="new">+// a structured array. Numbering of levels starts from the outermost one.</span>
+<span class="new">+class UnfoldedStructuredArrayConfiguration VALUE_OBJ_CLASS_SPEC {</span>
+<span class="new">+ private:</span>
+<span class="new">+  int dims;</span>
+<span class="new">+  AbstractStructuredArrayConfiguration* configs;</span>
+<span class="new">+</span>
+<span class="new">+ public:</span>
+<span class="new">+  UnfoldedStructuredArrayConfiguration() {</span>
+<span class="new">+    dims = 0;</span>
+<span class="new">+    configs = NULL;</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  ~UnfoldedStructuredArrayConfiguration() {</span>
+<span class="new">+    if (configs != NULL) {</span>
+<span class="new">+      FREE_C_HEAP_ARRAY(AbstractStructuredArrayConfiguration, configs,</span>
+<span class="new">+          mtInternal);</span>
+<span class="new">+    }</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  // Initialize the configurations from the given outermost structured array</span>
+<span class="new">+  // class and two parallel arrays determining counts of the elements and their</span>
+<span class="new">+  // classes for all nesting levels, starting from the outermost one. The caller</span>
+<span class="new">+  // is responsible for providing the correct input data.</span>
+<span class="new">+  void initialize(jclass container_cls, typeArrayHandle h_element_counts,</span>
+<span class="new">+      objArrayHandle h_element_classes, TRAPS) {</span>
+<span class="new">+    dims = h_element_counts-&gt;length();</span>
+<span class="new">+</span>
+<span class="new">+    configs = NEW_C_HEAP_ARRAY(AbstractStructuredArrayConfiguration, dims,</span>
+<span class="new">+        mtInternal);</span>
+<span class="new">+    if (configs == NULL) {</span>
+<span class="new">+      dims = 0;</span>
+<span class="new">+      THROW(vmSymbols::java_lang_OutOfMemoryError());</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+<span class="new">+    int i = dims - 1;</span>
+<span class="new">+    jlong prepadding_in_words = get_prepadding_helper();</span>
+<span class="new">+    jlong body_size_in_words = get_instance_size_helper(</span>
+<span class="new">+        h_element_classes-&gt;obj_at(i), THREAD);</span>
+<span class="new">+    jlong size_in_words = prepadding_in_words + body_size_in_words;</span>
+<span class="new">+    configs[i].length = h_element_counts-&gt;long_at(i);</span>
+<span class="new">+    configs[i].element_size = size_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">+    configs[i].padding_size = prepadding_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">+    instanceHandle h_temp_element_class(THREAD,</span>
+<span class="new">+        (instanceOop) (h_element_classes-&gt;obj_at(i)));</span>
+<span class="new">+    configs[i].h_element_class = h_temp_element_class;</span>
+<span class="new">+</span>
+<span class="new">+    while (--i &gt;= 0) {</span>
+<span class="new">+      body_size_in_words = get_instance_size_helper(</span>
+<span class="new">+          h_element_classes-&gt;obj_at(i), THREAD);</span>
+<span class="new">+      size_in_words = prepadding_in_words + body_size_in_words +</span>
+<span class="new">+          (h_element_counts-&gt;long_at(i + 1) * size_in_words);</span>
+<span class="new">+      configs[i + 1].body_size = (jint) (body_size_in_words &lt;&lt; LogHeapWordSize);</span>
+<span class="new">+      configs[i].length = h_element_counts-&gt;long_at(i);</span>
+<span class="new">+      configs[i].element_size = size_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">+      configs[i].padding_size = prepadding_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">+      instanceHandle h_temp_element_class(THREAD,</span>
+<span class="new">+          (instanceOop) (h_element_classes-&gt;obj_at(i)));</span>
+<span class="new">+      configs[i].h_element_class = h_temp_element_class;</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+<span class="new">+    body_size_in_words = get_instance_size_helper(container_cls, THREAD);</span>
+<span class="new">+    configs[0].body_size = (jint) (body_size_in_words &lt;&lt; LogHeapWordSize);</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  // Accessors</span>
+<span class="new">+</span>
+<span class="new">+  int dimensions() {</span>
+<span class="new">+    assert(configs != NULL, "object must be initialized");</span>
+<span class="new">+    return dims;</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  jint body_size(int level) {</span>
+<span class="new">+    assert(configs != NULL, "object must be initialized");</span>
+<span class="new">+    assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">+    return configs[level].body_size;</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  jlong length(int level) {</span>
+<span class="new">+    assert(configs != NULL, "object must be initialized");</span>
+<span class="new">+    assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">+    return configs[level].length;</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  jlong element_size(int level) {</span>
+<span class="new">+    assert(configs != NULL, "object must be initialized");</span>
+<span class="new">+    assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">+    return configs[level].element_size;</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  jlong padding_size(int level) {</span>
+<span class="new">+    assert(configs != NULL, "object must be initialized");</span>
+<span class="new">+    assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">+    return configs[level].padding_size;</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  instanceHandle element_class(int level) {</span>
+<span class="new">+    assert(configs != NULL, "object must be initialized");</span>
+<span class="new">+    assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">+    return configs[level].h_element_class;</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  // Configure the given object extending</span>
+<span class="new">+  // org.ObjectLayout.AbstractStructuredArray class and belonging to the given</span>
+<span class="new">+  // nesting level</span>
+<span class="new">+  void configure_instance(oop obj, int level) {</span>
+<span class="new">+    assert(configs != NULL, "object must be initialized");</span>
+<span class="new">+    assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">+    configs[level].configure_instance(obj);</span>
+<span class="new">+  }</span>
+<span class="new">+};</span>
+<span class="new">+</span>
+<span class="new">+UNSAFE_ENTRY(jlong, Unsafe_GetInstanceSize(JNIEnv* env, jobject unsafe,</span>
+<span class="new">+    jclass cls))</span>
+<span class="new">+  UnsafeWrapper("Unsafe_GetInstanceSize");</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">+    ResourceMark rm;</span>
+<span class="new">+    tty-&gt;print("Unsafe_GetInstanceSize: cls=");</span>
+<span class="new">+    if (cls != NULL) {</span>
+<span class="new">+      java_lang_Class::print_signature(JNIHandles::resolve_non_null(cls), tty);</span>
+<span class="new">+      tty-&gt;cr();</span>
+<span class="new">+    } else {</span>
+<span class="new">+      tty-&gt;print_cr("&lt;null&gt;");</span>
+<span class="new">+    }</span>
+<span class="new">+  }</span>
+<span class="new">+  if (cls == NULL) {</span>
+<span class="new">+    THROW_0(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  jlong size_in_words = get_instance_size_helper(cls, CHECK_0);</span>
+<span class="new">+  return size_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">+UNSAFE_END</span>
+<span class="new">+</span>
+<span class="new">+UNSAFE_ENTRY(jlong, Unsafe_GetInstanceFootprintWhenContained(JNIEnv* env,</span>
+<span class="new">+    jobject unsafe, jclass cls))</span>
+<span class="new">+  UnsafeWrapper("Unsafe_GetInstanceFootprintWhenContained");</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">+    ResourceMark rm;</span>
+<span class="new">+    tty-&gt;print("Unsafe_GetInstanceFootprintWhenContained: cls=");</span>
+<span class="new">+    if (cls != NULL) {</span>
+<span class="new">+      java_lang_Class::print_signature(JNIHandles::resolve_non_null(cls), tty);</span>
+<span class="new">+      tty-&gt;cr();</span>
+<span class="new">+    } else {</span>
+<span class="new">+      tty-&gt;print_cr("&lt;null&gt;");</span>
+<span class="new">+    }</span>
+<span class="new">+  }</span>
+<span class="new">+  if (cls == NULL) {</span>
+<span class="new">+    THROW_0(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  jlong size_in_words = get_prepadding_helper() +</span>
+<span class="new">+      get_instance_size_helper(cls, CHECK_0);</span>
+<span class="new">+  return size_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">+UNSAFE_END</span>
+<span class="new">+</span>
+<span class="new">+UNSAFE_ENTRY(jlong, Unsafe_GetContainingObjectFootprint(JNIEnv* env,</span>
+<span class="new">+    jobject unsafe, jclass container_cls, jlong element_size_in_bytes,</span>
+<span class="new">+    jlong number_of_elements))</span>
+<span class="new">+  UnsafeWrapper("Unsafe_GetContainingObjectFootprint");</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">+    ResourceMark rm;</span>
+<span class="new">+    tty-&gt;print("Unsafe_GetContainingObjectFootprint: container_cls=");</span>
+<span class="new">+    if (container_cls != NULL) {</span>
+<span class="new">+      java_lang_Class::print_signature(</span>
+<span class="new">+          JNIHandles::resolve_non_null(container_cls), tty);</span>
+<span class="new">+    } else {</span>
+<span class="new">+      tty-&gt;print("&lt;null&gt;");</span>
+<span class="new">+    }</span>
+<span class="new">+    tty-&gt;print_cr(", element_size_in_bytes=%ld(0x%lX), number_of_elements=%ld",</span>
+<span class="new">+        element_size_in_bytes, element_size_in_bytes, number_of_elements);</span>
+<span class="new">+  }</span>
+<span class="new">+  if (container_cls == NULL) {</span>
+<span class="new">+    THROW_0(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">+  }</span>
+<span class="new">+  if (!is_size_aligned((size_t) element_size_in_bytes, HeapWordSize) ||</span>
+<span class="new">+      element_size_in_bytes &lt;= 0 || number_of_elements &lt; 0) {</span>
+<span class="new">+    THROW_0(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  jlong body_size_in_words = get_instance_size_helper(container_cls, CHECK_0);</span>
+<span class="new">+  jlong element_size_in_words = element_size_in_bytes &gt;&gt; LogHeapWordSize;</span>
+<span class="new">+  return (body_size_in_words + (number_of_elements * element_size_in_words)) &lt;&lt;</span>
+<span class="new">+      LogHeapWordSize;</span>
+<span class="new">+UNSAFE_END</span>
+<span class="new">+</span>
+<span class="new">+UNSAFE_ENTRY(jlong, Unsafe_GetContainingObjectFootprintWhenContained(</span>
+<span class="new">+    JNIEnv* env, jobject unsafe, jclass container_cls,</span>
+<span class="new">+    jlong element_size_in_bytes, jlong number_of_elements))</span>
+<span class="new">+  UnsafeWrapper("Unsafe_GetContainingObjectFootprintWhenContained");</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">+    ResourceMark rm;</span>
+<span class="new">+    tty-&gt;print("Unsafe_GetContainingObjectFootprintWhenContained: "</span>
+<span class="new">+        "container_cls=");</span>
+<span class="new">+    if (container_cls != NULL) {</span>
+<span class="new">+      java_lang_Class::print_signature(</span>
+<span class="new">+          JNIHandles::resolve_non_null(container_cls), tty);</span>
+<span class="new">+    } else {</span>
+<span class="new">+      tty-&gt;print("&lt;null&gt;");</span>
+<span class="new">+    }</span>
+<span class="new">+    tty-&gt;print_cr(", element_size_in_bytes=%ld(0x%lX), number_of_elements=%ld",</span>
+<span class="new">+        element_size_in_bytes, element_size_in_bytes, number_of_elements);</span>
+<span class="new">+  }</span>
+<span class="new">+  if (container_cls == NULL) {</span>
+<span class="new">+    THROW_0(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">+  }</span>
+<span class="new">+  if (!is_size_aligned((size_t) element_size_in_bytes, HeapWordSize) ||</span>
+<span class="new">+      element_size_in_bytes &lt;= 0 || number_of_elements &lt; 0) {</span>
+<span class="new">+    THROW_0(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  jlong prepadding_in_words = get_prepadding_helper();</span>
+<span class="new">+  jlong body_size_in_words = get_instance_size_helper(container_cls, CHECK_0);</span>
+<span class="new">+  jlong element_size_in_words = element_size_in_bytes &gt;&gt; LogHeapWordSize;</span>
+<span class="new">+  return (prepadding_in_words + body_size_in_words +</span>
+<span class="new">+      (number_of_elements * element_size_in_words)) &lt;&lt; LogHeapWordSize;</span>
+<span class="new">+UNSAFE_END</span>
+<span class="new">+</span>
+<span class="new">+UNSAFE_ENTRY(jlong, Unsafe_GetPrePaddingInObjectFootprint(JNIEnv* env,</span>
+<span class="new">+    jobject unsafe, jlong obj_footprint_in_bytes))</span>
+<span class="new">+  UnsafeWrapper("Unsafe_GetPrePaddingInObjectFootprint");</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">+    tty-&gt;print_cr("Unsafe_GetPrePaddingInObjectFootprint: "</span>
+<span class="new">+        "obj_footprint_in_bytes=%ld(0x%lX)", obj_footprint_in_bytes,</span>
+<span class="new">+        obj_footprint_in_bytes);</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  return get_prepadding_helper() &lt;&lt; LogHeapWordSize;</span>
+<span class="new">+UNSAFE_END</span>
+<span class="new">+</span>
+<span class="new">+UNSAFE_ENTRY(jobject, Unsafe_AllocateHeapForElementArrayClass(JNIEnv* env,</span>
+<span class="new">+    jobject unsafe, jclass container_cls, jlongArray element_counts,</span>
+<span class="new">+    jobjectArray element_classes))</span>
+<span class="new">+  UnsafeWrapper("Unsafe_AllocateHeapForElementArrayClass");</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">+    ResourceMark rm;</span>
+<span class="new">+    tty-&gt;print("Unsafe_AllocateHeapForElementArrayClass: container_cls=");</span>
+<span class="new">+    if (container_cls != NULL) {</span>
+<span class="new">+      java_lang_Class::print_signature(</span>
+<span class="new">+          JNIHandles::resolve_non_null(container_cls), tty);</span>
+<span class="new">+    } else {</span>
+<span class="new">+      tty-&gt;print("&lt;null&gt;");</span>
+<span class="new">+    }</span>
+<span class="new">+    tty-&gt;print_cr(", element_counts=" PTR_FORMAT</span>
+<span class="new">+        ", element_classes=" PTR_FORMAT,</span>
+<span class="new">+        p2i((void*) JNIHandles::resolve(element_counts)),</span>
+<span class="new">+        p2i((void*) JNIHandles::resolve(element_classes)));</span>
+<span class="new">+  }</span>
+<span class="new">+  if (container_cls == NULL || element_counts == NULL ||</span>
+<span class="new">+      element_classes == NULL) {</span>
+<span class="new">+    THROW_NULL(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  typeArrayHandle h_element_counts(THREAD,</span>
+<span class="new">+      typeArrayOop(JNIHandles::resolve_non_null(element_counts)));</span>
+<span class="new">+  objArrayHandle h_element_classes(THREAD,</span>
+<span class="new">+      objArrayOop(JNIHandles::resolve_non_null(element_classes)));</span>
+<span class="new">+  int dims = h_element_counts-&gt;length();</span>
+<span class="new">+</span>
+<span class="new">+  if (dims == 0 || dims != h_element_classes-&gt;length()) {</span>
+<span class="new">+    THROW_NULL(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">+  }</span>
+<span class="new">+  for (int i = 0; i &lt; dims; i++) {</span>
+<span class="new">+    if (h_element_counts-&gt;long_at(i) &lt; 0 ||</span>
+<span class="new">+        h_element_classes-&gt;obj_at(i) == NULL) {</span>
+<span class="new">+      THROW_NULL(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">+    }</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  // Make sure that all the involved klasses are valid for instantiation</span>
+<span class="new">+  // and initialized</span>
+<span class="new">+  instanceKlassHandle h_container_klass(THREAD,</span>
+<span class="new">+      java_lang_Class::as_Klass(JNIHandles::resolve_non_null(container_cls)));</span>
+<span class="new">+  h_container_klass-&gt;check_valid_for_instantiation(true, CHECK_NULL);</span>
+<span class="new">+  h_container_klass-&gt;initialize(CHECK_NULL);</span>
+<span class="new">+  for (int i = 0; i &lt; dims; i++) {</span>
+<span class="new">+    instanceKlassHandle h_element_klass(THREAD,</span>
+<span class="new">+        java_lang_Class::as_Klass(h_element_classes-&gt;obj_at(i)));</span>
+<span class="new">+    h_element_klass-&gt;check_valid_for_instantiation(true, CHECK_NULL);</span>
+<span class="new">+    h_element_klass-&gt;initialize(CHECK_NULL);</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  // We need to allocate in the Java heap a memory region for a multi-</span>
+<span class="new">+  // dimensional structured array which is described by the given specification.</span>
+<span class="new">+  // The specification consists of two parallel arrays determining counts</span>
+<span class="new">+  // of the elements (h_element_counts) and their classes (h_element_classes)</span>
+<span class="new">+  // for all nesting levels, starting from the outermost one. The number of</span>
+<span class="new">+  // dimensions is determined by the length of these arrays.</span>
+<span class="new">+  //</span>
+<span class="new">+  // Here are the steps we need to do:</span>
+<span class="new">+  // 1. Calculate the total memory footprint of the multi-dimensional</span>
+<span class="new">+  //    structured array (including containing, contained, and RCO objects</span>
+<span class="new">+  //    on all nesting levels).</span>
+<span class="new">+  // 2. Allocate a memory region with the calculated size.</span>
+<span class="new">+  // 3. Initialize the headers of all the objects that make up the multi-</span>
+<span class="new">+  //    dimensional structured array (including containing, contained, and RCO</span>
+<span class="new">+  //    objects on all nesting levels); initialize special fields of all the</span>
+<span class="new">+  //    containing objects; set up the offset values in all the RCO objects.</span>
+<span class="new">+  //    It is important to complete all this initialization work before the</span>
+<span class="new">+  //    return from this method, otherwise the uninitialized contents get</span>
+<span class="new">+  //    exposed to the Java heap scanners and garbage collectors. An attempt</span>
+<span class="new">+  //    to scan an uninitialized or partially initialized structured array</span>
+<span class="new">+  //    would most likely result in a crash. It is also important to note that</span>
+<span class="new">+  //    by initialization here we don't mean actual creation of involved</span>
+<span class="new">+  //    Java objects (calling their constructors, etc.), but just doing</span>
+<span class="new">+  //    a specific set of steps for making the region of memory representing</span>
+<span class="new">+  //    the multi-dimensional structured array parsable by heap scanners and</span>
+<span class="new">+  //    GCs.</span>
+<span class="new">+</span>
+<span class="new">+  // Initialize configurations of all nesting levels of the structured array</span>
+<span class="new">+  UnfoldedStructuredArrayConfiguration configuration;</span>
+<span class="new">+  configuration.initialize(container_cls, h_element_counts, h_element_classes,</span>
+<span class="new">+      CHECK_NULL);</span>
+<span class="new">+</span>
+<span class="new">+  // Multi-dimensional cursor able to address elements of the most inner level</span>
+<span class="new">+  jlong* cursors = NEW_C_HEAP_ARRAY(jlong, dims, mtInternal);</span>
+<span class="new">+  if (cursors == NULL) {</span>
+<span class="new">+    THROW_NULL(vmSymbols::java_lang_OutOfMemoryError());</span>
+<span class="new">+  }</span>
+<span class="new">+  for (int i = 0; i &lt; dims; i++) {</span>
+<span class="new">+    cursors[i] = 0;</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  // Calculate the total memory footprint of the multi-dimensional structured</span>
+<span class="new">+  // array</span>
+<span class="new">+  jlong size_in_words = (configuration.body_size(0) +</span>
+<span class="new">+      (configuration.length(0) * configuration.element_size(0))) &gt;&gt;</span>
+<span class="new">+      LogHeapWordSize;</span>
+<span class="new">+</span>
+<span class="new">+#ifdef ASSERT</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">+    tty-&gt;print_cr("  Unsafe_AllocateHeapForElementArrayClass: "</span>
+<span class="new">+        "size=0x%lX", size_in_words &lt;&lt; LogHeapWordSize);</span>
+<span class="new">+  }</span>
+<span class="new">+#endif // ASSERT</span>
+<span class="new">+</span>
+<span class="new">+  // Allocate a memory region with the calculated size</span>
+<span class="new">+  oop container_obj =</span>
+<span class="new">+      h_container_klass-&gt;allocate_instance((int) size_in_words, CHECK_NULL);</span>
+<span class="new">+  configuration.configure_instance(container_obj, 0);</span>
+<span class="new">+</span>
+<span class="new">+  // Initialize the headers of all the objects that make up the multi-</span>
+<span class="new">+  // dimensional structured array; initialize special fields of all the</span>
+<span class="new">+  // containing objects; set up the offset values in all the RCO objects</span>
+<span class="new">+</span>
+<span class="new">+  address last_container_addr = (address) container_obj;</span>
+<span class="new">+  address derived_obj_addr = ((address) container_obj) +</span>
+<span class="new">+      configuration.body_size(0) + configuration.padding_size(0);</span>
+<span class="new">+</span>
+<span class="new">+  // This cycle initializes one innermost structured array per iteration. It</span>
+<span class="new">+  // also correctly handles situations when there are arrays with zero lengths</span>
+<span class="new">+  // somewhere in the hierarchy. In this case the cycle initializes one</span>
+<span class="new">+  // outermost structured array with zero length per cycle.</span>
+<span class="new">+  int cur_dim = 0;</span>
+<span class="new">+  do {</span>
+<span class="new">+    // Initialize one outermost structured array with zero length or, if there</span>
+<span class="new">+    // are no such arrays, one innermost structured array, including all its</span>
+<span class="new">+    // containers that are not initialized yet</span>
+<span class="new">+    while (cur_dim &lt; dims - 1) {</span>
+<span class="new">+      if (configuration.length(cur_dim) == 0) {</span>
+<span class="new">+        break;</span>
+<span class="new">+      }</span>
+<span class="new">+      create_rco_object(derived_obj_addr,</span>
+<span class="new">+          derived_obj_addr - last_container_addr);</span>
+<span class="new">+      instanceKlassHandle h_element_klass(THREAD,</span>
+<span class="new">+          java_lang_Class::as_Klass(configuration.element_class(cur_dim)()));</span>
+<span class="new">+      oop derived_obj = h_element_klass-&gt;allocate_instance_at(derived_obj_addr,</span>
+<span class="new">+          true, true, CHECK_NULL);</span>
+<span class="new">+      configuration.configure_instance(derived_obj, cur_dim + 1);</span>
+<span class="new">+      last_container_addr = derived_obj_addr;</span>
+<span class="new">+      derived_obj_addr += configuration.body_size(cur_dim + 1) +</span>
+<span class="new">+          configuration.padding_size(cur_dim + 1);</span>
+<span class="new">+      cur_dim++;</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+<span class="new">+    // If we got to the innermost structured array, initialize its elements</span>
+<span class="new">+    if (cur_dim == dims - 1) {</span>
+<span class="new">+      instanceKlassHandle h_element_klass(THREAD,</span>
+<span class="new">+          java_lang_Class::as_Klass(configuration.element_class(cur_dim)()));</span>
+<span class="new">+      for (jlong i = 0; i &lt; configuration.length(cur_dim); i++) {</span>
+<span class="new">+        create_rco_object(derived_obj_addr,</span>
+<span class="new">+            derived_obj_addr - last_container_addr);</span>
+<span class="new">+        h_element_klass-&gt;allocate_instance_at(derived_obj_addr, true, false,</span>
+<span class="new">+            CHECK_NULL);</span>
+<span class="new">+        derived_obj_addr += configuration.element_size(cur_dim);</span>
+<span class="new">+      }</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+<span class="new">+    // Move the cursor to the next structured array. The cursor will overflow</span>
+<span class="new">+    // and reset to the vector of zeros after all the hierarchy is traversed.</span>
+<span class="new">+    while (cur_dim &gt; 0) {</span>
+<span class="new">+      cur_dim--;</span>
+<span class="new">+      cursors[cur_dim]++;</span>
+<span class="new">+      if (cursors[cur_dim] &lt; configuration.length(cur_dim)) {</span>
+<span class="new">+        break;</span>
+<span class="new">+      }</span>
+<span class="new">+      cursors[cur_dim] = 0;</span>
+<span class="new">+    }</span>
+<span class="new">+  } while (cur_dim != 0 || cursors[cur_dim] != 0);</span>
+<span class="new">+</span>
+<span class="new">+  FREE_C_HEAP_ARRAY(jlong, cursors, mtInternal);</span>
+<span class="new">+</span>
+<span class="new">+  return JNIHandles::make_local(env, container_obj);</span>
+<span class="new">+UNSAFE_END</span>
+<span class="new">+</span>
+<span class="new">+UNSAFE_ENTRY(void, Unsafe_ConstructObjectAtOffset(JNIEnv* env, jobject unsafe,</span>
+<span class="new">+    jobject container, jlong offset, jlong obj_prepadding,</span>
+<span class="new">+    jboolean is_contained, jboolean is_container, jlong obj_footprint,</span>
+<span class="new">+    jobject ctor, jobjectArray ctor_args))</span>
+<span class="new">+  UnsafeWrapper("Unsafe_ConstructObjectAtOffset");</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+    tty-&gt;print_cr("Unsafe_ConstructObjectAtOffset: "</span>
+<span class="new">+        "container=" PTR_FORMAT ", offset=0x%lX, "</span>
+<span class="new">+        "obj_prepadding=0x%lX, %scontained, %scontainer, obj_footprint=0x%lX, "</span>
+<span class="new">+        "ctor=" PTR_FORMAT ", ctor_args=" PTR_FORMAT,</span>
+<span class="new">+        p2i((void*) JNIHandles::resolve(container)),</span>
+<span class="new">+        offset,</span>
+<span class="new">+        obj_prepadding,</span>
+<span class="new">+        is_contained ? "" : "not ",</span>
+<span class="new">+        is_container ? "" : "not ",</span>
+<span class="new">+        obj_footprint,</span>
+<span class="new">+        p2i((void*) JNIHandles::resolve(ctor)),</span>
+<span class="new">+        p2i((void*) JNIHandles::resolve(ctor_args)));</span>
+<span class="new">+  }</span>
+<span class="new">+  if (container == NULL || ctor == NULL) {</span>
+<span class="new">+    THROW(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">+  }</span>
+<span class="new">+  if (!is_size_aligned((size_t) offset, HeapWordSize) || offset &lt; 0 ||</span>
+<span class="new">+      ((is_contained == JNI_FALSE) &amp;&amp; (obj_prepadding != 0)) ||</span>
+<span class="new">+      ((is_contained != JNI_FALSE) &amp;&amp;</span>
+<span class="new">+      (obj_prepadding != (get_prepadding_helper() &lt;&lt; LogHeapWordSize)))) {</span>
+<span class="new">+    THROW(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  // Calculate the address at which the object will be created</span>
+<span class="new">+  oop container_obj = JNIHandles::resolve_non_null(container);</span>
+<span class="new">+  address derived_obj_addr = ((address) container_obj) + offset;</span>
+<span class="new">+</span>
+<span class="new">+  // Create the object</span>
+<span class="new">+  oop ctor_mirror = JNIHandles::resolve_non_null(ctor);</span>
+<span class="new">+</span>
+<span class="new">+  objArrayHandle h_ctor_args(THREAD,</span>
+<span class="new">+      objArrayOop(JNIHandles::resolve(ctor_args)));</span>
+<span class="new">+</span>
+<span class="new">+  oop result = Reflection::invoke_constructor_in_place(derived_obj_addr,</span>
+<span class="new">+      (is_contained != JNI_FALSE), (is_container != JNI_FALSE),</span>
+<span class="new">+      ctor_mirror, h_ctor_args, CHECK);</span>
+<span class="new">+</span>
+<span class="new">+  if (JvmtiExport::should_post_vm_object_alloc()) {</span>
+<span class="new">+    JvmtiExport::post_vm_object_alloc(JavaThread::current(), result);</span>
+<span class="new">+  }</span>
+<span class="new">+UNSAFE_END</span>
+<span class="new">+</span>
+<span class="new">+UNSAFE_ENTRY(jobject, Unsafe_DeriveContainedObjectAtOffset(JNIEnv* env,</span>
+<span class="new">+    jobject unsafe, jobject container, jlong offset_in_bytes))</span>
+<span class="new">+  UnsafeWrapper("Unsafe_DeriveContainedObjectAtOffset");</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+    tty-&gt;print_cr("Unsafe_DeriveContainedObjectAtOffset: "</span>
+<span class="new">+        "container=" PTR_FORMAT ", offset_in_bytes=%ld(0x%lX)",</span>
+<span class="new">+        p2i((void*) JNIHandles::resolve(container)), offset_in_bytes,</span>
+<span class="new">+        offset_in_bytes);</span>
+<span class="new">+  }</span>
+<span class="new">+  if (container == NULL) {</span>
+<span class="new">+    THROW_NULL(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">+  }</span>
+<span class="new">+  if (!is_size_aligned((size_t) offset_in_bytes, HeapWordSize) ||</span>
+<span class="new">+      offset_in_bytes &lt; 0) {</span>
+<span class="new">+    THROW_NULL(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  oop container_obj = JNIHandles::resolve_non_null(container);</span>
+<span class="new">+  oop derived_obj = (oop) (((address) container_obj) + offset_in_bytes);</span>
+<span class="new">+</span>
+<span class="new">+#ifdef ASSERT</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+    if (derived_obj-&gt;is_contained()) {</span>
+<span class="new">+      jlong stored_offset_in_bytes = derived_obj-&gt;relative_container_offset();</span>
+<span class="new">+      tty-&gt;print_cr("  Unsafe_DeriveContainedObjectAtOffset: "</span>
+<span class="new">+          "derived object contained, RCO=%ld(0x%lX)",</span>
+<span class="new">+          stored_offset_in_bytes, stored_offset_in_bytes);</span>
+<span class="new">+    } else {</span>
+<span class="new">+      tty-&gt;print_cr("  Unsafe_DeriveContainedObjectAtOffset: "</span>
+<span class="new">+          "derived object not contained");</span>
+<span class="new">+    }</span>
+<span class="new">+  }</span>
+<span class="new">+#endif // ASSERT</span>
+<span class="new">+</span>
+<span class="new">+  return JNIHandles::make_local(env, derived_obj);</span>
+<span class="new">+UNSAFE_END</span>
+ 
+ /// JVM_RegisterUnsafeMethods
+ 
+ #define ADR "J"
+ 
+</pre><hr /><pre>
+<span class="newmarker">@@ -1695,10 +2229,21 @@</span>
+     {CC"loadFence",          CC"()V",                    FN_PTR(Unsafe_LoadFence)},
+     {CC"storeFence",         CC"()V",                    FN_PTR(Unsafe_StoreFence)},
+     {CC"fullFence",          CC"()V",                    FN_PTR(Unsafe_FullFence)},
+ };
+ 
+<span class="new">+static JNINativeMethod objectlayout_methods[] = {</span>
+<span class="new">+  { CC "getInstanceSize",                           CC "("CLS")J",                 FN_PTR(Unsafe_GetInstanceSize) },</span>
+<span class="new">+  { CC "getInstanceFootprintWhenContained",         CC "("CLS")J",                 FN_PTR(Unsafe_GetInstanceFootprintWhenContained) },</span>
+<span class="new">+  { CC "getContainingObjectFootprint",              CC "("CLS"JJ)J",               FN_PTR(Unsafe_GetContainingObjectFootprint) },</span>
+<span class="new">+  { CC "getContainingObjectFootprintWhenContained", CC "("CLS"JJ)J",               FN_PTR(Unsafe_GetContainingObjectFootprintWhenContained) },</span>
+<span class="new">+  { CC "getPrePaddingInObjectFootprint",            CC "(J)J",                     FN_PTR(Unsafe_GetPrePaddingInObjectFootprint) },</span>
+<span class="new">+  { CC "allocateHeapForElementArrayClass",          CC "("CLS"[J["CLS")"OBJ,       FN_PTR(Unsafe_AllocateHeapForElementArrayClass) },</span>
+<span class="new">+  { CC "constructObjectAtOffset",                   CC "("OBJ"JJZZJ"CTR"["OBJ")V", FN_PTR(Unsafe_ConstructObjectAtOffset) },</span>
+<span class="new">+  { CC "deriveContainedObjectAtOffset",             CC "("OBJ"J)"OBJ,              FN_PTR(Unsafe_DeriveContainedObjectAtOffset) }</span>
+<span class="new">+};</span>
+<span class="new">+</span>
+ #undef CC
+ #undef FN_PTR
+ 
+ #undef ADR
+ #undef LANG
+</pre><hr /><pre>
+<span class="newmarker">@@ -1794,7 +2339,12 @@</span>
+       register_natives("1.7 LambdaForm support", env, unsafecls, lform_methods, sizeof(lform_methods)/sizeof(JNINativeMethod));
+     }
+ 
+     // Fence methods
+     register_natives("1.8 fence methods", env, unsafecls, fence_methods, sizeof(fence_methods)/sizeof(JNINativeMethod));
+<span class="new">+</span>
+<span class="new">+    // ObjectLayout intrinsics</span>
+<span class="new">+    register_natives("ObjectLayout intrinsics", env, unsafecls,</span>
+<span class="new">+      objectlayout_methods,</span>
+<span class="new">+      sizeof(objectlayout_methods) / sizeof(JNINativeMethod));</span>
+   }
+ JVM_END
+</pre></body></html>
+

@@ -1,0 +1,10 @@
+--- old/src/share/vm/adlc/formssel.cpp	2015-06-16 10:25:39.646548891 -0700
++++ new/src/share/vm/adlc/formssel.cpp	2015-06-16 10:25:39.578550501 -0700
+@@ -772,6 +772,7 @@
+   if( _matrule && _matrule->_rChild &&
+        (!strcmp(_matrule->_rChild->_opType,"CastPP")       ||  // new result type
+         !strcmp(_matrule->_rChild->_opType,"CastX2P")      ||  // new result type
++        !strcmp(_matrule->_rChild->_opType,"CastDerived")  ||  // new result type
+         !strcmp(_matrule->_rChild->_opType,"DecodeN")      ||
+         !strcmp(_matrule->_rChild->_opType,"EncodeP")      ||
+         !strcmp(_matrule->_rChild->_opType,"DecodeNKlass") ||

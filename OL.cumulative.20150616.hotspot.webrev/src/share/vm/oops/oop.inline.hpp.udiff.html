@@ -1,0 +1,439 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/oops/oop.inline.hpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/oops/oop.inline.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -142,11 +142,13 @@</span>
+     // Special case for GC
+     return (oop)(address)_metadata._klass;
+   }
+ }
+ 
+<span class="removed">-inline void   oopDesc::init_mark()                 { set_mark(markOopDesc::prototype_for_object(this)); }</span>
+<span class="new">+inline void oopDesc::init_mark() {</span>
+<span class="new">+  set_mark(markOopDesc::prototype_for_object(this));</span>
+<span class="new">+}</span>
+ 
+ inline bool oopDesc::is_a(Klass* k)        const { return klass()-&gt;is_subtype_of(k); }
+ 
+ inline bool oopDesc::is_instance()            const { return klass()-&gt;oop_is_instance(); }
+ inline bool oopDesc::is_instanceClassLoader() const { return klass()-&gt;oop_is_instanceClassLoader(); }
+</pre><hr /><pre>
+<span class="newmarker">@@ -557,28 +559,10 @@</span>
+     }
+     return (oop)Atomic::cmpxchg_ptr(exchange_value, (oop*)dest, compare_value);
+   }
+ }
+ 
+<span class="removed">-// Used only for markSweep, scavenging</span>
+<span class="removed">-inline bool oopDesc::is_gc_marked() const {</span>
+<span class="removed">-  return mark()-&gt;is_marked();</span>
+<span class="removed">-}</span>
+<span class="removed">-</span>
+<span class="removed">-inline bool oopDesc::is_locked() const {</span>
+<span class="removed">-  return mark()-&gt;is_locked();</span>
+<span class="removed">-}</span>
+<span class="removed">-</span>
+<span class="removed">-inline bool oopDesc::is_unlocked() const {</span>
+<span class="removed">-  return mark()-&gt;is_unlocked();</span>
+<span class="removed">-}</span>
+<span class="removed">-</span>
+<span class="removed">-inline bool oopDesc::has_bias_pattern() const {</span>
+<span class="removed">-  return mark()-&gt;has_bias_pattern();</span>
+<span class="removed">-}</span>
+<span class="removed">-</span>
+<span class="removed">-</span>
+ // used only for asserts
+ inline bool oopDesc::is_oop(bool ignore_mark_word) const {
+   oop obj = (oop) this;
+   if (!check_obj_alignment(obj)) return false;
+   if (!Universe::heap()-&gt;is_in_reserved(obj)) return false;
+</pre><hr /><pre>
+<span class="newmarker">@@ -596,11 +580,10 @@</span>
+     return true;
+   }
+   return !SafepointSynchronize::is_at_safepoint();
+ }
+ 
+<span class="removed">-</span>
+ // used only for asserts
+ inline bool oopDesc::is_oop_or_null(bool ignore_mark_word) const {
+   return this == NULL ? true : is_oop(ignore_mark_word);
+ }
+ 
+</pre><hr /><pre>
+<span class="newmarker">@@ -610,83 +593,236 @@</span>
+   if (!Universe::heap()-&gt;is_in_reserved(this)) return false;
+   return mark()-&gt;is_unlocked();
+ }
+ #endif // PRODUCT
+ 
+<span class="removed">-inline void oopDesc::follow_contents(void) {</span>
+<span class="removed">-  assert (is_gc_marked(), "should be marked");</span>
+<span class="new">+inline bool oopDesc::is_locked() const {</span>
+<span class="new">+  return mark()-&gt;is_locked();</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline bool oopDesc::is_unlocked() const {</span>
+<span class="new">+  return mark()-&gt;is_unlocked();</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline bool oopDesc::has_bias_pattern() const {</span>
+<span class="new">+  return mark()-&gt;has_bias_pattern();</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline bool oopDesc::has_displaced_mark() const {</span>
+<span class="new">+  return mark()-&gt;has_displaced_mark_helper();</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline markOop oopDesc::displaced_mark() const {</span>
+<span class="new">+  return mark()-&gt;displaced_mark_helper();</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline void oopDesc::set_displaced_mark(markOop m) {</span>
+<span class="new">+  mark()-&gt;set_displaced_mark_helper(m);</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline bool oopDesc::is_gc_marked() const {</span>
+<span class="new">+  return mark()-&gt;is_marked();</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline void oopDesc::follow_contents() {</span>
+<span class="new">+  assert(is_gc_marked(), "should be marked");</span>
+   klass()-&gt;oop_follow_contents(this);
+ }
+ 
+<span class="removed">-// Used by scavengers</span>
+<span class="new">+inline int oopDesc::adjust_pointers() {</span>
+<span class="new">+  debug_only(int check_size = size());</span>
+<span class="new">+  int s = klass()-&gt;oop_adjust_pointers(this);</span>
+<span class="new">+  assert(s == check_size, "should be the same");</span>
+<span class="new">+  return s;</span>
+<span class="new">+}</span>
+ 
+<span class="new">+// Used by scavengers</span>
+ inline bool oopDesc::is_forwarded() const {
+<span class="removed">-  // The extra heap check is needed since the obj might be locked, in which case the</span>
+<span class="removed">-  // mark would point to a stack location and have the sentinel bit cleared</span>
+<span class="new">+  // The extra heap check is needed since the object might be locked, in which</span>
+<span class="new">+  // case the mark would point to a stack location and have the sentinel bit</span>
+<span class="new">+  // cleared.</span>
+   return mark()-&gt;is_marked();
+ }
+ 
+ // Used by scavengers
+ inline void oopDesc::forward_to(oop p) {
+   assert(check_obj_alignment(p),
+          "forwarding to something not aligned");
+   assert(Universe::heap()-&gt;is_in_reserved(p),
+          "forwarding to something not in heap");
+<span class="removed">-  markOop m = markOopDesc::encode_pointer_as_mark(p);</span>
+<span class="removed">-  assert(m-&gt;decode_pointer() == p, "encoding must be reversable");</span>
+<span class="new">+  markOop m = markOopDesc::encode_pointer_as_mark(p, is_contained());</span>
+<span class="new">+  assert(m-&gt;decode_pointer() == p, "encoding must be reversible");</span>
+   set_mark(m);
+ }
+ 
+ // Used by parallel scavengers
+ inline bool oopDesc::cas_forward_to(oop p, markOop compare) {
+   assert(check_obj_alignment(p),
+          "forwarding to something not aligned");
+   assert(Universe::heap()-&gt;is_in_reserved(p),
+          "forwarding to something not in heap");
+<span class="removed">-  markOop m = markOopDesc::encode_pointer_as_mark(p);</span>
+<span class="removed">-  assert(m-&gt;decode_pointer() == p, "encoding must be reversable");</span>
+<span class="new">+  markOop m = markOopDesc::encode_pointer_as_mark(p,</span>
+<span class="new">+      oopDesc::is_contained(compare));</span>
+<span class="new">+  assert(m-&gt;decode_pointer() == p, "encoding must be reversible");</span>
+   return cas_set_mark(m, compare) == compare;
+ }
+ 
+<span class="removed">-// Note that the forwardee is not the same thing as the displaced_mark.</span>
+<span class="removed">-// The forwardee is used when copying during scavenge and mark-sweep.</span>
+<span class="removed">-// It does need to clear the low two locking- and GC-related bits.</span>
+<span class="new">+// Note that the forwardee is not the same thing as the displaced mark.</span>
+<span class="new">+// The forwardee is used when copying during Scavenge and Mark-Sweep. It does</span>
+<span class="new">+// need to clear the low three locking, GC, and ObjectLayout related bits.</span>
+ inline oop oopDesc::forwardee() const {
+   return (oop) mark()-&gt;decode_pointer();
+ }
+ 
+<span class="removed">-inline bool oopDesc::has_displaced_mark() const {</span>
+<span class="removed">-  return mark()-&gt;has_displaced_mark_helper();</span>
+<span class="removed">-}</span>
+<span class="removed">-</span>
+<span class="removed">-inline markOop oopDesc::displaced_mark() const {</span>
+<span class="removed">-  return mark()-&gt;displaced_mark_helper();</span>
+<span class="removed">-}</span>
+<span class="removed">-</span>
+<span class="removed">-inline void oopDesc::set_displaced_mark(markOop m) {</span>
+<span class="removed">-  mark()-&gt;set_displaced_mark_helper(m);</span>
+<span class="removed">-}</span>
+<span class="removed">-</span>
+<span class="removed">-// The following method needs to be MT safe.</span>
+ inline uint oopDesc::age() const {
+<span class="removed">-  assert(!is_forwarded(), "Attempt to read age from forwarded mark");</span>
+<span class="new">+  assert(!is_forwarded(), "attempt to read age from forwarded mark");</span>
+   if (has_displaced_mark()) {
+     return displaced_mark()-&gt;age();
+   } else {
+     return mark()-&gt;age();
+   }
+ }
+ 
+ inline void oopDesc::incr_age() {
+<span class="removed">-  assert(!is_forwarded(), "Attempt to increment age of forwarded mark");</span>
+<span class="new">+  assert(!is_forwarded(), "attempt to increment age of forwarded mark");</span>
+   if (has_displaced_mark()) {
+     set_displaced_mark(displaced_mark()-&gt;incr_age());
+   } else {
+     set_mark(mark()-&gt;incr_age());
+   }
+ }
+ 
+<span class="new">+inline bool oopDesc::is_contained() const {</span>
+<span class="new">+  return is_contained(mark());</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline bool oopDesc::is_contained(markOop mark) {</span>
+<span class="new">+  if (mark-&gt;is_marked()) {</span>
+<span class="new">+    return mark-&gt;is_contained_when_forwarded();</span>
+<span class="new">+  } else if (mark-&gt;has_displaced_mark_helper()) {</span>
+<span class="new">+    return mark-&gt;displaced_mark_helper()-&gt;is_contained();</span>
+<span class="new">+  } else {</span>
+<span class="new">+    return mark-&gt;is_contained();</span>
+<span class="new">+  }</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline void oopDesc::set_contained() {</span>
+<span class="new">+  if (is_forwarded()) {</span>
+<span class="new">+    set_mark(mark()-&gt;set_contained_when_forwarded());</span>
+<span class="new">+  } else if (has_displaced_mark()) {</span>
+<span class="new">+    set_displaced_mark(displaced_mark()-&gt;set_contained());</span>
+<span class="new">+  } else {</span>
+<span class="new">+    set_mark(mark()-&gt;set_contained());</span>
+<span class="new">+  }</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline void oopDesc::clear_contained() {</span>
+<span class="new">+  if (is_forwarded()) {</span>
+<span class="new">+    set_mark(mark()-&gt;clear_contained_when_forwarded());</span>
+<span class="new">+  } else if (has_displaced_mark()) {</span>
+<span class="new">+    set_displaced_mark(displaced_mark()-&gt;clear_contained());</span>
+<span class="new">+  } else {</span>
+<span class="new">+    set_mark(mark()-&gt;clear_contained());</span>
+<span class="new">+  }</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline bool oopDesc::is_container() const {</span>
+<span class="new">+  return is_container(mark(), klass());</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline bool oopDesc::is_container(markOop mark, Klass* klass) {</span>
+<span class="new">+  if (mark-&gt;is_marked()) {</span>
+<span class="new">+    return klass-&gt;oop_is_container();</span>
+<span class="new">+  } else if (mark-&gt;has_displaced_mark_helper()) {</span>
+<span class="new">+    return mark-&gt;displaced_mark_helper()-&gt;is_container();</span>
+<span class="new">+  } else {</span>
+<span class="new">+    return mark-&gt;is_container();</span>
+<span class="new">+  }</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline void oopDesc::convert_to_marked() {</span>
+<span class="new">+  assert(!is_gc_marked(), "object already marked");</span>
+<span class="new">+  markOop new_mark = markOopDesc::prototype()-&gt;set_marked();</span>
+<span class="new">+  if (is_contained()) {</span>
+<span class="new">+    new_mark = new_mark-&gt;set_contained_when_forwarded();</span>
+<span class="new">+  }</span>
+<span class="new">+  set_mark(new_mark);</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline void oopDesc::convert_to_unmarked() {</span>
+<span class="new">+  assert(is_gc_marked(), "object already unmarked");</span>
+<span class="new">+  markOop new_mark = markOopDesc::prototype_for_object(this);</span>
+<span class="new">+  if (is_contained()) {</span>
+<span class="new">+    new_mark = new_mark-&gt;set_contained();</span>
+<span class="new">+  }</span>
+<span class="new">+  if (is_container()) {</span>
+<span class="new">+    new_mark = new_mark-&gt;set_container();</span>
+<span class="new">+  }</span>
+<span class="new">+  set_mark(new_mark);</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline void oopDesc::restore_mark(markOop saved_value) {</span>
+<span class="new">+  assert(!is_gc_marked(), "object must not be marked");</span>
+<span class="new">+  assert(!saved_value-&gt;is_marked(), "value to be restored must not be marked");</span>
+<span class="new">+  bool is_contained = this-&gt;is_contained();</span>
+<span class="new">+  // The property whether the object is a container cannot change during GC.</span>
+<span class="new">+  // Hence, there is no need in updating the corresponding bit in the given</span>
+<span class="new">+  // saved markword value.</span>
+<span class="new">+  if (saved_value-&gt;has_displaced_mark_helper()) {</span>
+<span class="new">+    markOop displaced_value = saved_value-&gt;displaced_mark_helper();</span>
+<span class="new">+    saved_value-&gt;set_displaced_mark_helper(is_contained ?</span>
+<span class="new">+        displaced_value-&gt;set_contained() :</span>
+<span class="new">+        displaced_value-&gt;clear_contained());</span>
+<span class="new">+    set_mark(saved_value);</span>
+<span class="new">+  } else {</span>
+<span class="new">+    set_mark(is_contained ?</span>
+<span class="new">+        saved_value-&gt;set_contained() :</span>
+<span class="new">+        saved_value-&gt;clear_contained());</span>
+<span class="new">+  }</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline jlong oopDesc::relative_container_offset() const {</span>
+<span class="new">+  assert(is_contained(), "object not contained");</span>
+<span class="new">+  return *((jlong*) (((address) this) - sizeof(jlong)));</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline void oopDesc::set_relative_container_offset(jlong offset) {</span>
+<span class="new">+  assert(is_contained(), "object not contained");</span>
+<span class="new">+  *((jlong*) (((address) this) - sizeof(jlong))) = offset;</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline oop oopDesc::container() const {</span>
+<span class="new">+  assert(is_contained(), "object not contained");</span>
+<span class="new">+  return (oop) (((address) this) - relative_container_offset());</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline oop oopDesc::outermost_container() {</span>
+<span class="new">+  assert(is_contained(), "object not contained");</span>
+<span class="new">+  oop container = this;</span>
+<span class="new">+  do {</span>
+<span class="new">+    container = container-&gt;container();</span>
+<span class="new">+    assert(container-&gt;is_container(), "container broken");</span>
+<span class="new">+  } while (container-&gt;is_contained());</span>
+<span class="new">+  return container;</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+inline oop oopDesc::outermost_alive_container() {</span>
+<span class="new">+  assert(is_gc_marked(), "object not marked");</span>
+<span class="new">+  assert(is_contained(), "object not contained");</span>
+<span class="new">+  oop result = NULL;</span>
+<span class="new">+  oop container = this;</span>
+<span class="new">+  do {</span>
+<span class="new">+    container = container-&gt;container();</span>
+<span class="new">+    assert(container-&gt;is_container(), "container broken");</span>
+<span class="new">+    if (container-&gt;is_gc_marked()) {</span>
+<span class="new">+      result = container;</span>
+<span class="new">+    } else {</span>
+<span class="new">+      break;</span>
+<span class="new">+    }</span>
+<span class="new">+  } while (container-&gt;is_contained());</span>
+<span class="new">+  return result;</span>
+<span class="new">+}</span>
+ 
+ inline intptr_t oopDesc::identity_hash() {
+   // Fast case; if the object is unlocked and the hash value is set, no locking is needed
+   // Note: The mark must be read into local variable to avoid concurrent updates.
+   markOop mrk = mark();
+</pre><hr /><pre>
+<span class="newmarker">@@ -697,17 +833,10 @@</span>
+   } else {
+     return slow_identity_hash();
+   }
+ }
+ 
+<span class="removed">-inline int oopDesc::adjust_pointers() {</span>
+<span class="removed">-  debug_only(int check_size = size());</span>
+<span class="removed">-  int s = klass()-&gt;oop_adjust_pointers(this);</span>
+<span class="removed">-  assert(s == check_size, "should be the same");</span>
+<span class="removed">-  return s;</span>
+<span class="removed">-}</span>
+<span class="removed">-</span>
+ #define OOP_ITERATE_DEFN(OopClosureType, nv_suffix)                        \
+                                                                            \
+ inline int oopDesc::oop_iterate(OopClosureType* blk) {                     \
+   SpecializationStats::record_call();                                      \
+   return klass()-&gt;oop_oop_iterate##nv_suffix(this, blk);               \
+</pre></body></html>
+

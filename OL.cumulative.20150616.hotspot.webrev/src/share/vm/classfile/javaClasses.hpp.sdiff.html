@@ -1,0 +1,699 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/classfile </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/classfile/javaClasses.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+   1 /*
+<span class="changed">   2  * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.</span>
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+
+</pre><hr></hr><pre>
+ 467 
+ 468 class java_lang_Throwable: AllStatic {
+ 469   friend class BacktraceBuilder;
+ 470 
+ 471  private:
+ 472   // Offsets
+ 473   enum {
+ 474     hc_backtrace_offset     =  0,
+ 475     hc_detailMessage_offset =  1,
+ 476     hc_cause_offset         =  2,  // New since 1.4
+ 477     hc_stackTrace_offset    =  3   // New since 1.4
+ 478   };
+ 479   enum {
+ 480       hc_static_unassigned_stacktrace_offset = 0  // New since 1.7
+ 481   };
+ 482   // Trace constants
+ 483   enum {
+ 484     trace_methods_offset = 0,
+ 485     trace_bcis_offset    = 1,
+ 486     trace_mirrors_offset = 2,
+<span class="changed"> 487     trace_cprefs_offset  = 3,</span>
+<span class="changed"> 488     trace_next_offset    = 4,</span>
+<span class="changed"> 489     trace_size           = 5,</span>
+ 490     trace_chunk_size     = 32
+ 491   };
+ 492 
+ 493   static int backtrace_offset;
+ 494   static int detailMessage_offset;
+ 495   static int cause_offset;
+ 496   static int stackTrace_offset;
+ 497   static int static_unassigned_stacktrace_offset;
+ 498 
+ 499   // Printing
+<span class="changed"> 500   static char* print_stack_element_to_buffer(Handle mirror, int method, int version, int bci, int cpref);</span>
+ 501   // StackTrace (programmatic access, new since 1.4)
+ 502   static void clear_stacktrace(oop throwable);
+ 503   // No stack trace available
+ 504   static const char* no_stack_trace_message();
+ 505   // Stacktrace (post JDK 1.7.0 to allow immutability protocol to be followed)
+ 506   static void set_stacktrace(oop throwable, oop st_element_array);
+ 507   static oop unassigned_stacktrace();
+ 508 
+ 509  public:
+ 510   // Backtrace
+ 511   static oop backtrace(oop throwable);
+ 512   static void set_backtrace(oop throwable, oop value);
+ 513   // Needed by JVMTI to filter out this internal field.
+ 514   static int get_backtrace_offset() { return backtrace_offset;}
+ 515   static int get_detailMessage_offset() { return detailMessage_offset;}
+ 516   // Message
+ 517   static oop message(oop throwable);
+ 518   static oop message(Handle throwable);
+ 519   static void set_message(oop throwable, oop value);
+ 520   static void print_stack_element(outputStream *st, Handle mirror, int method,
+<span class="changed"> 521                                   int version, int bci, int cpref);</span>
+ 522   static void print_stack_element(outputStream *st, methodHandle method, int bci);
+ 523   static void print_stack_usage(Handle stream);
+ 524 
+ 525   // Allocate space for backtrace (created but stack trace not filled in)
+ 526   static void allocate_backtrace(Handle throwable, TRAPS);
+ 527   // Fill in current stack trace for throwable with preallocated backtrace (no GC)
+ 528   static void fill_in_stack_trace_of_preallocated_backtrace(Handle throwable);
+ 529   // Fill in current stack trace, can cause GC
+ 530   static void fill_in_stack_trace(Handle throwable, methodHandle method, TRAPS);
+ 531   static void fill_in_stack_trace(Handle throwable, methodHandle method = methodHandle());
+ 532   // Programmatic access to stack trace
+ 533   static oop  get_stack_trace_element(oop throwable, int index, TRAPS);
+ 534   static int  get_stack_trace_depth(oop throwable, TRAPS);
+ 535   // Printing
+ 536   static void print(oop throwable, outputStream* st);
+ 537   static void print(Handle throwable, outputStream* st);
+ 538   static void print_stack_trace(oop throwable, outputStream* st);
+ 539   // Debugging
+ 540   friend class JavaClasses;
+ 541 };
+
+</pre><hr></hr><pre>
+1079   static int _vmindex_offset;
+1080 
+1081   static void compute_offsets();
+1082 
+1083  public:
+1084   // Accessors
+1085   static oop            clazz(oop mname);
+1086   static void       set_clazz(oop mname, oop clazz);
+1087 
+1088   static oop            type(oop mname);
+1089   static void       set_type(oop mname, oop type);
+1090 
+1091   static oop            name(oop mname);
+1092   static void       set_name(oop mname, oop name);
+1093 
+1094   static int            flags(oop mname);
+1095   static void       set_flags(oop mname, int flags);
+1096 
+1097   static Metadata*      vmtarget(oop mname);
+1098   static void       set_vmtarget(oop mname, Metadata* target);
+
+
+
+
+1099 
+1100   static intptr_t       vmindex(oop mname);
+1101   static void       set_vmindex(oop mname, intptr_t index);
+1102 
+1103   // Testers
+1104   static bool is_subclass(Klass* klass) {
+1105     return klass-&gt;is_subclass_of(SystemDictionary::MemberName_klass());
+1106   }
+1107   static bool is_instance(oop obj) {
+1108     return obj != NULL &amp;&amp; is_subclass(obj-&gt;klass());
+1109   }
+1110 
+1111   static bool is_method(oop obj);
+1112 
+1113   // Relevant integer codes (keep these in synch. with MethodHandleNatives.Constants):
+1114   enum {
+1115     MN_IS_METHOD            = 0x00010000, // method (not constructor)
+1116     MN_IS_CONSTRUCTOR       = 0x00020000, // constructor
+1117     MN_IS_FIELD             = 0x00040000, // field
+1118     MN_IS_TYPE              = 0x00080000, // nested type
+
+</pre><hr></hr><pre>
+1306   enum {
+1307     hc_declaringClass_offset  = 0,
+1308     hc_methodName_offset = 1,
+1309     hc_fileName_offset   = 2,
+1310     hc_lineNumber_offset = 3
+1311   };
+1312 
+1313   static int declaringClass_offset;
+1314   static int methodName_offset;
+1315   static int fileName_offset;
+1316   static int lineNumber_offset;
+1317 
+1318  public:
+1319   // Setters
+1320   static void set_declaringClass(oop element, oop value);
+1321   static void set_methodName(oop element, oop value);
+1322   static void set_fileName(oop element, oop value);
+1323   static void set_lineNumber(oop element, int value);
+1324 
+1325   // Create an instance of StackTraceElement
+<span class="changed">1326   static oop create(Handle mirror, int method, int version, int bci, int cpref, TRAPS);</span>
+1327   static oop create(methodHandle method, int bci, TRAPS);
+1328 
+1329   // Debugging
+1330   friend class JavaClasses;
+1331 };
+1332 
+1333 
+1334 // Interface to java.lang.AssertionStatusDirectives objects
+1335 
+1336 class java_lang_AssertionStatusDirectives: AllStatic {
+1337  private:
+1338   enum {
+1339     hc_classes_offset,
+1340     hc_classEnabled_offset,
+1341     hc_packages_offset,
+1342     hc_packageEnabled_offset,
+1343     hc_deflt_offset
+1344   };
+1345 
+1346   static int classes_offset;
+
+</pre><hr></hr><pre>
+1359   // Debugging
+1360   friend class JavaClasses;
+1361 };
+1362 
+1363 
+1364 class java_nio_Buffer: AllStatic {
+1365  private:
+1366   static int _limit_offset;
+1367 
+1368  public:
+1369   static int  limit_offset();
+1370   static void compute_offsets();
+1371 };
+1372 
+1373 class java_util_concurrent_locks_AbstractOwnableSynchronizer : AllStatic {
+1374  private:
+1375   static int  _owner_offset;
+1376  public:
+1377   static void initialize(TRAPS);
+1378   static oop  get_owner_threadObj(oop obj);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1379 };
+1380 
+1381 // Use to declare fields that need to be injected into Java classes
+1382 // for the JVM to use.  The name_index and signature_index are
+1383 // declared in vmSymbols.  The may_be_java flag is used to declare
+1384 // fields that might already exist in Java but should be injected if
+1385 // they don't.  Otherwise the field is unconditionally injected and
+1386 // the JVM uses the injected one.  This is to ensure that name
+1387 // collisions don't occur.  In general may_be_java should be false
+1388 // unless there's a good reason.
+1389 
+1390 class InjectedField {
+1391  public:
+1392   const SystemDictionary::WKID klass_id;
+1393   const vmSymbols::SID name_index;
+1394   const vmSymbols::SID signature_index;
+1395   const bool           may_be_java;
+1396 
+1397 
+1398   Klass* klass() const    { return SystemDictionary::well_known_klass(klass_id); }
+
+</pre><hr></hr>
+</pre></td><td><pre>
+   1 /*
+<span class="changed">   2  * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.</span>
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+
+</pre><hr></hr><pre>
+ 467 
+ 468 class java_lang_Throwable: AllStatic {
+ 469   friend class BacktraceBuilder;
+ 470 
+ 471  private:
+ 472   // Offsets
+ 473   enum {
+ 474     hc_backtrace_offset     =  0,
+ 475     hc_detailMessage_offset =  1,
+ 476     hc_cause_offset         =  2,  // New since 1.4
+ 477     hc_stackTrace_offset    =  3   // New since 1.4
+ 478   };
+ 479   enum {
+ 480       hc_static_unassigned_stacktrace_offset = 0  // New since 1.7
+ 481   };
+ 482   // Trace constants
+ 483   enum {
+ 484     trace_methods_offset = 0,
+ 485     trace_bcis_offset    = 1,
+ 486     trace_mirrors_offset = 2,
+<span class="changed"> 487     trace_next_offset    = 3,</span>
+<span class="changed"> 488     trace_size           = 4,</span>
+
+ 489     trace_chunk_size     = 32
+ 490   };
+ 491 
+ 492   static int backtrace_offset;
+ 493   static int detailMessage_offset;
+ 494   static int cause_offset;
+ 495   static int stackTrace_offset;
+ 496   static int static_unassigned_stacktrace_offset;
+ 497 
+ 498   // Printing
+<span class="changed"> 499   static char* print_stack_element_to_buffer(Handle mirror, int method, int version, int bci);</span>
+ 500   // StackTrace (programmatic access, new since 1.4)
+ 501   static void clear_stacktrace(oop throwable);
+ 502   // No stack trace available
+ 503   static const char* no_stack_trace_message();
+ 504   // Stacktrace (post JDK 1.7.0 to allow immutability protocol to be followed)
+ 505   static void set_stacktrace(oop throwable, oop st_element_array);
+ 506   static oop unassigned_stacktrace();
+ 507 
+ 508  public:
+ 509   // Backtrace
+ 510   static oop backtrace(oop throwable);
+ 511   static void set_backtrace(oop throwable, oop value);
+ 512   // Needed by JVMTI to filter out this internal field.
+ 513   static int get_backtrace_offset() { return backtrace_offset;}
+ 514   static int get_detailMessage_offset() { return detailMessage_offset;}
+ 515   // Message
+ 516   static oop message(oop throwable);
+ 517   static oop message(Handle throwable);
+ 518   static void set_message(oop throwable, oop value);
+ 519   static void print_stack_element(outputStream *st, Handle mirror, int method,
+<span class="changed"> 520                                   int version, int bci);</span>
+ 521   static void print_stack_element(outputStream *st, methodHandle method, int bci);
+ 522   static void print_stack_usage(Handle stream);
+ 523 
+ 524   // Allocate space for backtrace (created but stack trace not filled in)
+ 525   static void allocate_backtrace(Handle throwable, TRAPS);
+ 526   // Fill in current stack trace for throwable with preallocated backtrace (no GC)
+ 527   static void fill_in_stack_trace_of_preallocated_backtrace(Handle throwable);
+ 528   // Fill in current stack trace, can cause GC
+ 529   static void fill_in_stack_trace(Handle throwable, methodHandle method, TRAPS);
+ 530   static void fill_in_stack_trace(Handle throwable, methodHandle method = methodHandle());
+ 531   // Programmatic access to stack trace
+ 532   static oop  get_stack_trace_element(oop throwable, int index, TRAPS);
+ 533   static int  get_stack_trace_depth(oop throwable, TRAPS);
+ 534   // Printing
+ 535   static void print(oop throwable, outputStream* st);
+ 536   static void print(Handle throwable, outputStream* st);
+ 537   static void print_stack_trace(oop throwable, outputStream* st);
+ 538   // Debugging
+ 539   friend class JavaClasses;
+ 540 };
+
+</pre><hr></hr><pre>
+1078   static int _vmindex_offset;
+1079 
+1080   static void compute_offsets();
+1081 
+1082  public:
+1083   // Accessors
+1084   static oop            clazz(oop mname);
+1085   static void       set_clazz(oop mname, oop clazz);
+1086 
+1087   static oop            type(oop mname);
+1088   static void       set_type(oop mname, oop type);
+1089 
+1090   static oop            name(oop mname);
+1091   static void       set_name(oop mname, oop name);
+1092 
+1093   static int            flags(oop mname);
+1094   static void       set_flags(oop mname, int flags);
+1095 
+1096   static Metadata*      vmtarget(oop mname);
+1097   static void       set_vmtarget(oop mname, Metadata* target);
+<span class="new">1098 #if INCLUDE_JVMTI</span>
+<span class="new">1099   static void       adjust_vmtarget(oop mname, Method* old_method, Method* new_method,</span>
+<span class="new">1100                                     bool* trace_name_printed);</span>
+<span class="new">1101 #endif // INCLUDE_JVMTI</span>
+1102 
+1103   static intptr_t       vmindex(oop mname);
+1104   static void       set_vmindex(oop mname, intptr_t index);
+1105 
+1106   // Testers
+1107   static bool is_subclass(Klass* klass) {
+1108     return klass-&gt;is_subclass_of(SystemDictionary::MemberName_klass());
+1109   }
+1110   static bool is_instance(oop obj) {
+1111     return obj != NULL &amp;&amp; is_subclass(obj-&gt;klass());
+1112   }
+1113 
+1114   static bool is_method(oop obj);
+1115 
+1116   // Relevant integer codes (keep these in synch. with MethodHandleNatives.Constants):
+1117   enum {
+1118     MN_IS_METHOD            = 0x00010000, // method (not constructor)
+1119     MN_IS_CONSTRUCTOR       = 0x00020000, // constructor
+1120     MN_IS_FIELD             = 0x00040000, // field
+1121     MN_IS_TYPE              = 0x00080000, // nested type
+
+</pre><hr></hr><pre>
+1309   enum {
+1310     hc_declaringClass_offset  = 0,
+1311     hc_methodName_offset = 1,
+1312     hc_fileName_offset   = 2,
+1313     hc_lineNumber_offset = 3
+1314   };
+1315 
+1316   static int declaringClass_offset;
+1317   static int methodName_offset;
+1318   static int fileName_offset;
+1319   static int lineNumber_offset;
+1320 
+1321  public:
+1322   // Setters
+1323   static void set_declaringClass(oop element, oop value);
+1324   static void set_methodName(oop element, oop value);
+1325   static void set_fileName(oop element, oop value);
+1326   static void set_lineNumber(oop element, int value);
+1327 
+1328   // Create an instance of StackTraceElement
+<span class="changed">1329   static oop create(Handle mirror, int method, int version, int bci, TRAPS);</span>
+1330   static oop create(methodHandle method, int bci, TRAPS);
+1331 
+1332   // Debugging
+1333   friend class JavaClasses;
+1334 };
+1335 
+1336 
+1337 // Interface to java.lang.AssertionStatusDirectives objects
+1338 
+1339 class java_lang_AssertionStatusDirectives: AllStatic {
+1340  private:
+1341   enum {
+1342     hc_classes_offset,
+1343     hc_classEnabled_offset,
+1344     hc_packages_offset,
+1345     hc_packageEnabled_offset,
+1346     hc_deflt_offset
+1347   };
+1348 
+1349   static int classes_offset;
+
+</pre><hr></hr><pre>
+1362   // Debugging
+1363   friend class JavaClasses;
+1364 };
+1365 
+1366 
+1367 class java_nio_Buffer: AllStatic {
+1368  private:
+1369   static int _limit_offset;
+1370 
+1371  public:
+1372   static int  limit_offset();
+1373   static void compute_offsets();
+1374 };
+1375 
+1376 class java_util_concurrent_locks_AbstractOwnableSynchronizer : AllStatic {
+1377  private:
+1378   static int  _owner_offset;
+1379  public:
+1380   static void initialize(TRAPS);
+1381   static oop  get_owner_threadObj(oop obj);
+<span class="new">1382 };</span>
+<span class="new">1383 </span>
+<span class="new">1384 </span>
+<span class="new">1385 // Interface to org.ObjectLayout.AbstractStructuredArray objects</span>
+<span class="new">1386 </span>
+<span class="new">1387 class org_ObjectLayout_AbstractStructuredArray : AllStatic {</span>
+<span class="new">1388   friend class JavaClasses;</span>
+<span class="new">1389 </span>
+<span class="new">1390  private:</span>
+<span class="new">1391   static int _bodySize_offset;</span>
+<span class="new">1392   static int _length_offset;</span>
+<span class="new">1393   static int _elementSize_offset;</span>
+<span class="new">1394   static int _paddingSize_offset;</span>
+<span class="new">1395   static int _elementClass_offset;</span>
+<span class="new">1396 </span>
+<span class="new">1397   static void compute_offsets();</span>
+<span class="new">1398 </span>
+<span class="new">1399  public:</span>
+<span class="new">1400   static int bodySize_offset() {</span>
+<span class="new">1401     return _bodySize_offset;</span>
+<span class="new">1402   }</span>
+<span class="new">1403   static int length_offset() {</span>
+<span class="new">1404     return _length_offset;</span>
+<span class="new">1405   }</span>
+<span class="new">1406   static int elementSize_offset() {</span>
+<span class="new">1407     return _elementSize_offset;</span>
+<span class="new">1408   }</span>
+<span class="new">1409   static int paddingSize_offset() {</span>
+<span class="new">1410     return _paddingSize_offset;</span>
+<span class="new">1411   }</span>
+<span class="new">1412   static int elementClass_offset() {</span>
+<span class="new">1413     return _elementClass_offset;</span>
+<span class="new">1414   }</span>
+<span class="new">1415 </span>
+<span class="new">1416   static jint bodySize(oop asa) {</span>
+<span class="new">1417     return asa-&gt;int_field(_bodySize_offset);</span>
+<span class="new">1418   }</span>
+<span class="new">1419   static void set_bodySize(oop asa, jint value) {</span>
+<span class="new">1420     return asa-&gt;int_field_put(_bodySize_offset, value);</span>
+<span class="new">1421   }</span>
+<span class="new">1422 </span>
+<span class="new">1423   static jlong length(oop asa) {</span>
+<span class="new">1424     return asa-&gt;long_field(_length_offset);</span>
+<span class="new">1425   }</span>
+<span class="new">1426   static void set_length(oop asa, jlong value) {</span>
+<span class="new">1427     return asa-&gt;long_field_put(_length_offset, value);</span>
+<span class="new">1428   }</span>
+<span class="new">1429 </span>
+<span class="new">1430   static jlong elementSize(oop asa) {</span>
+<span class="new">1431     return asa-&gt;long_field(_elementSize_offset);</span>
+<span class="new">1432   }</span>
+<span class="new">1433   static void set_elementSize(oop asa, jlong value) {</span>
+<span class="new">1434     return asa-&gt;long_field_put(_elementSize_offset, value);</span>
+<span class="new">1435   }</span>
+<span class="new">1436 </span>
+<span class="new">1437   static jlong paddingSize(oop asa) {</span>
+<span class="new">1438     return asa-&gt;long_field(_paddingSize_offset);</span>
+<span class="new">1439   }</span>
+<span class="new">1440   static void set_paddingSize(oop asa, jlong value) {</span>
+<span class="new">1441     return asa-&gt;long_field_put(_paddingSize_offset, value);</span>
+<span class="new">1442   }</span>
+<span class="new">1443 </span>
+<span class="new">1444   static oop elementClass(oop asa) {</span>
+<span class="new">1445     return asa-&gt;obj_field(_elementClass_offset);</span>
+<span class="new">1446   }</span>
+<span class="new">1447   static void set_elementClass(oop asa, oop value) {</span>
+<span class="new">1448     return asa-&gt;obj_field_put(_elementClass_offset, value);</span>
+<span class="new">1449   }</span>
+<span class="new">1450 </span>
+<span class="new">1451   static jlong footprint_with_contained_objects(oop asa) {</span>
+<span class="new">1452     return bodySize(asa) + length(asa) * elementSize(asa);</span>
+<span class="new">1453   }</span>
+1454 };
+1455 
+1456 // Use to declare fields that need to be injected into Java classes
+1457 // for the JVM to use.  The name_index and signature_index are
+1458 // declared in vmSymbols.  The may_be_java flag is used to declare
+1459 // fields that might already exist in Java but should be injected if
+1460 // they don't.  Otherwise the field is unconditionally injected and
+1461 // the JVM uses the injected one.  This is to ensure that name
+1462 // collisions don't occur.  In general may_be_java should be false
+1463 // unless there's a good reason.
+1464 
+1465 class InjectedField {
+1466  public:
+1467   const SystemDictionary::WKID klass_id;
+1468   const vmSymbols::SID name_index;
+1469   const vmSymbols::SID signature_index;
+1470   const bool           may_be_java;
+1471 
+1472 
+1473   Klass* klass() const    { return SystemDictionary::well_known_klass(klass_id); }
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

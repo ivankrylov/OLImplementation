@@ -1,0 +1,138 @@
+--- old/src/share/vm/classfile/javaClasses.hpp	2015-06-16 10:25:40.922518623 -0700
++++ new/src/share/vm/classfile/javaClasses.hpp	2015-06-16 10:25:40.846520428 -0700
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+  *
+  * This code is free software; you can redistribute it and/or modify it
+@@ -484,9 +484,8 @@
+     trace_methods_offset = 0,
+     trace_bcis_offset    = 1,
+     trace_mirrors_offset = 2,
+-    trace_cprefs_offset  = 3,
+-    trace_next_offset    = 4,
+-    trace_size           = 5,
++    trace_next_offset    = 3,
++    trace_size           = 4,
+     trace_chunk_size     = 32
+   };
+ 
+@@ -497,7 +496,7 @@
+   static int static_unassigned_stacktrace_offset;
+ 
+   // Printing
+-  static char* print_stack_element_to_buffer(Handle mirror, int method, int version, int bci, int cpref);
++  static char* print_stack_element_to_buffer(Handle mirror, int method, int version, int bci);
+   // StackTrace (programmatic access, new since 1.4)
+   static void clear_stacktrace(oop throwable);
+   // No stack trace available
+@@ -518,7 +517,7 @@
+   static oop message(Handle throwable);
+   static void set_message(oop throwable, oop value);
+   static void print_stack_element(outputStream *st, Handle mirror, int method,
+-                                  int version, int bci, int cpref);
++                                  int version, int bci);
+   static void print_stack_element(outputStream *st, methodHandle method, int bci);
+   static void print_stack_usage(Handle stream);
+ 
+@@ -1096,6 +1095,10 @@
+ 
+   static Metadata*      vmtarget(oop mname);
+   static void       set_vmtarget(oop mname, Metadata* target);
++#if INCLUDE_JVMTI
++  static void       adjust_vmtarget(oop mname, Method* old_method, Method* new_method,
++                                    bool* trace_name_printed);
++#endif // INCLUDE_JVMTI
+ 
+   static intptr_t       vmindex(oop mname);
+   static void       set_vmindex(oop mname, intptr_t index);
+@@ -1323,7 +1326,7 @@
+   static void set_lineNumber(oop element, int value);
+ 
+   // Create an instance of StackTraceElement
+-  static oop create(Handle mirror, int method, int version, int bci, int cpref, TRAPS);
++  static oop create(Handle mirror, int method, int version, int bci, TRAPS);
+   static oop create(methodHandle method, int bci, TRAPS);
+ 
+   // Debugging
+@@ -1378,6 +1381,78 @@
+   static oop  get_owner_threadObj(oop obj);
+ };
+ 
++
++// Interface to org.ObjectLayout.AbstractStructuredArray objects
++
++class org_ObjectLayout_AbstractStructuredArray : AllStatic {
++  friend class JavaClasses;
++
++ private:
++  static int _bodySize_offset;
++  static int _length_offset;
++  static int _elementSize_offset;
++  static int _paddingSize_offset;
++  static int _elementClass_offset;
++
++  static void compute_offsets();
++
++ public:
++  static int bodySize_offset() {
++    return _bodySize_offset;
++  }
++  static int length_offset() {
++    return _length_offset;
++  }
++  static int elementSize_offset() {
++    return _elementSize_offset;
++  }
++  static int paddingSize_offset() {
++    return _paddingSize_offset;
++  }
++  static int elementClass_offset() {
++    return _elementClass_offset;
++  }
++
++  static jint bodySize(oop asa) {
++    return asa->int_field(_bodySize_offset);
++  }
++  static void set_bodySize(oop asa, jint value) {
++    return asa->int_field_put(_bodySize_offset, value);
++  }
++
++  static jlong length(oop asa) {
++    return asa->long_field(_length_offset);
++  }
++  static void set_length(oop asa, jlong value) {
++    return asa->long_field_put(_length_offset, value);
++  }
++
++  static jlong elementSize(oop asa) {
++    return asa->long_field(_elementSize_offset);
++  }
++  static void set_elementSize(oop asa, jlong value) {
++    return asa->long_field_put(_elementSize_offset, value);
++  }
++
++  static jlong paddingSize(oop asa) {
++    return asa->long_field(_paddingSize_offset);
++  }
++  static void set_paddingSize(oop asa, jlong value) {
++    return asa->long_field_put(_paddingSize_offset, value);
++  }
++
++  static oop elementClass(oop asa) {
++    return asa->obj_field(_elementClass_offset);
++  }
++  static void set_elementClass(oop asa, oop value) {
++    return asa->obj_field_put(_elementClass_offset, value);
++  }
++
++  static jlong footprint_with_contained_objects(oop asa) {
++    return bodySize(asa) + length(asa) * elementSize(asa);
++  }
++};
++
+ // Use to declare fields that need to be injected into Java classes
+ // for the JVM to use.  The name_index and signature_index are
+ // declared in vmSymbols.  The may_be_java flag is used to declare

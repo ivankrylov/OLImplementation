@@ -1,0 +1,539 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/opto </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/opto/node.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+  34 
+  35 // Optimization - Graph Style
+  36 
+  37 
+  38 class AbstractLockNode;
+  39 class AddNode;
+  40 class AddPNode;
+  41 class AliasInfo;
+  42 class AllocateArrayNode;
+  43 class AllocateNode;
+  44 class Block;
+  45 class BoolNode;
+  46 class BoxLockNode;
+  47 class CMoveNode;
+  48 class CallDynamicJavaNode;
+  49 class CallJavaNode;
+  50 class CallLeafNode;
+  51 class CallNode;
+  52 class CallRuntimeNode;
+  53 class CallStaticJavaNode;
+
+
+  54 class CatchNode;
+  55 class CatchProjNode;
+  56 class CheckCastPPNode;
+  57 class ClearArrayNode;
+  58 class CmpNode;
+  59 class CodeBuffer;
+  60 class ConstraintCastNode;
+  61 class ConNode;
+  62 class CountedLoopNode;
+  63 class CountedLoopEndNode;
+  64 class DecodeNarrowPtrNode;
+  65 class DecodeNNode;
+  66 class DecodeNKlassNode;
+  67 class EncodeNarrowPtrNode;
+  68 class EncodePNode;
+  69 class EncodePKlassNode;
+  70 class FastLockNode;
+  71 class FastUnlockNode;
+  72 class IfNode;
+  73 class IfFalseNode;
+
+</pre><hr></hr><pre>
+  81 class LockNode;
+  82 class LoopNode;
+  83 class MachBranchNode;
+  84 class MachCallDynamicJavaNode;
+  85 class MachCallJavaNode;
+  86 class MachCallLeafNode;
+  87 class MachCallNode;
+  88 class MachCallRuntimeNode;
+  89 class MachCallStaticJavaNode;
+  90 class MachConstantBaseNode;
+  91 class MachConstantNode;
+  92 class MachGotoNode;
+  93 class MachIfNode;
+  94 class MachNode;
+  95 class MachNullCheckNode;
+  96 class MachProjNode;
+  97 class MachReturnNode;
+  98 class MachSafePointNode;
+  99 class MachSpillCopyNode;
+ 100 class MachTempNode;
+<span class="removed"> 101 class MachMergeNode;</span>
+ 102 class Matcher;
+ 103 class MemBarNode;
+ 104 class MemBarStoreStoreNode;
+ 105 class MemNode;
+ 106 class MergeMemNode;
+ 107 class MulNode;
+ 108 class MultiNode;
+ 109 class MultiBranchNode;
+ 110 class NeverBranchNode;
+ 111 class Node;
+ 112 class Node_Array;
+ 113 class Node_List;
+ 114 class Node_Stack;
+ 115 class NullCheckNode;
+ 116 class OopMap;
+ 117 class ParmNode;
+ 118 class PCTableNode;
+ 119 class PhaseCCP;
+ 120 class PhaseGVN;
+ 121 class PhaseIterGVN;
+
+</pre><hr></hr><pre>
+ 575         DEFINE_CLASS_ID(Initialize,       MemBar, 0)
+ 576         DEFINE_CLASS_ID(MemBarStoreStore, MemBar, 1)
+ 577 
+ 578     DEFINE_CLASS_ID(Mach,  Node, 1)
+ 579       DEFINE_CLASS_ID(MachReturn, Mach, 0)
+ 580         DEFINE_CLASS_ID(MachSafePoint, MachReturn, 0)
+ 581           DEFINE_CLASS_ID(MachCall, MachSafePoint, 0)
+ 582             DEFINE_CLASS_ID(MachCallJava,         MachCall, 0)
+ 583               DEFINE_CLASS_ID(MachCallStaticJava,   MachCallJava, 0)
+ 584               DEFINE_CLASS_ID(MachCallDynamicJava,  MachCallJava, 1)
+ 585             DEFINE_CLASS_ID(MachCallRuntime,      MachCall, 1)
+ 586               DEFINE_CLASS_ID(MachCallLeaf,         MachCallRuntime, 0)
+ 587       DEFINE_CLASS_ID(MachBranch, Mach, 1)
+ 588         DEFINE_CLASS_ID(MachIf,         MachBranch, 0)
+ 589         DEFINE_CLASS_ID(MachGoto,       MachBranch, 1)
+ 590         DEFINE_CLASS_ID(MachNullCheck,  MachBranch, 2)
+ 591       DEFINE_CLASS_ID(MachSpillCopy,    Mach, 2)
+ 592       DEFINE_CLASS_ID(MachTemp,         Mach, 3)
+ 593       DEFINE_CLASS_ID(MachConstantBase, Mach, 4)
+ 594       DEFINE_CLASS_ID(MachConstant,     Mach, 5)
+<span class="removed"> 595       DEFINE_CLASS_ID(MachMerge,        Mach, 6)</span>
+ 596 
+ 597     DEFINE_CLASS_ID(Type,  Node, 2)
+ 598       DEFINE_CLASS_ID(Phi,   Type, 0)
+ 599       DEFINE_CLASS_ID(ConstraintCast, Type, 1)
+
+
+ 600       DEFINE_CLASS_ID(CheckCastPP, Type, 2)
+ 601       DEFINE_CLASS_ID(CMove, Type, 3)
+ 602       DEFINE_CLASS_ID(SafePointScalarObject, Type, 4)
+ 603       DEFINE_CLASS_ID(DecodeNarrowPtr, Type, 5)
+ 604         DEFINE_CLASS_ID(DecodeN, DecodeNarrowPtr, 0)
+ 605         DEFINE_CLASS_ID(DecodeNKlass, DecodeNarrowPtr, 1)
+ 606       DEFINE_CLASS_ID(EncodeNarrowPtr, Type, 6)
+ 607         DEFINE_CLASS_ID(EncodeP, EncodeNarrowPtr, 0)
+ 608         DEFINE_CLASS_ID(EncodePKlass, EncodeNarrowPtr, 1)
+ 609 
+ 610     DEFINE_CLASS_ID(Proj,  Node, 3)
+ 611       DEFINE_CLASS_ID(CatchProj, Proj, 0)
+ 612       DEFINE_CLASS_ID(JumpProj,  Proj, 1)
+ 613       DEFINE_CLASS_ID(IfTrue,    Proj, 2)
+ 614       DEFINE_CLASS_ID(IfFalse,   Proj, 3)
+ 615       DEFINE_CLASS_ID(Parm,      Proj, 4)
+ 616       DEFINE_CLASS_ID(MachProj,  Proj, 5)
+ 617 
+ 618     DEFINE_CLASS_ID(Mem,   Node, 4)
+ 619       DEFINE_CLASS_ID(Load,  Mem, 0)
+
+</pre><hr></hr><pre>
+ 701     assert(is_##type(), "invalid node class");               \
+ 702     return (type##Node*)this;                                \
+ 703   }                                                          \
+ 704   type##Node* isa_##type() const {                           \
+ 705     return (is_##type()) ? as_##type() : NULL;               \
+ 706   }
+ 707 
+ 708   DEFINE_CLASS_QUERY(AbstractLock)
+ 709   DEFINE_CLASS_QUERY(Add)
+ 710   DEFINE_CLASS_QUERY(AddP)
+ 711   DEFINE_CLASS_QUERY(Allocate)
+ 712   DEFINE_CLASS_QUERY(AllocateArray)
+ 713   DEFINE_CLASS_QUERY(Bool)
+ 714   DEFINE_CLASS_QUERY(BoxLock)
+ 715   DEFINE_CLASS_QUERY(Call)
+ 716   DEFINE_CLASS_QUERY(CallDynamicJava)
+ 717   DEFINE_CLASS_QUERY(CallJava)
+ 718   DEFINE_CLASS_QUERY(CallLeaf)
+ 719   DEFINE_CLASS_QUERY(CallRuntime)
+ 720   DEFINE_CLASS_QUERY(CallStaticJava)
+
+ 721   DEFINE_CLASS_QUERY(Catch)
+ 722   DEFINE_CLASS_QUERY(CatchProj)
+ 723   DEFINE_CLASS_QUERY(CheckCastPP)
+ 724   DEFINE_CLASS_QUERY(ConstraintCast)
+ 725   DEFINE_CLASS_QUERY(ClearArray)
+ 726   DEFINE_CLASS_QUERY(CMove)
+ 727   DEFINE_CLASS_QUERY(Cmp)
+ 728   DEFINE_CLASS_QUERY(CountedLoop)
+ 729   DEFINE_CLASS_QUERY(CountedLoopEnd)
+ 730   DEFINE_CLASS_QUERY(DecodeNarrowPtr)
+ 731   DEFINE_CLASS_QUERY(DecodeN)
+ 732   DEFINE_CLASS_QUERY(DecodeNKlass)
+ 733   DEFINE_CLASS_QUERY(EncodeNarrowPtr)
+ 734   DEFINE_CLASS_QUERY(EncodeP)
+ 735   DEFINE_CLASS_QUERY(EncodePKlass)
+ 736   DEFINE_CLASS_QUERY(FastLock)
+ 737   DEFINE_CLASS_QUERY(FastUnlock)
+ 738   DEFINE_CLASS_QUERY(If)
+ 739   DEFINE_CLASS_QUERY(IfFalse)
+ 740   DEFINE_CLASS_QUERY(IfTrue)
+
+</pre><hr></hr><pre>
+ 746   DEFINE_CLASS_QUERY(Lock)
+ 747   DEFINE_CLASS_QUERY(Loop)
+ 748   DEFINE_CLASS_QUERY(Mach)
+ 749   DEFINE_CLASS_QUERY(MachBranch)
+ 750   DEFINE_CLASS_QUERY(MachCall)
+ 751   DEFINE_CLASS_QUERY(MachCallDynamicJava)
+ 752   DEFINE_CLASS_QUERY(MachCallJava)
+ 753   DEFINE_CLASS_QUERY(MachCallLeaf)
+ 754   DEFINE_CLASS_QUERY(MachCallRuntime)
+ 755   DEFINE_CLASS_QUERY(MachCallStaticJava)
+ 756   DEFINE_CLASS_QUERY(MachConstantBase)
+ 757   DEFINE_CLASS_QUERY(MachConstant)
+ 758   DEFINE_CLASS_QUERY(MachGoto)
+ 759   DEFINE_CLASS_QUERY(MachIf)
+ 760   DEFINE_CLASS_QUERY(MachNullCheck)
+ 761   DEFINE_CLASS_QUERY(MachProj)
+ 762   DEFINE_CLASS_QUERY(MachReturn)
+ 763   DEFINE_CLASS_QUERY(MachSafePoint)
+ 764   DEFINE_CLASS_QUERY(MachSpillCopy)
+ 765   DEFINE_CLASS_QUERY(MachTemp)
+<span class="removed"> 766   DEFINE_CLASS_QUERY(MachMerge)</span>
+ 767   DEFINE_CLASS_QUERY(Mem)
+ 768   DEFINE_CLASS_QUERY(MemBar)
+ 769   DEFINE_CLASS_QUERY(MemBarStoreStore)
+ 770   DEFINE_CLASS_QUERY(MergeMem)
+ 771   DEFINE_CLASS_QUERY(Mul)
+ 772   DEFINE_CLASS_QUERY(Multi)
+ 773   DEFINE_CLASS_QUERY(MultiBranch)
+ 774   DEFINE_CLASS_QUERY(Parm)
+ 775   DEFINE_CLASS_QUERY(PCTable)
+ 776   DEFINE_CLASS_QUERY(Phi)
+ 777   DEFINE_CLASS_QUERY(Proj)
+ 778   DEFINE_CLASS_QUERY(Region)
+ 779   DEFINE_CLASS_QUERY(Root)
+ 780   DEFINE_CLASS_QUERY(SafePoint)
+ 781   DEFINE_CLASS_QUERY(SafePointScalarObject)
+ 782   DEFINE_CLASS_QUERY(Start)
+ 783   DEFINE_CLASS_QUERY(Store)
+ 784   DEFINE_CLASS_QUERY(Sub)
+ 785   DEFINE_CLASS_QUERY(Type)
+ 786   DEFINE_CLASS_QUERY(Vector)
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+  34 
+  35 // Optimization - Graph Style
+  36 
+  37 
+  38 class AbstractLockNode;
+  39 class AddNode;
+  40 class AddPNode;
+  41 class AliasInfo;
+  42 class AllocateArrayNode;
+  43 class AllocateNode;
+  44 class Block;
+  45 class BoolNode;
+  46 class BoxLockNode;
+  47 class CMoveNode;
+  48 class CallDynamicJavaNode;
+  49 class CallJavaNode;
+  50 class CallLeafNode;
+  51 class CallNode;
+  52 class CallRuntimeNode;
+  53 class CallStaticJavaNode;
+<span class="new">  54 class CastDerivedNode;</span>
+<span class="new">  55 class CastPPNode;</span>
+  56 class CatchNode;
+  57 class CatchProjNode;
+  58 class CheckCastPPNode;
+  59 class ClearArrayNode;
+  60 class CmpNode;
+  61 class CodeBuffer;
+  62 class ConstraintCastNode;
+  63 class ConNode;
+  64 class CountedLoopNode;
+  65 class CountedLoopEndNode;
+  66 class DecodeNarrowPtrNode;
+  67 class DecodeNNode;
+  68 class DecodeNKlassNode;
+  69 class EncodeNarrowPtrNode;
+  70 class EncodePNode;
+  71 class EncodePKlassNode;
+  72 class FastLockNode;
+  73 class FastUnlockNode;
+  74 class IfNode;
+  75 class IfFalseNode;
+
+</pre><hr></hr><pre>
+  83 class LockNode;
+  84 class LoopNode;
+  85 class MachBranchNode;
+  86 class MachCallDynamicJavaNode;
+  87 class MachCallJavaNode;
+  88 class MachCallLeafNode;
+  89 class MachCallNode;
+  90 class MachCallRuntimeNode;
+  91 class MachCallStaticJavaNode;
+  92 class MachConstantBaseNode;
+  93 class MachConstantNode;
+  94 class MachGotoNode;
+  95 class MachIfNode;
+  96 class MachNode;
+  97 class MachNullCheckNode;
+  98 class MachProjNode;
+  99 class MachReturnNode;
+ 100 class MachSafePointNode;
+ 101 class MachSpillCopyNode;
+ 102 class MachTempNode;
+
+ 103 class Matcher;
+ 104 class MemBarNode;
+ 105 class MemBarStoreStoreNode;
+ 106 class MemNode;
+ 107 class MergeMemNode;
+ 108 class MulNode;
+ 109 class MultiNode;
+ 110 class MultiBranchNode;
+ 111 class NeverBranchNode;
+ 112 class Node;
+ 113 class Node_Array;
+ 114 class Node_List;
+ 115 class Node_Stack;
+ 116 class NullCheckNode;
+ 117 class OopMap;
+ 118 class ParmNode;
+ 119 class PCTableNode;
+ 120 class PhaseCCP;
+ 121 class PhaseGVN;
+ 122 class PhaseIterGVN;
+
+</pre><hr></hr><pre>
+ 576         DEFINE_CLASS_ID(Initialize,       MemBar, 0)
+ 577         DEFINE_CLASS_ID(MemBarStoreStore, MemBar, 1)
+ 578 
+ 579     DEFINE_CLASS_ID(Mach,  Node, 1)
+ 580       DEFINE_CLASS_ID(MachReturn, Mach, 0)
+ 581         DEFINE_CLASS_ID(MachSafePoint, MachReturn, 0)
+ 582           DEFINE_CLASS_ID(MachCall, MachSafePoint, 0)
+ 583             DEFINE_CLASS_ID(MachCallJava,         MachCall, 0)
+ 584               DEFINE_CLASS_ID(MachCallStaticJava,   MachCallJava, 0)
+ 585               DEFINE_CLASS_ID(MachCallDynamicJava,  MachCallJava, 1)
+ 586             DEFINE_CLASS_ID(MachCallRuntime,      MachCall, 1)
+ 587               DEFINE_CLASS_ID(MachCallLeaf,         MachCallRuntime, 0)
+ 588       DEFINE_CLASS_ID(MachBranch, Mach, 1)
+ 589         DEFINE_CLASS_ID(MachIf,         MachBranch, 0)
+ 590         DEFINE_CLASS_ID(MachGoto,       MachBranch, 1)
+ 591         DEFINE_CLASS_ID(MachNullCheck,  MachBranch, 2)
+ 592       DEFINE_CLASS_ID(MachSpillCopy,    Mach, 2)
+ 593       DEFINE_CLASS_ID(MachTemp,         Mach, 3)
+ 594       DEFINE_CLASS_ID(MachConstantBase, Mach, 4)
+ 595       DEFINE_CLASS_ID(MachConstant,     Mach, 5)
+
+ 596 
+ 597     DEFINE_CLASS_ID(Type,  Node, 2)
+ 598       DEFINE_CLASS_ID(Phi,   Type, 0)
+ 599       DEFINE_CLASS_ID(ConstraintCast, Type, 1)
+<span class="new"> 600         DEFINE_CLASS_ID(CastPP, ConstraintCast, 0)</span>
+<span class="new"> 601           DEFINE_CLASS_ID(CastDerived, CastPP, 0)</span>
+ 602       DEFINE_CLASS_ID(CheckCastPP, Type, 2)
+ 603       DEFINE_CLASS_ID(CMove, Type, 3)
+ 604       DEFINE_CLASS_ID(SafePointScalarObject, Type, 4)
+ 605       DEFINE_CLASS_ID(DecodeNarrowPtr, Type, 5)
+ 606         DEFINE_CLASS_ID(DecodeN, DecodeNarrowPtr, 0)
+ 607         DEFINE_CLASS_ID(DecodeNKlass, DecodeNarrowPtr, 1)
+ 608       DEFINE_CLASS_ID(EncodeNarrowPtr, Type, 6)
+ 609         DEFINE_CLASS_ID(EncodeP, EncodeNarrowPtr, 0)
+ 610         DEFINE_CLASS_ID(EncodePKlass, EncodeNarrowPtr, 1)
+ 611 
+ 612     DEFINE_CLASS_ID(Proj,  Node, 3)
+ 613       DEFINE_CLASS_ID(CatchProj, Proj, 0)
+ 614       DEFINE_CLASS_ID(JumpProj,  Proj, 1)
+ 615       DEFINE_CLASS_ID(IfTrue,    Proj, 2)
+ 616       DEFINE_CLASS_ID(IfFalse,   Proj, 3)
+ 617       DEFINE_CLASS_ID(Parm,      Proj, 4)
+ 618       DEFINE_CLASS_ID(MachProj,  Proj, 5)
+ 619 
+ 620     DEFINE_CLASS_ID(Mem,   Node, 4)
+ 621       DEFINE_CLASS_ID(Load,  Mem, 0)
+
+</pre><hr></hr><pre>
+ 703     assert(is_##type(), "invalid node class");               \
+ 704     return (type##Node*)this;                                \
+ 705   }                                                          \
+ 706   type##Node* isa_##type() const {                           \
+ 707     return (is_##type()) ? as_##type() : NULL;               \
+ 708   }
+ 709 
+ 710   DEFINE_CLASS_QUERY(AbstractLock)
+ 711   DEFINE_CLASS_QUERY(Add)
+ 712   DEFINE_CLASS_QUERY(AddP)
+ 713   DEFINE_CLASS_QUERY(Allocate)
+ 714   DEFINE_CLASS_QUERY(AllocateArray)
+ 715   DEFINE_CLASS_QUERY(Bool)
+ 716   DEFINE_CLASS_QUERY(BoxLock)
+ 717   DEFINE_CLASS_QUERY(Call)
+ 718   DEFINE_CLASS_QUERY(CallDynamicJava)
+ 719   DEFINE_CLASS_QUERY(CallJava)
+ 720   DEFINE_CLASS_QUERY(CallLeaf)
+ 721   DEFINE_CLASS_QUERY(CallRuntime)
+ 722   DEFINE_CLASS_QUERY(CallStaticJava)
+<span class="new"> 723   DEFINE_CLASS_QUERY(CastDerived)</span>
+ 724   DEFINE_CLASS_QUERY(Catch)
+ 725   DEFINE_CLASS_QUERY(CatchProj)
+ 726   DEFINE_CLASS_QUERY(CheckCastPP)
+ 727   DEFINE_CLASS_QUERY(ConstraintCast)
+ 728   DEFINE_CLASS_QUERY(ClearArray)
+ 729   DEFINE_CLASS_QUERY(CMove)
+ 730   DEFINE_CLASS_QUERY(Cmp)
+ 731   DEFINE_CLASS_QUERY(CountedLoop)
+ 732   DEFINE_CLASS_QUERY(CountedLoopEnd)
+ 733   DEFINE_CLASS_QUERY(DecodeNarrowPtr)
+ 734   DEFINE_CLASS_QUERY(DecodeN)
+ 735   DEFINE_CLASS_QUERY(DecodeNKlass)
+ 736   DEFINE_CLASS_QUERY(EncodeNarrowPtr)
+ 737   DEFINE_CLASS_QUERY(EncodeP)
+ 738   DEFINE_CLASS_QUERY(EncodePKlass)
+ 739   DEFINE_CLASS_QUERY(FastLock)
+ 740   DEFINE_CLASS_QUERY(FastUnlock)
+ 741   DEFINE_CLASS_QUERY(If)
+ 742   DEFINE_CLASS_QUERY(IfFalse)
+ 743   DEFINE_CLASS_QUERY(IfTrue)
+
+</pre><hr></hr><pre>
+ 749   DEFINE_CLASS_QUERY(Lock)
+ 750   DEFINE_CLASS_QUERY(Loop)
+ 751   DEFINE_CLASS_QUERY(Mach)
+ 752   DEFINE_CLASS_QUERY(MachBranch)
+ 753   DEFINE_CLASS_QUERY(MachCall)
+ 754   DEFINE_CLASS_QUERY(MachCallDynamicJava)
+ 755   DEFINE_CLASS_QUERY(MachCallJava)
+ 756   DEFINE_CLASS_QUERY(MachCallLeaf)
+ 757   DEFINE_CLASS_QUERY(MachCallRuntime)
+ 758   DEFINE_CLASS_QUERY(MachCallStaticJava)
+ 759   DEFINE_CLASS_QUERY(MachConstantBase)
+ 760   DEFINE_CLASS_QUERY(MachConstant)
+ 761   DEFINE_CLASS_QUERY(MachGoto)
+ 762   DEFINE_CLASS_QUERY(MachIf)
+ 763   DEFINE_CLASS_QUERY(MachNullCheck)
+ 764   DEFINE_CLASS_QUERY(MachProj)
+ 765   DEFINE_CLASS_QUERY(MachReturn)
+ 766   DEFINE_CLASS_QUERY(MachSafePoint)
+ 767   DEFINE_CLASS_QUERY(MachSpillCopy)
+ 768   DEFINE_CLASS_QUERY(MachTemp)
+
+ 769   DEFINE_CLASS_QUERY(Mem)
+ 770   DEFINE_CLASS_QUERY(MemBar)
+ 771   DEFINE_CLASS_QUERY(MemBarStoreStore)
+ 772   DEFINE_CLASS_QUERY(MergeMem)
+ 773   DEFINE_CLASS_QUERY(Mul)
+ 774   DEFINE_CLASS_QUERY(Multi)
+ 775   DEFINE_CLASS_QUERY(MultiBranch)
+ 776   DEFINE_CLASS_QUERY(Parm)
+ 777   DEFINE_CLASS_QUERY(PCTable)
+ 778   DEFINE_CLASS_QUERY(Phi)
+ 779   DEFINE_CLASS_QUERY(Proj)
+ 780   DEFINE_CLASS_QUERY(Region)
+ 781   DEFINE_CLASS_QUERY(Root)
+ 782   DEFINE_CLASS_QUERY(SafePoint)
+ 783   DEFINE_CLASS_QUERY(SafePointScalarObject)
+ 784   DEFINE_CLASS_QUERY(Start)
+ 785   DEFINE_CLASS_QUERY(Store)
+ 786   DEFINE_CLASS_QUERY(Sub)
+ 787   DEFINE_CLASS_QUERY(Type)
+ 788   DEFINE_CLASS_QUERY(Vector)
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

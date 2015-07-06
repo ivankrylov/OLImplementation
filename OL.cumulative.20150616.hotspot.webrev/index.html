@@ -1,0 +1,738 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta name="scm" content="mercurial" />
+<meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot</title>
+</head>
+<body id="SUNWwebrev">
+<div class="summary">
+<h2>Code Review for hotspot</h2>
+<table>
+<tr><th>Prepared by:</th><td>ipk on Tue Jun 16 10:25:50 PDT 2015</td></tr>
+<tr><th>Workspace:</th><td>/home/ivan/ol_may2015/jdk8u/hotspot</td></tr>
+<tr><th>Compare against:</th><td>
+http://hg.openjdk.java.net/jdk8u/jdk8u/hotspot
+</td></tr>
+<tr><th>Summary of changes:</th><td>
+2910 lines changed: 2075 ins; 463 del; 372 mod; 77787 unchg</td></tr>
+<tr><th>Patch of changes:</th><td>
+<a href="hotspot.patch">hotspot.patch</a></td></tr>
+<tr><th>Legend:</th><td>
+<b>Modified file</b><br><font color=red><b>Deleted file</b></font><br><font color=green><b>New file</b></font></td></tr>
+</table>
+</div>
+<p><code>
+<a href="src/cpu/ppc/vm/stubGenerator_ppc.cpp.cdiff.html">Cdiffs</a>
+<a href="src/cpu/ppc/vm/stubGenerator_ppc.cpp.udiff.html">Udiffs</a>
+<a href="src/cpu/ppc/vm/stubGenerator_ppc.cpp.wdiff.html">Wdiffs</a>
+<a href="src/cpu/ppc/vm/stubGenerator_ppc.cpp.sdiff.html">Sdiffs</a>
+<a href="src/cpu/ppc/vm/stubGenerator_ppc.cpp.frames.html">Frames</a>
+<a href="src/cpu/ppc/vm/stubGenerator_ppc.cpp-.html">Old</a>
+<a href="src/cpu/ppc/vm/stubGenerator_ppc.cpp.html">New</a>
+<a href="src/cpu/ppc/vm/stubGenerator_ppc.cpp.patch">Patch</a>
+<a href="raw_files/new/src/cpu/ppc/vm/stubGenerator_ppc.cpp">Raw</a>
+</code>
+<b>src/cpu/ppc/vm/stubGenerator_ppc.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/cpu/ppc/vm/stubGenerator_ppc.cpp here -->
+<span class="lineschanged">4 lines changed: 4 ins; 0 del; 0 mod; 2113 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/cpu/sparc/vm/stubGenerator_sparc.cpp.cdiff.html">Cdiffs</a>
+<a href="src/cpu/sparc/vm/stubGenerator_sparc.cpp.udiff.html">Udiffs</a>
+<a href="src/cpu/sparc/vm/stubGenerator_sparc.cpp.wdiff.html">Wdiffs</a>
+<a href="src/cpu/sparc/vm/stubGenerator_sparc.cpp.sdiff.html">Sdiffs</a>
+<a href="src/cpu/sparc/vm/stubGenerator_sparc.cpp.frames.html">Frames</a>
+<a href="src/cpu/sparc/vm/stubGenerator_sparc.cpp-.html">Old</a>
+<a href="src/cpu/sparc/vm/stubGenerator_sparc.cpp.html">New</a>
+<a href="src/cpu/sparc/vm/stubGenerator_sparc.cpp.patch">Patch</a>
+<a href="raw_files/new/src/cpu/sparc/vm/stubGenerator_sparc.cpp">Raw</a>
+</code>
+<b>src/cpu/sparc/vm/stubGenerator_sparc.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/cpu/sparc/vm/stubGenerator_sparc.cpp here -->
+<span class="lineschanged">4 lines changed: 4 ins; 0 del; 0 mod; 4937 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/cpu/x86/vm/x86_64.ad.cdiff.html">Cdiffs</a>
+<a href="src/cpu/x86/vm/x86_64.ad.udiff.html">Udiffs</a>
+<a href="src/cpu/x86/vm/x86_64.ad.wdiff.html">Wdiffs</a>
+<a href="src/cpu/x86/vm/x86_64.ad.sdiff.html">Sdiffs</a>
+<a href="src/cpu/x86/vm/x86_64.ad.frames.html">Frames</a>
+<a href="src/cpu/x86/vm/x86_64.ad-.html">Old</a>
+<a href="src/cpu/x86/vm/x86_64.ad.html">New</a>
+<a href="src/cpu/x86/vm/x86_64.ad.patch">Patch</a>
+<a href="raw_files/new/src/cpu/x86/vm/x86_64.ad">Raw</a>
+</code>
+<b>src/cpu/x86/vm/x86_64.ad</b> 
+</p><blockquote><!-- Add comments to explain changes in src/cpu/x86/vm/x86_64.ad here -->
+<span class="lineschanged">22 lines changed: 22 ins; 0 del; 0 mod; 11726 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/adlc/formssel.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/adlc/formssel.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/adlc/formssel.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/adlc/formssel.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/adlc/formssel.cpp.frames.html">Frames</a>
+<a href="src/share/vm/adlc/formssel.cpp-.html">Old</a>
+<a href="src/share/vm/adlc/formssel.cpp.html">New</a>
+<a href="src/share/vm/adlc/formssel.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/adlc/formssel.cpp">Raw</a>
+</code>
+<b>src/share/vm/adlc/formssel.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/adlc/formssel.cpp here -->
+<span class="lineschanged">1 line changed: 1 ins; 0 del; 0 mod; 4253 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/c1/c1_GraphBuilder.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/c1/c1_GraphBuilder.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/c1/c1_GraphBuilder.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/c1/c1_GraphBuilder.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/c1/c1_GraphBuilder.cpp.frames.html">Frames</a>
+<a href="src/share/vm/c1/c1_GraphBuilder.cpp-.html">Old</a>
+<a href="src/share/vm/c1/c1_GraphBuilder.cpp.html">New</a>
+<a href="src/share/vm/c1/c1_GraphBuilder.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/c1/c1_GraphBuilder.cpp">Raw</a>
+</code>
+<b>src/share/vm/c1/c1_GraphBuilder.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/c1/c1_GraphBuilder.cpp here -->
+<span class="lineschanged">5 lines changed: 5 ins; 0 del; 0 mod; 4392 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/classfile/classFileParser.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/classfile/classFileParser.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/classfile/classFileParser.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/classfile/classFileParser.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/classfile/classFileParser.cpp.frames.html">Frames</a>
+<a href="src/share/vm/classfile/classFileParser.cpp-.html">Old</a>
+<a href="src/share/vm/classfile/classFileParser.cpp.html">New</a>
+<a href="src/share/vm/classfile/classFileParser.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/classfile/classFileParser.cpp">Raw</a>
+</code>
+<b>src/share/vm/classfile/classFileParser.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/classfile/classFileParser.cpp here -->
+<span class="lineschanged">2 lines changed: 0 ins; 0 del; 2 mod; 5264 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/classfile/javaClasses.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/classfile/javaClasses.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/classfile/javaClasses.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/classfile/javaClasses.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/classfile/javaClasses.cpp.frames.html">Frames</a>
+<a href="src/share/vm/classfile/javaClasses.cpp-.html">Old</a>
+<a href="src/share/vm/classfile/javaClasses.cpp.html">New</a>
+<a href="src/share/vm/classfile/javaClasses.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/classfile/javaClasses.cpp">Raw</a>
+</code>
+<b>src/share/vm/classfile/javaClasses.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/classfile/javaClasses.cpp here -->
+<span class="lineschanged">131 lines changed: 73 ins; 32 del; 26 mod; 3527 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/classfile/javaClasses.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/classfile/javaClasses.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/classfile/javaClasses.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/classfile/javaClasses.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/classfile/javaClasses.hpp.frames.html">Frames</a>
+<a href="src/share/vm/classfile/javaClasses.hpp-.html">Old</a>
+<a href="src/share/vm/classfile/javaClasses.hpp.html">New</a>
+<a href="src/share/vm/classfile/javaClasses.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/classfile/javaClasses.hpp">Raw</a>
+</code>
+<b>src/share/vm/classfile/javaClasses.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/classfile/javaClasses.hpp here -->
+<span class="lineschanged">83 lines changed: 76 ins; 1 del; 6 mod; 1439 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/classfile/systemDictionary.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/classfile/systemDictionary.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/classfile/systemDictionary.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/classfile/systemDictionary.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/classfile/systemDictionary.hpp.frames.html">Frames</a>
+<a href="src/share/vm/classfile/systemDictionary.hpp-.html">Old</a>
+<a href="src/share/vm/classfile/systemDictionary.hpp.html">New</a>
+<a href="src/share/vm/classfile/systemDictionary.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/classfile/systemDictionary.hpp">Raw</a>
+</code>
+<b>src/share/vm/classfile/systemDictionary.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/classfile/systemDictionary.hpp here -->
+<span class="lineschanged">5 lines changed: 3 ins; 0 del; 2 mod; 715 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/classfile/vmSymbols.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/classfile/vmSymbols.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/classfile/vmSymbols.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/classfile/vmSymbols.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/classfile/vmSymbols.hpp.frames.html">Frames</a>
+<a href="src/share/vm/classfile/vmSymbols.hpp-.html">Old</a>
+<a href="src/share/vm/classfile/vmSymbols.hpp.html">New</a>
+<a href="src/share/vm/classfile/vmSymbols.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/classfile/vmSymbols.hpp">Raw</a>
+</code>
+<b>src/share/vm/classfile/vmSymbols.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/classfile/vmSymbols.hpp here -->
+<span class="lineschanged">34 lines changed: 27 ins; 0 del; 7 mod; 1277 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp.frames.html">Frames</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp-.html">Old</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp.html">New</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp">Raw</a>
+</code>
+<b>src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp here -->
+<span class="lineschanged">33 lines changed: 29 ins; 0 del; 4 mod; 677 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp.frames.html">Frames</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp-.html">Old</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp.html">New</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp">Raw</a>
+</code>
+<b>src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp here -->
+<span class="lineschanged">119 lines changed: 105 ins; 1 del; 13 mod; 398 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp.frames.html">Frames</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp-.html">Old</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp.html">New</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp">Raw</a>
+</code>
+<b>src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp here -->
+<span class="lineschanged">1 line changed: 1 ins; 0 del; 0 mod; 81 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp.frames.html">Frames</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp-.html">Old</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp.html">New</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp">Raw</a>
+</code>
+<b>src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp here -->
+<span class="lineschanged">71 lines changed: 48 ins; 10 del; 13 mod; 321 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp.frames.html">Frames</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp-.html">Old</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp.html">New</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp">Raw</a>
+</code>
+<b>src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp here -->
+<span class="lineschanged">15 lines changed: 5 ins; 9 del; 1 mod; 198 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp.frames.html">Frames</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp-.html">Old</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp.html">New</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp">Raw</a>
+</code>
+<b>src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp here -->
+<span class="lineschanged">288 lines changed: 180 ins; 59 del; 49 mod; 153 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp.frames.html">Frames</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp-.html">Old</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp.html">New</a>
+<a href="src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp">Raw</a>
+</code>
+<b>src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp here -->
+<span class="lineschanged">23 lines changed: 18 ins; 0 del; 5 mod; 866 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/gc_implementation/shared/markSweep.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.cpp.frames.html">Frames</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.cpp-.html">Old</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.cpp.html">New</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/gc_implementation/shared/markSweep.cpp">Raw</a>
+</code>
+<b>src/share/vm/gc_implementation/shared/markSweep.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/gc_implementation/shared/markSweep.cpp here -->
+<span class="lineschanged">7 lines changed: 0 ins; 0 del; 7 mod; 160 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/gc_implementation/shared/markSweep.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.hpp.frames.html">Frames</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.hpp-.html">Old</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.hpp.html">New</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/gc_implementation/shared/markSweep.hpp">Raw</a>
+</code>
+<b>src/share/vm/gc_implementation/shared/markSweep.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/gc_implementation/shared/markSweep.hpp here -->
+<span class="lineschanged">1 line changed: 0 ins; 0 del; 1 mod; 193 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/gc_implementation/shared/markSweep.inline.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.inline.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.inline.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.inline.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.inline.hpp.frames.html">Frames</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.inline.hpp-.html">Old</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.inline.hpp.html">New</a>
+<a href="src/share/vm/gc_implementation/shared/markSweep.inline.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/gc_implementation/shared/markSweep.inline.hpp">Raw</a>
+</code>
+<b>src/share/vm/gc_implementation/shared/markSweep.inline.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/gc_implementation/shared/markSweep.inline.hpp here -->
+<span class="lineschanged">28 lines changed: 22 ins; 5 del; 1 mod; 108 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/oops/instanceKlass.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/oops/instanceKlass.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/oops/instanceKlass.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/oops/instanceKlass.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/oops/instanceKlass.cpp.frames.html">Frames</a>
+<a href="src/share/vm/oops/instanceKlass.cpp-.html">Old</a>
+<a href="src/share/vm/oops/instanceKlass.cpp.html">New</a>
+<a href="src/share/vm/oops/instanceKlass.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/oops/instanceKlass.cpp">Raw</a>
+</code>
+<b>src/share/vm/oops/instanceKlass.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/oops/instanceKlass.cpp here -->
+<span class="lineschanged">339 lines changed: 211 ins; 88 del; 40 mod; 3758 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/oops/instanceKlass.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/oops/instanceKlass.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/oops/instanceKlass.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/oops/instanceKlass.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/oops/instanceKlass.hpp.frames.html">Frames</a>
+<a href="src/share/vm/oops/instanceKlass.hpp-.html">Old</a>
+<a href="src/share/vm/oops/instanceKlass.hpp.html">New</a>
+<a href="src/share/vm/oops/instanceKlass.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/oops/instanceKlass.hpp">Raw</a>
+</code>
+<b>src/share/vm/oops/instanceKlass.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/oops/instanceKlass.hpp here -->
+<span class="lineschanged">32 lines changed: 19 ins; 6 del; 7 mod; 1342 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/oops/klass.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/oops/klass.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/oops/klass.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/oops/klass.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/oops/klass.cpp.frames.html">Frames</a>
+<a href="src/share/vm/oops/klass.cpp-.html">Old</a>
+<a href="src/share/vm/oops/klass.cpp.html">New</a>
+<a href="src/share/vm/oops/klass.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/oops/klass.cpp">Raw</a>
+</code>
+<b>src/share/vm/oops/klass.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/oops/klass.cpp here -->
+<span class="lineschanged">4 lines changed: 4 ins; 0 del; 0 mod; 739 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/oops/klass.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/oops/klass.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/oops/klass.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/oops/klass.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/oops/klass.hpp.frames.html">Frames</a>
+<a href="src/share/vm/oops/klass.hpp-.html">Old</a>
+<a href="src/share/vm/oops/klass.hpp.html">New</a>
+<a href="src/share/vm/oops/klass.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/oops/klass.hpp">Raw</a>
+</code>
+<b>src/share/vm/oops/klass.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/oops/klass.hpp here -->
+<span class="lineschanged">21 lines changed: 6 ins; 0 del; 15 mod; 705 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/oops/klassPS.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/oops/klassPS.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/oops/klassPS.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/oops/klassPS.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/oops/klassPS.hpp.frames.html">Frames</a>
+<a href="src/share/vm/oops/klassPS.hpp-.html">Old</a>
+<a href="src/share/vm/oops/klassPS.hpp.html">New</a>
+<a href="src/share/vm/oops/klassPS.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/oops/klassPS.hpp">Raw</a>
+</code>
+<b>src/share/vm/oops/klassPS.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/oops/klassPS.hpp here -->
+<span class="lineschanged">20 lines changed: 3 ins; 8 del; 9 mod; 37 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/oops/markOop.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/oops/markOop.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/oops/markOop.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/oops/markOop.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/oops/markOop.hpp.frames.html">Frames</a>
+<a href="src/share/vm/oops/markOop.hpp-.html">Old</a>
+<a href="src/share/vm/oops/markOop.hpp.html">New</a>
+<a href="src/share/vm/oops/markOop.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/oops/markOop.hpp">Raw</a>
+</code>
+<b>src/share/vm/oops/markOop.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/oops/markOop.hpp here -->
+<span class="lineschanged">179 lines changed: 105 ins; 17 del; 57 mod; 332 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/oops/oop.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/oops/oop.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/oops/oop.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/oops/oop.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/oops/oop.hpp.frames.html">Frames</a>
+<a href="src/share/vm/oops/oop.hpp-.html">Old</a>
+<a href="src/share/vm/oops/oop.hpp.html">New</a>
+<a href="src/share/vm/oops/oop.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/oops/oop.hpp">Raw</a>
+</code>
+<b>src/share/vm/oops/oop.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/oops/oop.hpp here -->
+<span class="lineschanged">85 lines changed: 49 ins; 17 del; 19 mod; 343 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/oops/oop.inline.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/oops/oop.inline.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/oops/oop.inline.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/oops/oop.inline.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/oops/oop.inline.hpp.frames.html">Frames</a>
+<a href="src/share/vm/oops/oop.inline.hpp-.html">Old</a>
+<a href="src/share/vm/oops/oop.inline.hpp.html">New</a>
+<a href="src/share/vm/oops/oop.inline.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/oops/oop.inline.hpp">Raw</a>
+</code>
+<b>src/share/vm/oops/oop.inline.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/oops/oop.inline.hpp here -->
+<span class="lineschanged">226 lines changed: 168 ins; 39 del; 19 mod; 691 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/oops/oop.pcgc.inline.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/oops/oop.pcgc.inline.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/oops/oop.pcgc.inline.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/oops/oop.pcgc.inline.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/oops/oop.pcgc.inline.hpp.frames.html">Frames</a>
+<a href="src/share/vm/oops/oop.pcgc.inline.hpp-.html">Old</a>
+<a href="src/share/vm/oops/oop.pcgc.inline.hpp.html">New</a>
+<a href="src/share/vm/oops/oop.pcgc.inline.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/oops/oop.pcgc.inline.hpp">Raw</a>
+</code>
+<b>src/share/vm/oops/oop.pcgc.inline.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/oops/oop.pcgc.inline.hpp here -->
+<span class="lineschanged">3 lines changed: 2 ins; 0 del; 1 mod; 80 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/oops/oop.psgc.inline.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/oops/oop.psgc.inline.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/oops/oop.psgc.inline.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/oops/oop.psgc.inline.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/oops/oop.psgc.inline.hpp.frames.html">Frames</a>
+<a href="src/share/vm/oops/oop.psgc.inline.hpp-.html">Old</a>
+<a href="src/share/vm/oops/oop.psgc.inline.hpp.html">New</a>
+<a href="src/share/vm/oops/oop.psgc.inline.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/oops/oop.psgc.inline.hpp">Raw</a>
+</code>
+<b>src/share/vm/oops/oop.psgc.inline.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/oops/oop.psgc.inline.hpp here -->
+<span class="lineschanged">3 lines changed: 0 ins; 0 del; 3 mod; 43 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/opto/classes.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/opto/classes.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/opto/classes.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/opto/classes.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/opto/classes.hpp.frames.html">Frames</a>
+<a href="src/share/vm/opto/classes.hpp-.html">Old</a>
+<a href="src/share/vm/opto/classes.hpp.html">New</a>
+<a href="src/share/vm/opto/classes.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/opto/classes.hpp">Raw</a>
+</code>
+<b>src/share/vm/opto/classes.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/opto/classes.hpp here -->
+<span class="lineschanged">2 lines changed: 1 ins; 1 del; 0 mod; 326 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/opto/connode.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/opto/connode.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/opto/connode.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/opto/connode.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/opto/connode.hpp.frames.html">Frames</a>
+<a href="src/share/vm/opto/connode.hpp-.html">Old</a>
+<a href="src/share/vm/opto/connode.hpp.html">New</a>
+<a href="src/share/vm/opto/connode.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/opto/connode.hpp">Raw</a>
+</code>
+<b>src/share/vm/opto/connode.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/opto/connode.hpp here -->
+<span class="lineschanged">37 lines changed: 11 ins; 25 del; 1 mod; 782 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/opto/library_call.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/opto/library_call.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/opto/library_call.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/opto/library_call.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/opto/library_call.cpp.frames.html">Frames</a>
+<a href="src/share/vm/opto/library_call.cpp-.html">Old</a>
+<a href="src/share/vm/opto/library_call.cpp.html">New</a>
+<a href="src/share/vm/opto/library_call.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/opto/library_call.cpp">Raw</a>
+</code>
+<b>src/share/vm/opto/library_call.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/opto/library_call.cpp here -->
+<span class="lineschanged">270 lines changed: 186 ins; 84 del; 0 mod; 6546 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/opto/memnode.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/opto/memnode.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/opto/memnode.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/opto/memnode.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/opto/memnode.cpp.frames.html">Frames</a>
+<a href="src/share/vm/opto/memnode.cpp-.html">Old</a>
+<a href="src/share/vm/opto/memnode.cpp.html">New</a>
+<a href="src/share/vm/opto/memnode.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/opto/memnode.cpp">Raw</a>
+</code>
+<b>src/share/vm/opto/memnode.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/opto/memnode.cpp here -->
+<span class="lineschanged">1 line changed: 1 ins; 0 del; 0 mod; 4596 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/opto/node.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/opto/node.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/opto/node.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/opto/node.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/opto/node.hpp.frames.html">Frames</a>
+<a href="src/share/vm/opto/node.hpp-.html">Old</a>
+<a href="src/share/vm/opto/node.hpp.html">New</a>
+<a href="src/share/vm/opto/node.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/opto/node.hpp">Raw</a>
+</code>
+<b>src/share/vm/opto/node.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/opto/node.hpp here -->
+<span class="lineschanged">8 lines changed: 5 ins; 3 del; 0 mod; 1596 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/prims/unsafe.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/prims/unsafe.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/prims/unsafe.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/prims/unsafe.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/prims/unsafe.cpp.frames.html">Frames</a>
+<a href="src/share/vm/prims/unsafe.cpp-.html">Old</a>
+<a href="src/share/vm/prims/unsafe.cpp.html">New</a>
+<a href="src/share/vm/prims/unsafe.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/prims/unsafe.cpp">Raw</a>
+</code>
+<b>src/share/vm/prims/unsafe.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/prims/unsafe.cpp here -->
+<span class="lineschanged">618 lines changed: 579 ins; 29 del; 10 mod; 1761 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/runtime/arguments.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/runtime/arguments.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/runtime/arguments.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/runtime/arguments.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/runtime/arguments.cpp.frames.html">Frames</a>
+<a href="src/share/vm/runtime/arguments.cpp-.html">Old</a>
+<a href="src/share/vm/runtime/arguments.cpp.html">New</a>
+<a href="src/share/vm/runtime/arguments.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/runtime/arguments.cpp">Raw</a>
+</code>
+<b>src/share/vm/runtime/arguments.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/runtime/arguments.cpp here -->
+<span class="lineschanged">39 lines changed: 21 ins; 6 del; 12 mod; 4294 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/runtime/arguments.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/runtime/arguments.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/runtime/arguments.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/runtime/arguments.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/runtime/arguments.hpp.frames.html">Frames</a>
+<a href="src/share/vm/runtime/arguments.hpp-.html">Old</a>
+<a href="src/share/vm/runtime/arguments.hpp.html">New</a>
+<a href="src/share/vm/runtime/arguments.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/runtime/arguments.hpp">Raw</a>
+</code>
+<b>src/share/vm/runtime/arguments.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/runtime/arguments.hpp here -->
+<span class="lineschanged">7 lines changed: 6 ins; 0 del; 1 mod; 616 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/runtime/globals.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/runtime/globals.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/runtime/globals.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/runtime/globals.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/runtime/globals.hpp.frames.html">Frames</a>
+<a href="src/share/vm/runtime/globals.hpp-.html">Old</a>
+<a href="src/share/vm/runtime/globals.hpp.html">New</a>
+<a href="src/share/vm/runtime/globals.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/runtime/globals.hpp">Raw</a>
+</code>
+<b>src/share/vm/runtime/globals.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/runtime/globals.hpp here -->
+<span class="lineschanged">18 lines changed: 12 ins; 0 del; 6 mod; 3998 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/runtime/reflection.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/runtime/reflection.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/runtime/reflection.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/runtime/reflection.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/runtime/reflection.cpp.frames.html">Frames</a>
+<a href="src/share/vm/runtime/reflection.cpp-.html">Old</a>
+<a href="src/share/vm/runtime/reflection.cpp.html">New</a>
+<a href="src/share/vm/runtime/reflection.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/runtime/reflection.cpp">Raw</a>
+</code>
+<b>src/share/vm/runtime/reflection.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/runtime/reflection.cpp here -->
+<span class="lineschanged">73 lines changed: 42 ins; 13 del; 18 mod; 1148 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/runtime/reflection.hpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/runtime/reflection.hpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/runtime/reflection.hpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/runtime/reflection.hpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/runtime/reflection.hpp.frames.html">Frames</a>
+<a href="src/share/vm/runtime/reflection.hpp-.html">Old</a>
+<a href="src/share/vm/runtime/reflection.hpp.html">New</a>
+<a href="src/share/vm/runtime/reflection.hpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/runtime/reflection.hpp">Raw</a>
+</code>
+<b>src/share/vm/runtime/reflection.hpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/runtime/reflection.hpp here -->
+<span class="lineschanged">12 lines changed: 7 ins; 0 del; 5 mod; 143 unchg</span>
+</blockquote>
+<p><code>
+<a href="src/share/vm/runtime/virtualspace.cpp.cdiff.html">Cdiffs</a>
+<a href="src/share/vm/runtime/virtualspace.cpp.udiff.html">Udiffs</a>
+<a href="src/share/vm/runtime/virtualspace.cpp.wdiff.html">Wdiffs</a>
+<a href="src/share/vm/runtime/virtualspace.cpp.sdiff.html">Sdiffs</a>
+<a href="src/share/vm/runtime/virtualspace.cpp.frames.html">Frames</a>
+<a href="src/share/vm/runtime/virtualspace.cpp-.html">Old</a>
+<a href="src/share/vm/runtime/virtualspace.cpp.html">New</a>
+<a href="src/share/vm/runtime/virtualspace.cpp.patch">Patch</a>
+<a href="raw_files/new/src/share/vm/runtime/virtualspace.cpp">Raw</a>
+</code>
+<b>src/share/vm/runtime/virtualspace.cpp</b> 
+</p><blockquote><!-- Add comments to explain changes in src/share/vm/runtime/virtualspace.cpp here -->
+<span class="lineschanged">36 lines changed: 14 ins; 10 del; 12 mod; 1113 unchg</span>
+</blockquote>
+
+
+<hr />
+<p style="font-size: small">
+This code review page was prepared using <b>/home/ivan/ol_may2015/jdk8u/make/scripts/webrev.ksh</b>
+(vers 25.1-hg+openjdk.java.net).
+</body>
+</html>

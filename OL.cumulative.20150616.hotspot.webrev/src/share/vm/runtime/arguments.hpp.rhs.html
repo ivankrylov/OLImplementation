@@ -1,0 +1,789 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #ifndef SHARE_VM_RUNTIME_ARGUMENTS_HPP
+  26 #define SHARE_VM_RUNTIME_ARGUMENTS_HPP
+  27 
+  28 #include "runtime/java.hpp"
+  29 #include "runtime/perfData.hpp"
+  30 #include "utilities/debug.hpp"
+  31 #include "utilities/top.hpp"
+  32 
+  33 // Arguments parses the command line and recognizes options
+  34 
+  35 // Invocation API hook typedefs (these should really be defined in jni.hpp)
+  36 extern "C" {
+  37   typedef void (JNICALL *abort_hook_t)(void);
+  38   typedef void (JNICALL *exit_hook_t)(jint code);
+  39   typedef jint (JNICALL *vfprintf_hook_t)(FILE *fp, const char *format, va_list args)  ATTRIBUTE_PRINTF(2, 0);
+  40 }
+  41 
+  42 // Forward declarations
+  43 
+  44 class SysClassPath;
+  45 
+  46 // Element describing System and User (-Dkey=value flags) defined property.
+  47 
+  48 class SystemProperty: public CHeapObj&lt;mtInternal&gt; {
+  49  private:
+  50   char*           _key;
+  51   char*           _value;
+  52   SystemProperty* _next;
+  53   bool            _writeable;
+  54   bool writeable()   { return _writeable; }
+  55 
+  56  public:
+  57   // Accessors
+  58   const char* key() const                   { return _key; }
+  59   char* value() const                       { return _value; }
+  60   SystemProperty* next() const              { return _next; }
+  61   void set_next(SystemProperty* next)       { _next = next; }
+  62   bool set_value(char *value) {
+  63     if (writeable()) {
+  64       if (_value != NULL) {
+  65         FreeHeap(_value);
+  66       }
+  67       _value = AllocateHeap(strlen(value)+1, mtInternal);
+  68       if (_value != NULL) {
+  69         strcpy(_value, value);
+  70       }
+  71       return true;
+  72     }
+  73     return false;
+  74   }
+  75 
+  76   void append_value(const char *value) {
+  77     char *sp;
+  78     size_t len = 0;
+  79     if (value != NULL) {
+  80       len = strlen(value);
+  81       if (_value != NULL) {
+  82         len += strlen(_value);
+  83       }
+  84       sp = AllocateHeap(len+2, mtInternal);
+  85       if (sp != NULL) {
+  86         if (_value != NULL) {
+  87           strcpy(sp, _value);
+  88           strcat(sp, os::path_separator());
+  89           strcat(sp, value);
+  90           FreeHeap(_value);
+  91         } else {
+  92           strcpy(sp, value);
+  93         }
+  94         _value = sp;
+  95       }
+  96     }
+  97   }
+  98 
+  99   // Constructor
+ 100   SystemProperty(const char* key, const char* value, bool writeable) {
+ 101     if (key == NULL) {
+ 102       _key = NULL;
+ 103     } else {
+ 104       _key = AllocateHeap(strlen(key)+1, mtInternal);
+ 105       strcpy(_key, key);
+ 106     }
+ 107     if (value == NULL) {
+ 108       _value = NULL;
+ 109     } else {
+ 110       _value = AllocateHeap(strlen(value)+1, mtInternal);
+ 111       strcpy(_value, value);
+ 112     }
+ 113     _next = NULL;
+ 114     _writeable = writeable;
+ 115   }
+ 116 };
+ 117 
+ 118 
+ 119 // For use by -agentlib, -agentpath and -Xrun
+ 120 class AgentLibrary : public CHeapObj&lt;mtInternal&gt; {
+ 121   friend class AgentLibraryList;
+ 122 public:
+ 123   // Is this library valid or not. Don't rely on os_lib == NULL as statically
+ 124   // linked lib could have handle of RTLD_DEFAULT which == 0 on some platforms
+ 125   enum AgentState {
+ 126     agent_invalid = 0,
+ 127     agent_valid   = 1
+ 128   };
+ 129 
+ 130  private:
+ 131   char*           _name;
+ 132   char*           _options;
+ 133   void*           _os_lib;
+ 134   bool            _is_absolute_path;
+ 135   bool            _is_static_lib;
+ 136   AgentState      _state;
+ 137   AgentLibrary*   _next;
+ 138 
+ 139  public:
+ 140   // Accessors
+ 141   const char* name() const                  { return _name; }
+ 142   char* options() const                     { return _options; }
+ 143   bool is_absolute_path() const             { return _is_absolute_path; }
+ 144   void* os_lib() const                      { return _os_lib; }
+ 145   void set_os_lib(void* os_lib)             { _os_lib = os_lib; }
+ 146   AgentLibrary* next() const                { return _next; }
+ 147   bool is_static_lib() const                { return _is_static_lib; }
+ 148   void set_static_lib(bool is_static_lib)   { _is_static_lib = is_static_lib; }
+ 149   bool valid()                              { return (_state == agent_valid); }
+ 150   void set_valid()                          { _state = agent_valid; }
+ 151   void set_invalid()                        { _state = agent_invalid; }
+ 152 
+ 153   // Constructor
+ 154   AgentLibrary(const char* name, const char* options, bool is_absolute_path, void* os_lib) {
+ 155     _name = AllocateHeap(strlen(name)+1, mtInternal);
+ 156     strcpy(_name, name);
+ 157     if (options == NULL) {
+ 158       _options = NULL;
+ 159     } else {
+ 160       _options = AllocateHeap(strlen(options)+1, mtInternal);
+ 161       strcpy(_options, options);
+ 162     }
+ 163     _is_absolute_path = is_absolute_path;
+ 164     _os_lib = os_lib;
+ 165     _next = NULL;
+ 166     _state = agent_invalid;
+ 167     _is_static_lib = false;
+ 168   }
+ 169 };
+ 170 
+ 171 // maintain an order of entry list of AgentLibrary
+ 172 class AgentLibraryList VALUE_OBJ_CLASS_SPEC {
+ 173  private:
+ 174   AgentLibrary*   _first;
+ 175   AgentLibrary*   _last;
+ 176  public:
+ 177   bool is_empty() const                     { return _first == NULL; }
+ 178   AgentLibrary* first() const               { return _first; }
+ 179 
+ 180   // add to the end of the list
+ 181   void add(AgentLibrary* lib) {
+ 182     if (is_empty()) {
+ 183       _first = _last = lib;
+ 184     } else {
+ 185       _last-&gt;_next = lib;
+ 186       _last = lib;
+ 187     }
+ 188     lib-&gt;_next = NULL;
+ 189   }
+ 190 
+ 191   // search for and remove a library known to be in the list
+ 192   void remove(AgentLibrary* lib) {
+ 193     AgentLibrary* curr;
+ 194     AgentLibrary* prev = NULL;
+ 195     for (curr = first(); curr != NULL; prev = curr, curr = curr-&gt;next()) {
+ 196       if (curr == lib) {
+ 197         break;
+ 198       }
+ 199     }
+ 200     assert(curr != NULL, "always should be found");
+ 201 
+ 202     if (curr != NULL) {
+ 203       // it was found, by-pass this library
+ 204       if (prev == NULL) {
+ 205         _first = curr-&gt;_next;
+ 206       } else {
+ 207         prev-&gt;_next = curr-&gt;_next;
+ 208       }
+ 209       if (curr == _last) {
+ 210         _last = prev;
+ 211       }
+ 212       curr-&gt;_next = NULL;
+ 213     }
+ 214   }
+ 215 
+ 216   AgentLibraryList() {
+ 217     _first = NULL;
+ 218     _last = NULL;
+ 219   }
+ 220 };
+ 221 
+ 222 
+ 223 class Arguments : AllStatic {
+ 224   friend class VMStructs;
+ 225   friend class JvmtiExport;
+ 226  public:
+ 227   // Operation modi
+ 228   enum Mode {
+ 229     _int,       // corresponds to -Xint
+ 230     _mixed,     // corresponds to -Xmixed
+ 231     _comp       // corresponds to -Xcomp
+ 232   };
+ 233 
+ 234   enum ArgsRange {
+ 235     arg_unreadable = -3,
+ 236     arg_too_small  = -2,
+ 237     arg_too_big    = -1,
+ 238     arg_in_range   = 0
+ 239   };
+ 240 
+ 241  private:
+ 242 
+ 243   // an array containing all flags specified in the .hotspotrc file
+ 244   static char** _jvm_flags_array;
+ 245   static int    _num_jvm_flags;
+ 246   // an array containing all jvm arguments specified in the command line
+ 247   static char** _jvm_args_array;
+ 248   static int    _num_jvm_args;
+ 249   // string containing all java command (class/jarfile name and app args)
+ 250   static char* _java_command;
+ 251 
+ 252   // Property list
+ 253   static SystemProperty* _system_properties;
+ 254 
+ 255   // Quick accessor to System properties in the list:
+ 256   static SystemProperty *_java_ext_dirs;
+ 257   static SystemProperty *_java_endorsed_dirs;
+ 258   static SystemProperty *_sun_boot_library_path;
+ 259   static SystemProperty *_java_library_path;
+ 260   static SystemProperty *_java_home;
+ 261   static SystemProperty *_java_class_path;
+ 262   static SystemProperty *_sun_boot_class_path;
+ 263 
+ 264   // Meta-index for knowing what packages are in the boot class path
+ 265   static char* _meta_index_path;
+ 266   static char* _meta_index_dir;
+ 267 
+ 268   // java.vendor.url.bug, bug reporting URL for fatal errors.
+ 269   static const char* _java_vendor_url_bug;
+ 270 
+ 271   // sun.java.launcher, private property to provide information about
+ 272   // java/gamma launcher
+ 273   static const char* _sun_java_launcher;
+ 274 
+ 275   // sun.java.launcher.pid, private property
+ 276   static int    _sun_java_launcher_pid;
+ 277 
+ 278   // was this VM created by the gamma launcher
+ 279   static bool   _created_by_gamma_launcher;
+ 280 
+ 281   // Option flags
+ 282   static bool   _has_profile;
+ 283   static const char*  _gc_log_filename;
+ 284   // Value of the conservative maximum heap alignment needed
+ 285   static size_t  _conservative_max_heap_alignment;
+ 286 
+ 287   static uintx _min_heap_size;
+ 288 
+ 289   // Used to store original flag values
+ 290   static uintx _min_heap_free_ratio;
+ 291   static uintx _max_heap_free_ratio;
+ 292 
+ 293   // -Xrun arguments
+ 294   static AgentLibraryList _libraryList;
+ 295   static void add_init_library(const char* name, char* options)
+ 296     { _libraryList.add(new AgentLibrary(name, options, false, NULL)); }
+ 297 
+ 298   // -agentlib and -agentpath arguments
+ 299   static AgentLibraryList _agentList;
+ 300   static void add_init_agent(const char* name, char* options, bool absolute_path)
+ 301     { _agentList.add(new AgentLibrary(name, options, absolute_path, NULL)); }
+ 302 
+ 303   // Late-binding agents not started via arguments
+ 304   static void add_loaded_agent(AgentLibrary *agentLib)
+ 305     { _agentList.add(agentLib); }
+ 306   static void add_loaded_agent(const char* name, char* options, bool absolute_path, void* os_lib)
+ 307     { _agentList.add(new AgentLibrary(name, options, absolute_path, os_lib)); }
+ 308 
+ 309   // Operation modi
+ 310   static Mode _mode;
+ 311   static void set_mode_flags(Mode mode);
+ 312   static bool _java_compiler;
+ 313   static void set_java_compiler(bool arg) { _java_compiler = arg; }
+ 314   static bool java_compiler()   { return _java_compiler; }
+ 315 
+ 316   // -Xdebug flag
+ 317   static bool _xdebug_mode;
+ 318   static void set_xdebug_mode(bool arg) { _xdebug_mode = arg; }
+ 319   static bool xdebug_mode()             { return _xdebug_mode; }
+ 320 
+ 321   // Used to save default settings
+ 322   static bool _AlwaysCompileLoopMethods;
+ 323   static bool _UseOnStackReplacement;
+ 324   static bool _BackgroundCompilation;
+ 325   static bool _ClipInlining;
+ 326   static bool _CIDynamicCompilePriority;
+ 327 
+ 328   // Tiered
+ 329   static void set_tiered_flags();
+ 330   static int  get_min_number_of_compiler_threads();
+ 331   // CMS/ParNew garbage collectors
+ 332   static void set_parnew_gc_flags();
+ 333   static void set_cms_and_parnew_gc_flags();
+ 334   // UseParallel[Old]GC
+ 335   static void set_parallel_gc_flags();
+ 336   // Garbage-First (UseG1GC)
+ 337   static void set_g1_gc_flags();
+ 338   // GC ergonomics
+ 339   static void set_conservative_max_heap_alignment();
+ 340   static void set_use_compressed_oops();
+ 341   static void set_use_compressed_klass_ptrs();
+ 342   static void select_gc();
+ 343   static void set_ergonomics_flags();
+ 344   static void set_shared_spaces_flags();
+<a name="1" id="anc1"></a><span class="new"> 345   static void set_object_layout_flags();</span>
+ 346   // limits the given memory size by the maximum amount of memory this process is
+ 347   // currently allowed to allocate or reserve.
+ 348   static julong limit_by_allocatable_memory(julong size);
+ 349   // Setup heap size
+ 350   static void set_heap_size();
+ 351   // Based on automatic selection criteria, should the
+ 352   // low pause collector be used.
+ 353   static bool should_auto_select_low_pause_collector();
+ 354 
+ 355   // Bytecode rewriting
+ 356   static void set_bytecode_flags();
+ 357 
+ 358   // Invocation API hooks
+ 359   static abort_hook_t     _abort_hook;
+ 360   static exit_hook_t      _exit_hook;
+ 361   static vfprintf_hook_t  _vfprintf_hook;
+ 362 
+ 363   // System properties
+ 364   static bool add_property(const char* prop);
+ 365 
+ 366   // Aggressive optimization flags.
+ 367   static void set_aggressive_opts_flags();
+ 368 
+ 369   // Argument parsing
+ 370   static void do_pd_flag_adjustments();
+ 371   static bool parse_argument(const char* arg, Flag::Flags origin);
+ 372   static bool process_argument(const char* arg, jboolean ignore_unrecognized, Flag::Flags origin);
+ 373   static void process_java_launcher_argument(const char*, void*);
+ 374   static void process_java_compiler_argument(char* arg);
+ 375   static jint parse_options_environment_variable(const char* name, SysClassPath* scp_p, bool* scp_assembly_required_p);
+ 376   static jint parse_java_tool_options_environment_variable(SysClassPath* scp_p, bool* scp_assembly_required_p);
+ 377   static jint parse_java_options_environment_variable(SysClassPath* scp_p, bool* scp_assembly_required_p);
+ 378   static jint parse_vm_init_args(const JavaVMInitArgs* args);
+ 379   static jint parse_each_vm_init_arg(const JavaVMInitArgs* args, SysClassPath* scp_p, bool* scp_assembly_required_p, Flag::Flags origin);
+ 380   static jint finalize_vm_init_args(SysClassPath* scp_p, bool scp_assembly_required);
+ 381   static bool is_bad_option(const JavaVMOption* option, jboolean ignore, const char* option_type);
+ 382 
+ 383   static bool is_bad_option(const JavaVMOption* option, jboolean ignore) {
+ 384     return is_bad_option(option, ignore, NULL);
+ 385   }
+ 386 
+ 387   static bool is_percentage(uintx val) {
+ 388     return val &lt;= 100;
+ 389   }
+ 390 
+ 391   static bool verify_interval(uintx val, uintx min,
+ 392                               uintx max, const char* name);
+ 393   static bool verify_min_value(intx val, intx min, const char* name);
+ 394   static bool verify_percentage(uintx value, const char* name);
+ 395   static void describe_range_error(ArgsRange errcode);
+ 396   static ArgsRange check_memory_size(julong size, julong min_size);
+ 397   static ArgsRange parse_memory_size(const char* s, julong* long_arg,
+ 398                                      julong min_size);
+ 399   // Parse a string for a unsigned integer.  Returns true if value
+ 400   // is an unsigned integer greater than or equal to the minimum
+ 401   // parameter passed and returns the value in uintx_arg.  Returns
+ 402   // false otherwise, with uintx_arg undefined.
+ 403   static bool parse_uintx(const char* value, uintx* uintx_arg,
+ 404                           uintx min_size);
+ 405 
+ 406   // methods to build strings from individual args
+ 407   static void build_jvm_args(const char* arg);
+ 408   static void build_jvm_flags(const char* arg);
+ 409   static void add_string(char*** bldarray, int* count, const char* arg);
+ 410   static const char* build_resource_string(char** args, int count);
+ 411 
+ 412   static bool methodExists(
+ 413     char* className, char* methodName,
+ 414     int classesNum, char** classes, bool* allMethods,
+ 415     int methodsNum, char** methods, bool* allClasses
+ 416   );
+ 417 
+ 418   static void parseOnlyLine(
+ 419     const char* line,
+ 420     short* classesNum, short* classesMax, char*** classes, bool** allMethods,
+ 421     short* methodsNum, short* methodsMax, char*** methods, bool** allClasses
+ 422   );
+ 423 
+ 424   // Returns true if the string s is in the list of flags that have recently
+ 425   // been made obsolete.  If we detect one of these flags on the command
+ 426   // line, instead of failing we print a warning message and ignore the
+ 427   // flag.  This gives the user a release or so to stop using the flag.
+ 428   static bool is_newly_obsolete(const char* s, JDK_Version* buffer);
+ 429 
+ 430   static short  CompileOnlyClassesNum;
+ 431   static short  CompileOnlyClassesMax;
+ 432   static char** CompileOnlyClasses;
+ 433   static bool*  CompileOnlyAllMethods;
+ 434 
+ 435   static short  CompileOnlyMethodsNum;
+ 436   static short  CompileOnlyMethodsMax;
+ 437   static char** CompileOnlyMethods;
+ 438   static bool*  CompileOnlyAllClasses;
+ 439 
+ 440   static short  InterpretOnlyClassesNum;
+ 441   static short  InterpretOnlyClassesMax;
+ 442   static char** InterpretOnlyClasses;
+ 443   static bool*  InterpretOnlyAllMethods;
+ 444 
+ 445   static bool   CheckCompileOnly;
+ 446 
+ 447   static char*  SharedArchivePath;
+ 448 
+ 449  public:
+ 450   // Parses the arguments, first phase
+ 451   static jint parse(const JavaVMInitArgs* args);
+ 452   // Apply ergonomics
+ 453   static jint apply_ergo();
+ 454   // Adjusts the arguments after the OS have adjusted the arguments
+ 455   static jint adjust_after_os();
+ 456 
+ 457   static void set_gc_specific_flags();
+ 458   static inline bool gc_selected(); // whether a gc has been selected
+ 459   static void select_gc_ergonomically();
+ 460 
+ 461   // Verifies that the given value will fit as a MinHeapFreeRatio. If not, an error
+ 462   // message is returned in the provided buffer.
+ 463   static bool verify_MinHeapFreeRatio(FormatBuffer&lt;80&gt;&amp; err_msg, uintx min_heap_free_ratio);
+ 464 
+ 465   // Verifies that the given value will fit as a MaxHeapFreeRatio. If not, an error
+ 466   // message is returned in the provided buffer.
+ 467   static bool verify_MaxHeapFreeRatio(FormatBuffer&lt;80&gt;&amp; err_msg, uintx max_heap_free_ratio);
+ 468 
+ 469   // Check for consistency in the selection of the garbage collector.
+<a name="2" id="anc2"></a><span class="changed"> 470   static bool check_gc_consistency_user();        // Check user-selected gc</span>
+<span class="changed"> 471   static inline bool check_gc_consistency_ergo(); // Check ergonomic-selected gc</span>
+ 472   static void check_deprecated_gcs();
+ 473   static void check_deprecated_gc_flags();
+ 474   // Check consistecy or otherwise of VM argument settings
+ 475   static bool check_vm_args_consistency();
+ 476   // Check stack pages settings
+ 477   static bool check_stack_pages();
+ 478   // Used by os_solaris
+ 479   static bool process_settings_file(const char* file_name, bool should_exist, jboolean ignore_unrecognized);
+ 480 
+ 481   static size_t conservative_max_heap_alignment() { return _conservative_max_heap_alignment; }
+ 482   // Return the maximum size a heap with compressed oops can take
+ 483   static size_t max_heap_for_compressed_oops();
+ 484 
+ 485   // return a char* array containing all options
+ 486   static char** jvm_flags_array()          { return _jvm_flags_array; }
+ 487   static char** jvm_args_array()           { return _jvm_args_array; }
+ 488   static int num_jvm_flags()               { return _num_jvm_flags; }
+ 489   static int num_jvm_args()                { return _num_jvm_args; }
+ 490   // return the arguments passed to the Java application
+ 491   static const char* java_command()        { return _java_command; }
+ 492 
+ 493   // print jvm_flags, jvm_args and java_command
+ 494   static void print_on(outputStream* st);
+ 495 
+ 496   // convenient methods to obtain / print jvm_flags and jvm_args
+ 497   static const char* jvm_flags()           { return build_resource_string(_jvm_flags_array, _num_jvm_flags); }
+ 498   static const char* jvm_args()            { return build_resource_string(_jvm_args_array, _num_jvm_args); }
+ 499   static void print_jvm_flags_on(outputStream* st);
+ 500   static void print_jvm_args_on(outputStream* st);
+ 501 
+ 502   // -Dkey=value flags
+ 503   static SystemProperty*  system_properties()   { return _system_properties; }
+ 504   static const char*    get_property(const char* key);
+ 505 
+ 506   // -Djava.vendor.url.bug
+ 507   static const char* java_vendor_url_bug()  { return _java_vendor_url_bug; }
+ 508 
+ 509   // -Dsun.java.launcher
+ 510   static const char* sun_java_launcher()    { return _sun_java_launcher; }
+ 511   // Was VM created by a Java launcher?
+ 512   static bool created_by_java_launcher();
+ 513   // Was VM created by the gamma Java launcher?
+ 514   static bool created_by_gamma_launcher();
+ 515   // -Dsun.java.launcher.pid
+ 516   static int sun_java_launcher_pid()        { return _sun_java_launcher_pid; }
+ 517 
+ 518   // -Xloggc:&lt;file&gt;, if not specified will be NULL
+ 519   static const char* gc_log_filename()      { return _gc_log_filename; }
+ 520 
+ 521   // -Xprof
+ 522   static bool has_profile()                 { return _has_profile; }
+ 523 
+ 524   // -Xms, -Xmx
+ 525   static uintx min_heap_size()              { return _min_heap_size; }
+ 526   static void  set_min_heap_size(uintx v)   { _min_heap_size = v;  }
+ 527 
+ 528   // Returns the original values of -XX:MinHeapFreeRatio and -XX:MaxHeapFreeRatio
+ 529   static uintx min_heap_free_ratio()        { return _min_heap_free_ratio; }
+ 530   static uintx max_heap_free_ratio()        { return _max_heap_free_ratio; }
+ 531 
+ 532   // -Xrun
+ 533   static AgentLibrary* libraries()          { return _libraryList.first(); }
+ 534   static bool init_libraries_at_startup()   { return !_libraryList.is_empty(); }
+ 535   static void convert_library_to_agent(AgentLibrary* lib)
+ 536                                             { _libraryList.remove(lib);
+ 537                                               _agentList.add(lib); }
+ 538 
+ 539   // -agentlib -agentpath
+ 540   static AgentLibrary* agents()             { return _agentList.first(); }
+ 541   static bool init_agents_at_startup()      { return !_agentList.is_empty(); }
+ 542 
+ 543   // abort, exit, vfprintf hooks
+ 544   static abort_hook_t    abort_hook()       { return _abort_hook; }
+ 545   static exit_hook_t     exit_hook()        { return _exit_hook; }
+ 546   static vfprintf_hook_t vfprintf_hook()    { return _vfprintf_hook; }
+ 547 
+ 548   static bool GetCheckCompileOnly ()        { return CheckCompileOnly; }
+ 549 
+ 550   static const char* GetSharedArchivePath() { return SharedArchivePath; }
+ 551 
+ 552   static bool CompileMethod(char* className, char* methodName) {
+ 553     return
+ 554       methodExists(
+ 555         className, methodName,
+ 556         CompileOnlyClassesNum, CompileOnlyClasses, CompileOnlyAllMethods,
+ 557         CompileOnlyMethodsNum, CompileOnlyMethods, CompileOnlyAllClasses
+ 558       );
+ 559   }
+ 560 
+ 561   // Java launcher properties
+ 562   static void process_sun_java_launcher_properties(JavaVMInitArgs* args);
+ 563 
+ 564   // System properties
+ 565   static void init_system_properties();
+ 566 
+ 567   // Update/Initialize System properties after JDK version number is known
+ 568   static void init_version_specific_system_properties();
+ 569 
+ 570   // Property List manipulation
+ 571   static void PropertyList_add(SystemProperty** plist, SystemProperty *element);
+ 572   static void PropertyList_add(SystemProperty** plist, const char* k, char* v);
+ 573   static void PropertyList_unique_add(SystemProperty** plist, const char* k, char* v) {
+ 574     PropertyList_unique_add(plist, k, v, false);
+ 575   }
+ 576   static void PropertyList_unique_add(SystemProperty** plist, const char* k, char* v, jboolean append);
+ 577   static const char* PropertyList_get_value(SystemProperty* plist, const char* key);
+ 578   static int  PropertyList_count(SystemProperty* pl);
+ 579   static const char* PropertyList_get_key_at(SystemProperty* pl,int index);
+ 580   static char* PropertyList_get_value_at(SystemProperty* pl,int index);
+ 581 
+ 582   // Miscellaneous System property value getter and setters.
+ 583   static void set_dll_dir(char *value) { _sun_boot_library_path-&gt;set_value(value); }
+ 584   static void set_java_home(char *value) { _java_home-&gt;set_value(value); }
+ 585   static void set_library_path(char *value) { _java_library_path-&gt;set_value(value); }
+ 586   static void set_ext_dirs(char *value) { _java_ext_dirs-&gt;set_value(value); }
+ 587   static void set_endorsed_dirs(char *value) { _java_endorsed_dirs-&gt;set_value(value); }
+ 588   static void set_sysclasspath(char *value) { _sun_boot_class_path-&gt;set_value(value); }
+ 589   static void append_sysclasspath(const char *value) { _sun_boot_class_path-&gt;append_value(value); }
+ 590   static void set_meta_index_path(char* meta_index_path, char* meta_index_dir) {
+ 591     _meta_index_path = meta_index_path;
+ 592     _meta_index_dir  = meta_index_dir;
+ 593   }
+ 594 
+ 595   static char* get_java_home() { return _java_home-&gt;value(); }
+ 596   static char* get_dll_dir() { return _sun_boot_library_path-&gt;value(); }
+ 597   static char* get_endorsed_dir() { return _java_endorsed_dirs-&gt;value(); }
+ 598   static char* get_sysclasspath() { return _sun_boot_class_path-&gt;value(); }
+ 599   static char* get_meta_index_path() { return _meta_index_path; }
+ 600   static char* get_meta_index_dir()  { return _meta_index_dir;  }
+ 601   static char* get_ext_dirs() { return _java_ext_dirs-&gt;value(); }
+ 602   static char* get_appclasspath() { return _java_class_path-&gt;value(); }
+ 603   static void  fix_appclasspath();
+ 604 
+ 605   // Operation modi
+ 606   static Mode mode()                { return _mode; }
+ 607   static bool is_interpreter_only() { return mode() == _int; }
+ 608 
+ 609 
+ 610   // Utility: copies src into buf, replacing "%%" with "%" and "%p" with pid.
+ 611   static bool copy_expand_pid(const char* src, size_t srclen, char* buf, size_t buflen);
+ 612 };
+ 613 
+ 614 bool Arguments::gc_selected() {
+ 615   return UseConcMarkSweepGC || UseG1GC || UseParallelGC || UseParallelOldGC ||
+ 616     UseParNewGC || UseSerialGC;
+<a name="3" id="anc3"></a><span class="new"> 617 }</span>
+<span class="new"> 618 </span>
+<span class="new"> 619 bool Arguments::check_gc_consistency_ergo() {</span>
+<span class="new"> 620   return check_gc_consistency_user();</span>
+ 621 }
+ 622 
+ 623 #endif // SHARE_VM_RUNTIME_ARGUMENTS_HPP
+<a name="4" id="anc4"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="4" type="hidden" /></form></body></html>

@@ -1,0 +1,73 @@
+--- old/src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp	2015-06-16 10:25:41.754498821 -0700
++++ new/src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp	2015-06-16 10:25:41.686500439 -0700
+@@ -167,12 +167,19 @@
+   {
+     HandleMark hm;
+ 
++    gclog_or_tty->date_stamp(PrintGC && PrintGCDateStamps);
+     TraceCPUTime tcpu(PrintGCDetails, true, gclog_or_tty);
+     GCTraceTime t1(GCCauseString("Full GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer->gc_id());
+     TraceCollectorStats tcs(counters());
+     TraceMemoryManagerStats tms(true /* Full GC */,gc_cause);
+ 
+-    if (TraceGen1Time) accumulated_time()->start();
++    if (TraceGen1Time) {
++      accumulated_time()->start();
++    }
++
++    if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 1) {
++      tty->print_cr("PSMarkSweep::invoke_no_policy: Starting full GC...");
++    }
+ 
+     // Let the size policy know we're starting
+     size_policy->major_collection_begin();
+@@ -200,16 +207,32 @@
+ 
+     mark_sweep_phase1(clear_all_softrefs);
+ 
++    if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 1) {
++      tty->print_cr("PSMarkSweep::invoke_no_policy: Finished phase 1...");
++    }
++
+     mark_sweep_phase2();
+ 
+-    // Don't add any more derived pointers during phase3
+-    COMPILER2_PRESENT(assert(DerivedPointerTable::is_active(), "Sanity"));
++    if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 1) {
++      tty->print_cr("PSMarkSweep::invoke_no_policy: Finished phase 2...");
++    }
++
++    // Don't add any more derived pointers during phase 3
++    COMPILER2_PRESENT(assert(DerivedPointerTable::is_active(), "sanity check"));
+     COMPILER2_PRESENT(DerivedPointerTable::set_active(false));
+ 
+     mark_sweep_phase3();
+ 
++    if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 1) {
++      tty->print_cr("PSMarkSweep::invoke_no_policy: Finished phase 3...");
++    }
++
+     mark_sweep_phase4();
+ 
++    if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 1) {
++      tty->print_cr("PSMarkSweep::invoke_no_policy: Finished phase 4...");
++    }
++
+     restore_marks();
+ 
+     deallocate_stacks();
+@@ -345,7 +368,13 @@
+     // We collected the heap, recalculate the metaspace capacity
+     MetaspaceGC::compute_new_size();
+ 
+-    if (TraceGen1Time) accumulated_time()->stop();
++    if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 1) {
++      tty->print_cr("PSMarkSweep::invoke_no_policy: Finished full GC");
++    }
++
++    if (TraceGen1Time) {
++      accumulated_time()->stop();
++    }
+ 
+     if (PrintGC) {
+       if (PrintGCDetails) {

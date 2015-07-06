@@ -1,0 +1,13 @@
+--- old/src/share/vm/oops/klass.cpp	2015-06-16 10:25:45.014420801 -0700
++++ new/src/share/vm/oops/klass.cpp	2015-06-16 10:25:44.946422434 -0700
+@@ -392,6 +392,10 @@
+   debug_only(verify();)
+ }
+ 
++bool Klass::oop_is_container() const {
++  return is_subclass_of(SystemDictionary::AbstractStructuredArray_klass());
++}
++
+ bool Klass::is_loader_alive(BoolObjectClosure* is_alive) {
+ #ifdef ASSERT
+   // The class is alive iff the class loader is alive.

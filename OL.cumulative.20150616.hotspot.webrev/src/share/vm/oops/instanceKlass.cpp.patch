@@ -1,0 +1,479 @@
+--- old/src/share/vm/oops/instanceKlass.cpp	2015-06-16 10:25:44.426434918 -0700
++++ new/src/share/vm/oops/instanceKlass.cpp	2015-06-16 10:25:44.350436743 -0700
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+  *
+  * This code is free software; you can redistribute it and/or modify it
+@@ -50,7 +50,6 @@
+ #include "prims/jvmtiExport.hpp"
+ #include "prims/jvmtiRedefineClassesTrace.hpp"
+ #include "prims/jvmtiRedefineClasses.hpp"
+-#include "prims/jvmtiThreadState.hpp"
+ #include "prims/methodComparator.hpp"
+ #include "runtime/fieldDescriptor.hpp"
+ #include "runtime/handles.inline.hpp"
+@@ -111,7 +110,7 @@
+       len = name->utf8_length();                                 \
+     }                                                            \
+     HS_DTRACE_PROBE4(hotspot, class__initialization__##type,     \
+-      data, len, (void *)(clss)->class_loader(), thread_type);           \
++      data, len, SOLARIS_ONLY((void *))(clss)->class_loader(), thread_type);           \
+   }
+ 
+ #define DTRACE_CLASSINIT_PROBE_WAIT(type, clss, thread_type, wait) \
+@@ -124,7 +123,7 @@
+       len = name->utf8_length();                                 \
+     }                                                            \
+     HS_DTRACE_PROBE5(hotspot, class__initialization__##type,     \
+-      data, len, (void *)(clss)->class_loader(), thread_type, wait);     \
++      data, len, SOLARIS_ONLY((void *))(clss)->class_loader(), thread_type, wait);     \
+   }
+ #else /* USDT2 */
+ 
+@@ -929,16 +928,10 @@
+     // Step 10 and 11
+     Handle e(THREAD, PENDING_EXCEPTION);
+     CLEAR_PENDING_EXCEPTION;
+-    // JVMTI has already reported the pending exception
+-    // JVMTI internal flag reset is needed in order to report ExceptionInInitializerError
+-    JvmtiExport::clear_detected_exception((JavaThread*)THREAD);
+     {
+       EXCEPTION_MARK;
+       this_oop->set_initialization_state_and_notify(initialization_error, THREAD);
+       CLEAR_PENDING_EXCEPTION;   // ignore any exception thrown, class initialization error is thrown below
+-      // JVMTI has already reported the pending exception
+-      // JVMTI internal flag reset is needed in order to report ExceptionInInitializerError
+-      JvmtiExport::clear_detected_exception((JavaThread*)THREAD);
+     }
+     DTRACE_CLASSINIT_PROBE_WAIT(error, InstanceKlass::cast(this_oop()), -1,wait);
+     if (e->is_a(SystemDictionary::Error_klass())) {
+@@ -1122,19 +1115,99 @@
+ 
+ instanceOop InstanceKlass::allocate_instance(TRAPS) {
+   bool has_finalizer_flag = has_finalizer(); // Query before possible GC
+-  int size = size_helper();  // Query before forming handle.
++  int size = size_helper(); // Query before forming handle
+ 
+   KlassHandle h_k(THREAD, this);
++  instanceOop i = (instanceOop) CollectedHeap::obj_allocate(h_k, size,
++      CHECK_NULL);
++  if (has_finalizer_flag && !RegisterFinalizersAtInit) {
++    i = register_finalizer(i, CHECK_NULL);
++  }
++  return i;
++}
+ 
+-  instanceOop i;
++instanceOop InstanceKlass::allocate_instance(int size, TRAPS) {
++  if (TraceObjectLayoutIntrinsics) {
++    ResourceMark rm;
++    tty->print_cr(
++        "InstanceKlass::allocate_instance: type=%s, size=%d",
++        signature_name(), size);
++  }
++
++  assert(size > 0, "invalid size");
+ 
+-  i = (instanceOop)CollectedHeap::obj_allocate(h_k, size, CHECK_NULL);
++  bool has_finalizer_flag = has_finalizer(); // Query before possible GC
++
++  KlassHandle h_k(THREAD, this);
++  instanceOop i = (instanceOop) CollectedHeap::obj_allocate(h_k, size,
++      CHECK_NULL);
+   if (has_finalizer_flag && !RegisterFinalizersAtInit) {
+     i = register_finalizer(i, CHECK_NULL);
+   }
+   return i;
+ }
+ 
++instanceOop InstanceKlass::allocate_instance_at(address obj_addr,
++    bool is_contained, bool is_container, TRAPS) {
++  if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++    ResourceMark rm;
++    tty->print_cr(
++        "InstanceKlass::allocate_instance_at: "
++        "type=%s, addr=0x%p, %scontained, %scontainer",
++        signature_name(), (void*) obj_addr,
++        is_contained ? "" : "not ",
++        is_container ? "" : "not ");
++  }
++
++  bool has_finalizer_flag = has_finalizer(); // Query before possible GC
++  int size_in_words = size_helper();
++
++  assert(!Universe::heap()->is_gc_active(),
++      "initialization during GC not allowed");
++  assert(obj_addr != NULL, "cannot initialize NULL object");
++  assert(is_ptr_aligned(obj_addr, HeapWordSize), "address not aligned");
++  assert(size_in_words > 0, "invalid size");
++
++  oop obj = (oop) obj_addr;
++  obj->set_klass_gap(0);
++  markOop mark;
++  if (UseBiasedLocking) {
++    mark = prototype_header();
++  } else {
++    mark = markOopDesc::prototype();
++  }
++  if (is_contained) {
++    mark = mark->set_contained();
++  }
++  if (is_container) {
++    mark = mark->set_container();
++  }
++  obj->set_mark(mark);
++  obj->set_klass(this);
++
++  // Support for JVMTI VMObjectAlloc event (no-op if not enabled)
++  JvmtiExport::vm_object_alloc_event_collector(obj);
++
++  if (DTraceAllocProbes) {
++    // Support for DTrace object-alloc probe (no-op most of the time)
++    if (name() != NULL) {
++      SharedRuntime::dtrace_object_alloc(obj, size_in_words);
++    }
++  }
++
++  instanceOop i = (instanceOop) obj;
++  if (has_finalizer_flag && !RegisterFinalizersAtInit) {
++    // For SA we need to do register_finalizer
++    // in a separate pass. Otherwise we might get inconsistent heap
++    // For now we just disallow SAs with finalizers
++    // See issue #28 for details.
++    guarantee( ((is_contained || is_container) == false), \
++            err_msg("SA and finalizers don't work together for now. See issue #28 for details"));
++    i = register_finalizer(i, CHECK_NULL);
++  }
++  return i;
++}
++
+ void InstanceKlass::check_valid_for_instantiation(bool throwError, TRAPS) {
+   if (is_interface() || is_abstract()) {
+     ResourceMark rm(THREAD);
+@@ -2181,26 +2254,156 @@
+   }                                                                      \
+ }
+ 
++#define InstanceKlass_CONTAINER_ITERATE_INCL_RCO(container, do_oop)         \
++{                                                                           \
++  address addr = ((address) container) +                                    \
++      org_ObjectLayout_AbstractStructuredArray::bodySize(container);        \
++  jlong length =                                                            \
++      org_ObjectLayout_AbstractStructuredArray::length(container);          \
++  jlong element_size =                                                      \
++      org_ObjectLayout_AbstractStructuredArray::elementSize(container);     \
++  jlong padding_size =                                                      \
++      org_ObjectLayout_AbstractStructuredArray::paddingSize(container);     \
++                                                                            \
++  oop* p;                                                                   \
++  for (jlong i = 0; i < length; i++) {                                      \
++    oop rco = (oop) addr;                                                   \
++    p = &rco;                                                               \
++    do_oop;                                                                 \
++    oop obj = (oop) (addr + padding_size);                                  \
++    p = &obj;                                                               \
++    do_oop;                                                                 \
++    addr += element_size;                                                   \
++  }                                                                         \
++}
++
++#define InstanceKlass_CONTAINER_ITERATE_EXCL_RCO(container, do_oop)         \
++{                                                                           \
++  address addr = ((address) container) +                                    \
++      org_ObjectLayout_AbstractStructuredArray::bodySize(container);        \
++  jlong length =                                                            \
++      org_ObjectLayout_AbstractStructuredArray::length(container);          \
++  jlong element_size =                                                      \
++      org_ObjectLayout_AbstractStructuredArray::elementSize(container);     \
++  jlong padding_size =                                                      \
++      org_ObjectLayout_AbstractStructuredArray::paddingSize(container);     \
++                                                                            \
++  oop* p;                                                                   \
++  for (jlong i = 0; i < length; i++) {                                      \
++    oop obj = (oop) (addr + padding_size);                                  \
++    p = &obj;                                                               \
++    do_oop;                                                                 \
++    addr += element_size;                                                   \
++  }                                                                         \
++}
++
++#define InstanceKlass_CONTAINER_REVERSE_ITERATE_INCL_RCO(container, do_oop) \
++{                                                                           \
++  address addr = ((address) container) +                                    \
++      org_ObjectLayout_AbstractStructuredArray::bodySize(container);        \
++  jlong length =                                                            \
++      org_ObjectLayout_AbstractStructuredArray::length(container);          \
++  jlong element_size =                                                      \
++      org_ObjectLayout_AbstractStructuredArray::elementSize(container);     \
++  jlong padding_size =                                                      \
++      org_ObjectLayout_AbstractStructuredArray::paddingSize(container);     \
++                                                                            \
++  addr += (length - 1) * element_size;                                      \
++  oop* p;                                                                   \
++  for (jlong i = length - 1; i >= 0; i--) {                                 \
++    oop obj = (oop) (addr + padding_size);                                  \
++    p = &obj;                                                               \
++    do_oop;                                                                 \
++    oop rco = (oop) addr;                                                   \
++    p = &rco;                                                               \
++    do_oop;                                                                 \
++    addr -= element_size;                                                   \
++  }                                                                         \
++}
++
++#define InstanceKlass_CONTAINER_REVERSE_ITERATE_EXCL_RCO(container, do_oop) \
++{                                                                           \
++  address addr = ((address) container) +                                    \
++      org_ObjectLayout_AbstractStructuredArray::bodySize(container);        \
++  jlong length =                                                            \
++      org_ObjectLayout_AbstractStructuredArray::length(container);          \
++  jlong element_size =                                                      \
++      org_ObjectLayout_AbstractStructuredArray::elementSize(container);     \
++  jlong padding_size =                                                      \
++      org_ObjectLayout_AbstractStructuredArray::paddingSize(container);     \
++                                                                            \
++  addr += (length - 1) * element_size;                                      \
++  oop* p;                                                                   \
++  for (jlong i = length - 1; i >= 0; i--) {                                 \
++    oop obj = (oop) (addr + padding_size);                                  \
++    p = &obj;                                                               \
++    do_oop;                                                                 \
++    addr -= element_size;                                                   \
++  }                                                                         \
++}
++
+ void InstanceKlass::oop_follow_contents(oop obj) {
+-  assert(obj != NULL, "can't follow the content of NULL object");
++  assert(obj != NULL, "can't follow the contents of NULL object");
+   MarkSweep::follow_klass(obj->klass());
+-  InstanceKlass_OOP_MAP_ITERATE( \
+-    obj, \
+-    MarkSweep::mark_and_push(p), \
+-    assert_is_in_closed_subset)
++  InstanceKlass_OOP_MAP_ITERATE(   \
++      obj,                         \
++      MarkSweep::mark_and_push(p), \
++      assert_is_in_closed_subset)
++
++  if (obj->is_container()) {
++    InstanceKlass_CONTAINER_ITERATE_INCL_RCO( \
++        obj,                                  \
++        MarkSweep::mark_and_push(p))
++  }
++}
++
++int InstanceKlass::oop_adjust_pointers(oop obj) {
++  int size = size_helper();
++  InstanceKlass_OOP_MAP_ITERATE(    \
++      obj,                          \
++      MarkSweep::adjust_pointer(p), \
++      assert_is_in)
++
++  // There is no need in special handling of containers here. The caller
++  // sequentially scans a space from its bottom to the end. Contained objects
++  // (and their corresponding RCO objects) will be processed one-by-one just
++  // after their containers. To the caller they look like standard Java objects.
++
++  return size;
+ }
+ 
+ #if INCLUDE_ALL_GCS
+-void InstanceKlass::oop_follow_contents(ParCompactionManager* cm,
+-                                        oop obj) {
+-  assert(obj != NULL, "can't follow the content of NULL object");
++void InstanceKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
++  if (obj->is_container()) {
++    InstanceKlass_CONTAINER_REVERSE_ITERATE_EXCL_RCO( \
++        obj,                                          \
++        (*p)->push_contents(pm))
++  }
++
++  InstanceKlass_OOP_MAP_REVERSE_ITERATE(    \
++      obj,                                  \
++      if (PSScavenge::should_scavenge(p)) { \
++        pm->claim_or_forward_depth(p);      \
++      },                                    \
++      assert_nothing)
++}
++
++void InstanceKlass::oop_follow_contents(ParCompactionManager* cm, oop obj) {
++  assert(obj != NULL, "can't follow the contents of NULL object");
+   PSParallelCompact::follow_klass(cm, obj->klass());
+-  // Only mark the header and let the scan of the meta-data mark
+-  // everything else.
+-  InstanceKlass_OOP_MAP_ITERATE( \
+-    obj, \
+-    PSParallelCompact::mark_and_push(cm, p), \
+-    assert_is_in)
++  InstanceKlass_OOP_MAP_ITERATE(               \
++      obj,                                     \
++      PSParallelCompact::mark_and_push(cm, p), \
++      assert_is_in)
++}
++
++int InstanceKlass::oop_update_pointers(ParCompactionManager* cm, oop obj) {
++  int size = size_helper();
++  InstanceKlass_OOP_MAP_ITERATE(            \
++      obj,                                  \
++      PSParallelCompact::adjust_pointer(p), \
++      assert_is_in)
++  return size;
+ }
+ #endif // INCLUDE_ALL_GCS
+ 
+@@ -2270,36 +2473,6 @@
+ ALL_OOP_OOP_ITERATE_CLOSURES_2(InstanceKlass_OOP_OOP_ITERATE_BACKWARDS_DEFN)
+ #endif // INCLUDE_ALL_GCS
+ 
+-int InstanceKlass::oop_adjust_pointers(oop obj) {
+-  int size = size_helper();
+-  InstanceKlass_OOP_MAP_ITERATE( \
+-    obj, \
+-    MarkSweep::adjust_pointer(p), \
+-    assert_is_in)
+-  return size;
+-}
+-
+-#if INCLUDE_ALL_GCS
+-void InstanceKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
+-  InstanceKlass_OOP_MAP_REVERSE_ITERATE( \
+-    obj, \
+-    if (PSScavenge::should_scavenge(p)) { \
+-      pm->claim_or_forward_depth(p); \
+-    }, \
+-    assert_nothing )
+-}
+-
+-int InstanceKlass::oop_update_pointers(ParCompactionManager* cm, oop obj) {
+-  int size = size_helper();
+-  InstanceKlass_OOP_MAP_ITERATE( \
+-    obj, \
+-    PSParallelCompact::adjust_pointer(p), \
+-    assert_is_in)
+-  return size;
+-}
+-
+-#endif // INCLUDE_ALL_GCS
+-
+ void InstanceKlass::clean_implementors_list(BoolObjectClosure* is_alive) {
+   assert(class_loader_data()->is_alive(is_alive), "this klass should be live");
+   if (is_interface()) {
+@@ -2805,33 +2978,30 @@
+ // not yet in the vtable due to concurrent subclass define and superinterface
+ // redefinition
+ // Note: those in the vtable, should have been updated via adjust_method_entries
+-void InstanceKlass::adjust_default_methods(InstanceKlass* holder, bool* trace_name_printed) {
++void InstanceKlass::adjust_default_methods(Method** old_methods, Method** new_methods,
++                                           int methods_length, bool* trace_name_printed) {
+   // search the default_methods for uses of either obsolete or EMCP methods
+   if (default_methods() != NULL) {
+-    for (int index = 0; index < default_methods()->length(); index ++) {
+-      Method* old_method = default_methods()->at(index);
+-      if (old_method == NULL || old_method->method_holder() != holder || !old_method->is_old()) {
+-        continue; // skip uninteresting entries
+-      }
+-      assert(!old_method->is_deleted(), "default methods may not be deleted");
+-
+-      Method* new_method = holder->method_with_idnum(old_method->orig_method_idnum());
+-
+-      assert(new_method != NULL, "method_with_idnum() should not be NULL");
+-      assert(old_method != new_method, "sanity check");
+-
+-      default_methods()->at_put(index, new_method);
+-      if (RC_TRACE_IN_RANGE(0x00100000, 0x00400000)) {
+-        if (!(*trace_name_printed)) {
+-          // RC_TRACE_MESG macro has an embedded ResourceMark
+-          RC_TRACE_MESG(("adjust: klassname=%s default methods from name=%s",
+-                         external_name(),
+-                         old_method->method_holder()->external_name()));
+-          *trace_name_printed = true;
++    for (int j = 0; j < methods_length; j++) {
++      Method* old_method = old_methods[j];
++      Method* new_method = new_methods[j];
++
++      for (int index = 0; index < default_methods()->length(); index ++) {
++        if (default_methods()->at(index) == old_method) {
++          default_methods()->at_put(index, new_method);
++          if (RC_TRACE_IN_RANGE(0x00100000, 0x00400000)) {
++            if (!(*trace_name_printed)) {
++              // RC_TRACE_MESG macro has an embedded ResourceMark
++              RC_TRACE_MESG(("adjust: klassname=%s default methods from name=%s",
++                             external_name(),
++                             old_method->method_holder()->external_name()));
++              *trace_name_printed = true;
++            }
++            RC_TRACE(0x00100000, ("default method update: %s(%s) ",
++                                  new_method->name()->as_C_string(),
++                                  new_method->signature()->as_C_string()));
++          }
+         }
+-        RC_TRACE(0x00100000, ("default method update: %s(%s) ",
+-                              new_method->name()->as_C_string(),
+-                              new_method->signature()->as_C_string()));
+       }
+     }
+   }
+@@ -3754,22 +3924,6 @@
+ } // end has_previous_version()
+ 
+ 
+-InstanceKlass* InstanceKlass::get_klass_version(int version) {
+-  if (constants()->version() == version) {
+-    return this;
+-  }
+-  PreviousVersionWalker pvw(Thread::current(), (InstanceKlass*)this);
+-  for (PreviousVersionNode * pv_node = pvw.next_previous_version();
+-       pv_node != NULL; pv_node = pvw.next_previous_version()) {
+-    ConstantPool* prev_cp = pv_node->prev_constant_pool();
+-    if (prev_cp->version() == version) {
+-      return prev_cp->pool_holder();
+-    }
+-  }
+-  return NULL; // None found
+-}
+-
+-
+ Method* InstanceKlass::method_with_idnum(int idnum) {
+   Method* m = NULL;
+   if (idnum < methods()->length()) {
+@@ -3788,37 +3942,6 @@
+   return m;
+ }
+ 
+-
+-Method* InstanceKlass::method_with_orig_idnum(int idnum) {
+-  if (idnum >= methods()->length()) {
+-    return NULL;
+-  }
+-  Method* m = methods()->at(idnum);
+-  if (m != NULL && m->orig_method_idnum() == idnum) {
+-    return m;
+-  }
+-  // Obsolete method idnum does not match the original idnum
+-  for (int index = 0; index < methods()->length(); ++index) {
+-    m = methods()->at(index);
+-    if (m->orig_method_idnum() == idnum) {
+-      return m;
+-    }
+-  }
+-  // None found, return null for the caller to handle.
+-  return NULL;
+-}
+-
+-
+-Method* InstanceKlass::method_with_orig_idnum(int idnum, int version) {
+-  InstanceKlass* holder = get_klass_version(version);
+-  if (holder == NULL) {
+-    return NULL; // The version of klass is gone, no method is found
+-  }
+-  Method* method = holder->method_with_orig_idnum(idnum);
+-  return method;
+-}
+-
+-
+ jint InstanceKlass::get_cached_class_file_len() {
+   return VM_RedefineClasses::get_cached_class_file_len(_cached_class_file);
+ }

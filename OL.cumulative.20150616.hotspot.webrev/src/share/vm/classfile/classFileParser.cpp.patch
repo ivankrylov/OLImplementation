@@ -1,0 +1,20 @@
+--- old/src/share/vm/classfile/classFileParser.cpp	2015-06-16 10:25:40.258534387 -0700
++++ new/src/share/vm/classfile/classFileParser.cpp	2015-06-16 10:25:40.182536190 -0700
+@@ -3669,7 +3669,7 @@
+     compute_oop_map_count(_super_klass, nonstatic_oop_map_count,
+                           first_nonstatic_oop_offset);
+ 
+-#ifndef PRODUCT
++//#ifndef PRODUCT
+   if (PrintFieldLayout) {
+     print_field_layout(_class_name,
+           _fields,
+@@ -3680,7 +3680,7 @@
+           static_fields_end);
+   }
+ 
+-#endif
++//#endif
+   // Pass back information needed for InstanceKlass creation
+   info->nonstatic_oop_offsets = nonstatic_oop_offsets;
+   info->nonstatic_oop_counts = nonstatic_oop_counts;

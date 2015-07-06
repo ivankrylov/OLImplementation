@@ -1,0 +1,231 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>jdk Udiff src/share/classes/sun/misc/Unsafe.java</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/classes/sun/misc/Unsafe.java</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -21,19 +21,24 @@</span>
+  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  * or visit www.oracle.com if you need additional information or have any
+  * questions.
+  */
+ 
+<span class="new">+/*</span>
+<span class="new">+ * This file has been modified by Azul Systems, Inc. in 2014. These</span>
+<span class="new">+ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made</span>
+<span class="new">+ * available on the same license terms set forth above.</span>
+<span class="new">+ */</span>
+<span class="new">+</span>
+ package sun.misc;
+ 
+<span class="removed">-import java.security.*;</span>
+ import java.lang.reflect.*;
+<span class="new">+import java.security.*;</span>
+ 
+ import sun.reflect.CallerSensitive;
+ import sun.reflect.Reflection;
+ 
+<span class="removed">-</span>
+ /**
+  * A collection of methods for performing low-level, unsafe operations.
+  * Although the class and all methods are public, use of this class is
+  * limited because only trusted code can obtain instances of it.
+  *
+</pre><hr /><pre>
+<span class="newmarker">@@ -844,26 +849,23 @@</span>
+         Initializes the class if it has not yet been. */
+     public native Object allocateInstance(Class&lt;?&gt; cls)
+         throws InstantiationException;
+ 
+     /** Lock the object.  It must get unlocked via {@link #monitorExit}. */
+<span class="removed">-    @Deprecated</span>
+     public native void monitorEnter(Object o);
+ 
+     /**
+      * Unlock the object.  It must have been locked via {@link
+      * #monitorEnter}.
+      */
+<span class="removed">-    @Deprecated</span>
+     public native void monitorExit(Object o);
+ 
+     /**
+      * Tries to lock the object.  Returns true or false to indicate
+      * whether the lock succeeded.  If it did, the object must be
+      * unlocked via {@link #monitorExit}.
+      */
+<span class="removed">-    @Deprecated</span>
+     public native boolean tryMonitorEnter(Object o);
+ 
+     /** Throw the exception without telling the verifier. */
+     public native void throwException(Throwable ee);
+ 
+</pre><hr /><pre>
+<span class="newmarker">@@ -1140,6 +1142,77 @@</span>
+      */
+     private static void throwIllegalAccessError() {
+        throw new IllegalAccessError();
+     }
+ 
+<span class="new">+    /**</span>
+<span class="new">+     * Return the size of a JVM-level object representing an instance</span>
+<span class="new">+     * of the given class.</span>
+<span class="new">+     */</span>
+<span class="new">+    public native long getInstanceSize(Class instanceClass);</span>
+<span class="new">+</span>
+<span class="new">+    /**</span>
+<span class="new">+     * Return the footprint of a JVM-level representation of an instance</span>
+<span class="new">+     * of the given class when it is located inside a container (includes</span>
+<span class="new">+     * an object representing the instance itself, prepadding before</span>
+<span class="new">+     * the object, and padding after the object, whatever is applicable).</span>
+<span class="new">+     */</span>
+<span class="new">+    public native long getInstanceFootprintWhenContained(Class instanceClass);</span>
+<span class="new">+</span>
+<span class="new">+    /**</span>
+<span class="new">+     * Return the footprint of a JVM-level representation of a container</span>
+<span class="new">+     * (includes an object representing an instance of the given container</span>
+<span class="new">+     * class and representations of the given number of contained elements,</span>
+<span class="new">+     * each having the given size).</span>
+<span class="new">+     */</span>
+<span class="new">+    public native long getContainingObjectFootprint(Class containerClass,</span>
+<span class="new">+            long containedElementSize, long numberOfElements);</span>
+<span class="new">+</span>
+<span class="new">+    /**</span>
+<span class="new">+     * Return the footprint of a JVM-level representation of a container</span>
+<span class="new">+     * when it is located inside another container (includes a representation</span>
+<span class="new">+     * of the inner container having the given parameters, prepadding before</span>
+<span class="new">+     * the container, and padding after the container, whatever is applicable).</span>
+<span class="new">+     */</span>
+<span class="new">+    public native long getContainingObjectFootprintWhenContained(</span>
+<span class="new">+            Class containerClass, long containedElementSize,</span>
+<span class="new">+            long numberOfElements);</span>
+<span class="new">+</span>
+<span class="new">+    /**</span>
+<span class="new">+     * Return the size of prepadding in the given object footprint.</span>
+<span class="new">+     */</span>
+<span class="new">+    public native long getPrePaddingInObjectFootprint(long objectFootprint);</span>
+<span class="new">+</span>
+<span class="new">+    /**</span>
+<span class="new">+     * Allocate in the Java heap a memory region for an instance of the given</span>
+<span class="new">+     * container class and all its contents, which is described by the given</span>
+<span class="new">+     * specification. The elements of the container should be either plain</span>
+<span class="new">+     * Java objects or nested containers. The specification consists of two</span>
+<span class="new">+     * parallel arrays determining counts of the elements and their classes</span>
+<span class="new">+     * for all nesting levels, starting from the outermost one. The method</span>
+<span class="new">+     * does not construct any objects. The method returns the reference to</span>
+<span class="new">+     * the allocated memory region.</span>
+<span class="new">+     */</span>
+<span class="new">+    public native Object allocateHeapForElementArrayClass(Class instanceClass,</span>
+<span class="new">+            long[] elementCounts, Class[] elementClasses);</span>
+<span class="new">+</span>
+<span class="new">+    /**</span>
+<span class="new">+     * Construct an object starting at the given offset from the beginning</span>
+<span class="new">+     * of the given containing object, using the supplied constructor and</span>
+<span class="new">+     * arguments. The object is constructed in place in a previously allocated</span>
+<span class="new">+     * memory region.</span>
+<span class="new">+     */</span>
+<span class="new">+    public native void constructObjectAtOffset(</span>
+<span class="new">+            Object containingObject, long offset,</span>
+<span class="new">+            long objectPrePadding, boolean isContained,</span>
+<span class="new">+            boolean isContainer, long objectFootprint,</span>
+<span class="new">+            Constructor constructor, Object[] constructorArgs)</span>
+<span class="new">+            throws InstantiationException, IllegalAccessException,</span>
+<span class="new">+            InvocationTargetException;</span>
+<span class="new">+</span>
+<span class="new">+    /**</span>
+<span class="new">+     * Return an object starting at the given offset from the beginning</span>
+<span class="new">+     * of the given containing object.</span>
+<span class="new">+     */</span>
+<span class="new">+    public native Object deriveContainedObjectAtOffset(Object containingObject,</span>
+<span class="new">+            long offset);</span>
+ }
+</pre></body></html>
+

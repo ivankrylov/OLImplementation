@@ -1,0 +1,876 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 2001, 2014, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #include "precompiled.hpp"
+  26 #include "classfile/symbolTable.hpp"
+  27 #include "classfile/systemDictionary.hpp"
+  28 #include "code/codeCache.hpp"
+  29 #include "gc_implementation/parallelScavenge/parallelScavengeHeap.hpp"
+  30 #include "gc_implementation/parallelScavenge/psAdaptiveSizePolicy.hpp"
+  31 #include "gc_implementation/parallelScavenge/psMarkSweep.hpp"
+  32 #include "gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp"
+  33 #include "gc_implementation/parallelScavenge/psOldGen.hpp"
+  34 #include "gc_implementation/parallelScavenge/psScavenge.hpp"
+  35 #include "gc_implementation/parallelScavenge/psYoungGen.hpp"
+  36 #include "gc_implementation/shared/gcHeapSummary.hpp"
+  37 #include "gc_implementation/shared/gcTimer.hpp"
+  38 #include "gc_implementation/shared/gcTrace.hpp"
+  39 #include "gc_implementation/shared/gcTraceTime.hpp"
+  40 #include "gc_implementation/shared/isGCActiveMark.hpp"
+  41 #include "gc_implementation/shared/markSweep.hpp"
+  42 #include "gc_implementation/shared/spaceDecorator.hpp"
+  43 #include "gc_interface/gcCause.hpp"
+  44 #include "memory/gcLocker.inline.hpp"
+  45 #include "memory/referencePolicy.hpp"
+  46 #include "memory/referenceProcessor.hpp"
+  47 #include "oops/oop.inline.hpp"
+  48 #include "runtime/biasedLocking.hpp"
+  49 #include "runtime/fprofiler.hpp"
+  50 #include "runtime/safepoint.hpp"
+  51 #include "runtime/vmThread.hpp"
+  52 #include "services/management.hpp"
+  53 #include "services/memoryService.hpp"
+  54 #include "utilities/events.hpp"
+  55 #include "utilities/stack.inline.hpp"
+  56 
+  57 PRAGMA_FORMAT_MUTE_WARNINGS_FOR_GCC
+  58 
+  59 elapsedTimer        PSMarkSweep::_accumulated_time;
+  60 jlong               PSMarkSweep::_time_of_last_gc   = 0;
+  61 CollectorCounters*  PSMarkSweep::_counters = NULL;
+  62 
+  63 void PSMarkSweep::initialize() {
+  64   MemRegion mr = Universe::heap()-&gt;reserved_region();
+  65   _ref_processor = new ReferenceProcessor(mr);     // a vanilla ref proc
+  66   _counters = new CollectorCounters("PSMarkSweep", 1);
+  67 }
+  68 
+  69 // This method contains all heap specific policy for invoking mark sweep.
+  70 // PSMarkSweep::invoke_no_policy() will only attempt to mark-sweep-compact
+  71 // the heap. It will do nothing further. If we need to bail out for policy
+  72 // reasons, scavenge before full gc, or any other specialized behavior, it
+  73 // needs to be added here.
+  74 //
+  75 // Note that this method should only be called from the vm_thread while
+  76 // at a safepoint!
+  77 //
+  78 // Note that the all_soft_refs_clear flag in the collector policy
+  79 // may be true because this method can be called without intervening
+  80 // activity.  For example when the heap space is tight and full measure
+  81 // are being taken to free space.
+  82 
+  83 void PSMarkSweep::invoke(bool maximum_heap_compaction) {
+  84   assert(SafepointSynchronize::is_at_safepoint(), "should be at safepoint");
+  85   assert(Thread::current() == (Thread*)VMThread::vm_thread(), "should be in vm thread");
+  86   assert(!Universe::heap()-&gt;is_gc_active(), "not reentrant");
+  87 
+  88   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+  89   GCCause::Cause gc_cause = heap-&gt;gc_cause();
+  90   PSAdaptiveSizePolicy* policy = heap-&gt;size_policy();
+  91   IsGCActiveMark mark;
+  92 
+  93   if (ScavengeBeforeFullGC) {
+  94     PSScavenge::invoke_no_policy();
+  95   }
+  96 
+  97   const bool clear_all_soft_refs =
+  98     heap-&gt;collector_policy()-&gt;should_clear_all_soft_refs();
+  99 
+ 100   uint count = maximum_heap_compaction ? 1 : MarkSweepAlwaysCompactCount;
+ 101   UIntFlagSetting flag_setting(MarkSweepAlwaysCompactCount, count);
+ 102   PSMarkSweep::invoke_no_policy(clear_all_soft_refs || maximum_heap_compaction);
+ 103 }
+ 104 
+ 105 // This method contains no policy. You should probably
+ 106 // be calling invoke() instead.
+ 107 bool PSMarkSweep::invoke_no_policy(bool clear_all_softrefs) {
+ 108   assert(SafepointSynchronize::is_at_safepoint(), "must be at a safepoint");
+ 109   assert(ref_processor() != NULL, "Sanity");
+ 110 
+ 111   if (GC_locker::check_active_before_gc()) {
+ 112     return false;
+ 113   }
+ 114 
+ 115   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+ 116   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 117   GCCause::Cause gc_cause = heap-&gt;gc_cause();
+ 118 
+ 119   _gc_timer-&gt;register_gc_start();
+ 120   _gc_tracer-&gt;report_gc_start(gc_cause, _gc_timer-&gt;gc_start());
+ 121 
+ 122   PSAdaptiveSizePolicy* size_policy = heap-&gt;size_policy();
+ 123 
+ 124   // The scope of casr should end after code that can change
+ 125   // CollectorPolicy::_should_clear_all_soft_refs.
+ 126   ClearedAllSoftRefs casr(clear_all_softrefs, heap-&gt;collector_policy());
+ 127 
+ 128   PSYoungGen* young_gen = heap-&gt;young_gen();
+ 129   PSOldGen* old_gen = heap-&gt;old_gen();
+ 130 
+ 131   // Increment the invocation count
+ 132   heap-&gt;increment_total_collections(true /* full */);
+ 133 
+ 134   // Save information needed to minimize mangling
+ 135   heap-&gt;record_gen_tops_before_GC();
+ 136 
+ 137   // We need to track unique mark sweep invocations as well.
+ 138   _total_invocations++;
+ 139 
+ 140   AdaptiveSizePolicyOutput(size_policy, heap-&gt;total_collections());
+ 141 
+ 142   heap-&gt;print_heap_before_gc();
+ 143   heap-&gt;trace_heap_before_gc(_gc_tracer);
+ 144 
+ 145   // Fill in TLABs
+ 146   heap-&gt;accumulate_statistics_all_tlabs();
+ 147   heap-&gt;ensure_parsability(true);  // retire TLABs
+ 148 
+ 149   if (VerifyBeforeGC &amp;&amp; heap-&gt;total_collections() &gt;= VerifyGCStartAt) {
+ 150     HandleMark hm;  // Discard invalid handles created during verification
+ 151     Universe::verify(" VerifyBeforeGC:");
+ 152   }
+ 153 
+ 154   // Verify object start arrays
+ 155   if (VerifyObjectStartArray &amp;&amp;
+ 156       VerifyBeforeGC) {
+ 157     old_gen-&gt;verify_object_start_array();
+ 158   }
+ 159 
+ 160   heap-&gt;pre_full_gc_dump(_gc_timer);
+ 161 
+ 162   // Filled in below to track the state of the young gen after the collection.
+ 163   bool eden_empty;
+ 164   bool survivors_empty;
+ 165   bool young_gen_empty;
+ 166 
+ 167   {
+ 168     HandleMark hm;
+ 169 
+<a name="1" id="anc1"></a>
+ 170     TraceCPUTime tcpu(PrintGCDetails, true, gclog_or_tty);
+ 171     GCTraceTime t1(GCCauseString("Full GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer-&gt;gc_id());
+ 172     TraceCollectorStats tcs(counters());
+ 173     TraceMemoryManagerStats tms(true /* Full GC */,gc_cause);
+ 174 
+<a name="2" id="anc2"></a><span class="changed"> 175     if (TraceGen1Time) accumulated_time()-&gt;start();</span>
+
+
+
+
+
+
+ 176 
+ 177     // Let the size policy know we're starting
+ 178     size_policy-&gt;major_collection_begin();
+ 179 
+ 180     CodeCache::gc_prologue();
+ 181     Threads::gc_prologue();
+ 182     BiasedLocking::preserve_marks();
+ 183 
+ 184     // Capture heap size before collection for printing.
+ 185     size_t prev_used = heap-&gt;used();
+ 186 
+ 187     // Capture metadata size before collection for sizing.
+ 188     size_t metadata_prev_used = MetaspaceAux::used_bytes();
+ 189 
+ 190     // For PrintGCDetails
+ 191     size_t old_gen_prev_used = old_gen-&gt;used_in_bytes();
+ 192     size_t young_gen_prev_used = young_gen-&gt;used_in_bytes();
+ 193 
+ 194     allocate_stacks();
+ 195 
+ 196     COMPILER2_PRESENT(DerivedPointerTable::clear());
+ 197 
+ 198     ref_processor()-&gt;enable_discovery(true /*verify_disabled*/, true /*verify_no_refs*/);
+ 199     ref_processor()-&gt;setup_policy(clear_all_softrefs);
+ 200 
+ 201     mark_sweep_phase1(clear_all_softrefs);
+ 202 
+<a name="3" id="anc3"></a>
+
+
+
+ 203     mark_sweep_phase2();
+ 204 
+<a name="4" id="anc4"></a><span class="changed"> 205     // Don't add any more derived pointers during phase3</span>
+<span class="changed"> 206     COMPILER2_PRESENT(assert(DerivedPointerTable::is_active(), "Sanity"));</span>
+
+
+
+
+ 207     COMPILER2_PRESENT(DerivedPointerTable::set_active(false));
+ 208 
+ 209     mark_sweep_phase3();
+ 210 
+<a name="5" id="anc5"></a>
+
+
+
+ 211     mark_sweep_phase4();
+ 212 
+<a name="6" id="anc6"></a>
+
+
+
+ 213     restore_marks();
+ 214 
+ 215     deallocate_stacks();
+ 216 
+ 217     if (ZapUnusedHeapArea) {
+ 218       // Do a complete mangle (top to end) because the usage for
+ 219       // scratch does not maintain a top pointer.
+ 220       young_gen-&gt;to_space()-&gt;mangle_unused_area_complete();
+ 221     }
+ 222 
+ 223     eden_empty = young_gen-&gt;eden_space()-&gt;is_empty();
+ 224     if (!eden_empty) {
+ 225       eden_empty = absorb_live_data_from_eden(size_policy, young_gen, old_gen);
+ 226     }
+ 227 
+ 228     // Update heap occupancy information which is used as
+ 229     // input to soft ref clearing policy at the next gc.
+ 230     Universe::update_heap_info_at_gc();
+ 231 
+ 232     survivors_empty = young_gen-&gt;from_space()-&gt;is_empty() &amp;&amp;
+ 233                       young_gen-&gt;to_space()-&gt;is_empty();
+ 234     young_gen_empty = eden_empty &amp;&amp; survivors_empty;
+ 235 
+ 236     BarrierSet* bs = heap-&gt;barrier_set();
+ 237     if (bs-&gt;is_a(BarrierSet::ModRef)) {
+ 238       ModRefBarrierSet* modBS = (ModRefBarrierSet*)bs;
+ 239       MemRegion old_mr = heap-&gt;old_gen()-&gt;reserved();
+ 240       if (young_gen_empty) {
+ 241         modBS-&gt;clear(MemRegion(old_mr.start(), old_mr.end()));
+ 242       } else {
+ 243         modBS-&gt;invalidate(MemRegion(old_mr.start(), old_mr.end()));
+ 244       }
+ 245     }
+ 246 
+ 247     // Delete metaspaces for unloaded class loaders and clean up loader_data graph
+ 248     ClassLoaderDataGraph::purge();
+ 249     MetaspaceAux::verify_metrics();
+ 250 
+ 251     BiasedLocking::restore_marks();
+ 252     Threads::gc_epilogue();
+ 253     CodeCache::gc_epilogue();
+ 254     JvmtiExport::gc_epilogue();
+ 255 
+ 256     COMPILER2_PRESENT(DerivedPointerTable::update_pointers());
+ 257 
+ 258     ref_processor()-&gt;enqueue_discovered_references(NULL);
+ 259 
+ 260     // Update time of last GC
+ 261     reset_millis_since_last_gc();
+ 262 
+ 263     // Let the size policy know we're done
+ 264     size_policy-&gt;major_collection_end(old_gen-&gt;used_in_bytes(), gc_cause);
+ 265 
+ 266     if (UseAdaptiveSizePolicy) {
+ 267 
+ 268       if (PrintAdaptiveSizePolicy) {
+ 269         gclog_or_tty-&gt;print("AdaptiveSizeStart: ");
+ 270         gclog_or_tty-&gt;stamp();
+ 271         gclog_or_tty-&gt;print_cr(" collection: %d ",
+ 272                        heap-&gt;total_collections());
+ 273         if (Verbose) {
+ 274           gclog_or_tty-&gt;print("old_gen_capacity: %d young_gen_capacity: %d",
+ 275             old_gen-&gt;capacity_in_bytes(), young_gen-&gt;capacity_in_bytes());
+ 276         }
+ 277       }
+ 278 
+ 279       // Don't check if the size_policy is ready here.  Let
+ 280       // the size_policy check that internally.
+ 281       if (UseAdaptiveGenerationSizePolicyAtMajorCollection &amp;&amp;
+ 282           ((gc_cause != GCCause::_java_lang_system_gc) ||
+ 283             UseAdaptiveSizePolicyWithSystemGC)) {
+ 284         // Calculate optimal free space amounts
+ 285         assert(young_gen-&gt;max_size() &gt;
+ 286           young_gen-&gt;from_space()-&gt;capacity_in_bytes() +
+ 287           young_gen-&gt;to_space()-&gt;capacity_in_bytes(),
+ 288           "Sizes of space in young gen are out-of-bounds");
+ 289 
+ 290         size_t young_live = young_gen-&gt;used_in_bytes();
+ 291         size_t eden_live = young_gen-&gt;eden_space()-&gt;used_in_bytes();
+ 292         size_t old_live = old_gen-&gt;used_in_bytes();
+ 293         size_t cur_eden = young_gen-&gt;eden_space()-&gt;capacity_in_bytes();
+ 294         size_t max_old_gen_size = old_gen-&gt;max_gen_size();
+ 295         size_t max_eden_size = young_gen-&gt;max_size() -
+ 296           young_gen-&gt;from_space()-&gt;capacity_in_bytes() -
+ 297           young_gen-&gt;to_space()-&gt;capacity_in_bytes();
+ 298 
+ 299         // Used for diagnostics
+ 300         size_policy-&gt;clear_generation_free_space_flags();
+ 301 
+ 302         size_policy-&gt;compute_generations_free_space(young_live,
+ 303                                                     eden_live,
+ 304                                                     old_live,
+ 305                                                     cur_eden,
+ 306                                                     max_old_gen_size,
+ 307                                                     max_eden_size,
+ 308                                                     true /* full gc*/);
+ 309 
+ 310         size_policy-&gt;check_gc_overhead_limit(young_live,
+ 311                                              eden_live,
+ 312                                              max_old_gen_size,
+ 313                                              max_eden_size,
+ 314                                              true /* full gc*/,
+ 315                                              gc_cause,
+ 316                                              heap-&gt;collector_policy());
+ 317 
+ 318         size_policy-&gt;decay_supplemental_growth(true /* full gc*/);
+ 319 
+ 320         heap-&gt;resize_old_gen(size_policy-&gt;calculated_old_free_size_in_bytes());
+ 321 
+ 322         // Don't resize the young generation at an major collection.  A
+ 323         // desired young generation size may have been calculated but
+ 324         // resizing the young generation complicates the code because the
+ 325         // resizing of the old generation may have moved the boundary
+ 326         // between the young generation and the old generation.  Let the
+ 327         // young generation resizing happen at the minor collections.
+ 328       }
+ 329       if (PrintAdaptiveSizePolicy) {
+ 330         gclog_or_tty-&gt;print_cr("AdaptiveSizeStop: collection: %d ",
+ 331                        heap-&gt;total_collections());
+ 332       }
+ 333     }
+ 334 
+ 335     if (UsePerfData) {
+ 336       heap-&gt;gc_policy_counters()-&gt;update_counters();
+ 337       heap-&gt;gc_policy_counters()-&gt;update_old_capacity(
+ 338         old_gen-&gt;capacity_in_bytes());
+ 339       heap-&gt;gc_policy_counters()-&gt;update_young_capacity(
+ 340         young_gen-&gt;capacity_in_bytes());
+ 341     }
+ 342 
+ 343     heap-&gt;resize_all_tlabs();
+ 344 
+ 345     // We collected the heap, recalculate the metaspace capacity
+ 346     MetaspaceGC::compute_new_size();
+ 347 
+<a name="7" id="anc7"></a><span class="changed"> 348     if (TraceGen1Time) accumulated_time()-&gt;stop();</span>
+
+
+
+
+
+
+ 349 
+ 350     if (PrintGC) {
+ 351       if (PrintGCDetails) {
+ 352         // Don't print a GC timestamp here.  This is after the GC so
+ 353         // would be confusing.
+ 354         young_gen-&gt;print_used_change(young_gen_prev_used);
+ 355         old_gen-&gt;print_used_change(old_gen_prev_used);
+ 356       }
+ 357       heap-&gt;print_heap_change(prev_used);
+ 358       if (PrintGCDetails) {
+ 359         MetaspaceAux::print_metaspace_change(metadata_prev_used);
+ 360       }
+ 361     }
+ 362 
+ 363     // Track memory usage and detect low memory
+ 364     MemoryService::track_memory_usage();
+ 365     heap-&gt;update_counters();
+ 366   }
+ 367 
+ 368   if (VerifyAfterGC &amp;&amp; heap-&gt;total_collections() &gt;= VerifyGCStartAt) {
+ 369     HandleMark hm;  // Discard invalid handles created during verification
+ 370     Universe::verify(" VerifyAfterGC:");
+ 371   }
+ 372 
+ 373   // Re-verify object start arrays
+ 374   if (VerifyObjectStartArray &amp;&amp;
+ 375       VerifyAfterGC) {
+ 376     old_gen-&gt;verify_object_start_array();
+ 377   }
+ 378 
+ 379   if (ZapUnusedHeapArea) {
+ 380     old_gen-&gt;object_space()-&gt;check_mangled_unused_area_complete();
+ 381   }
+ 382 
+ 383   NOT_PRODUCT(ref_processor()-&gt;verify_no_references_recorded());
+ 384 
+ 385   heap-&gt;print_heap_after_gc();
+ 386   heap-&gt;trace_heap_after_gc(_gc_tracer);
+ 387 
+ 388   heap-&gt;post_full_gc_dump(_gc_timer);
+ 389 
+ 390 #ifdef TRACESPINNING
+ 391   ParallelTaskTerminator::print_termination_counts();
+ 392 #endif
+ 393 
+ 394   _gc_timer-&gt;register_gc_end();
+ 395 
+ 396   _gc_tracer-&gt;report_gc_end(_gc_timer-&gt;gc_end(), _gc_timer-&gt;time_partitions());
+ 397 
+ 398   return true;
+ 399 }
+ 400 
+ 401 bool PSMarkSweep::absorb_live_data_from_eden(PSAdaptiveSizePolicy* size_policy,
+ 402                                              PSYoungGen* young_gen,
+ 403                                              PSOldGen* old_gen) {
+ 404   MutableSpace* const eden_space = young_gen-&gt;eden_space();
+ 405   assert(!eden_space-&gt;is_empty(), "eden must be non-empty");
+ 406   assert(young_gen-&gt;virtual_space()-&gt;alignment() ==
+ 407          old_gen-&gt;virtual_space()-&gt;alignment(), "alignments do not match");
+ 408 
+ 409   if (!(UseAdaptiveSizePolicy &amp;&amp; UseAdaptiveGCBoundary)) {
+ 410     return false;
+ 411   }
+ 412 
+ 413   // Both generations must be completely committed.
+ 414   if (young_gen-&gt;virtual_space()-&gt;uncommitted_size() != 0) {
+ 415     return false;
+ 416   }
+ 417   if (old_gen-&gt;virtual_space()-&gt;uncommitted_size() != 0) {
+ 418     return false;
+ 419   }
+ 420 
+ 421   // Figure out how much to take from eden.  Include the average amount promoted
+ 422   // in the total; otherwise the next young gen GC will simply bail out to a
+ 423   // full GC.
+ 424   const size_t alignment = old_gen-&gt;virtual_space()-&gt;alignment();
+ 425   const size_t eden_used = eden_space-&gt;used_in_bytes();
+ 426   const size_t promoted = (size_t)size_policy-&gt;avg_promoted()-&gt;padded_average();
+ 427   const size_t absorb_size = align_size_up(eden_used + promoted, alignment);
+ 428   const size_t eden_capacity = eden_space-&gt;capacity_in_bytes();
+ 429 
+ 430   if (absorb_size &gt;= eden_capacity) {
+ 431     return false; // Must leave some space in eden.
+ 432   }
+ 433 
+ 434   const size_t new_young_size = young_gen-&gt;capacity_in_bytes() - absorb_size;
+ 435   if (new_young_size &lt; young_gen-&gt;min_gen_size()) {
+ 436     return false; // Respect young gen minimum size.
+ 437   }
+ 438 
+ 439   if (TraceAdaptiveGCBoundary &amp;&amp; Verbose) {
+ 440     gclog_or_tty-&gt;print(" absorbing " SIZE_FORMAT "K:  "
+ 441                         "eden " SIZE_FORMAT "K-&gt;" SIZE_FORMAT "K "
+ 442                         "from " SIZE_FORMAT "K, to " SIZE_FORMAT "K "
+ 443                         "young_gen " SIZE_FORMAT "K-&gt;" SIZE_FORMAT "K ",
+ 444                         absorb_size / K,
+ 445                         eden_capacity / K, (eden_capacity - absorb_size) / K,
+ 446                         young_gen-&gt;from_space()-&gt;used_in_bytes() / K,
+ 447                         young_gen-&gt;to_space()-&gt;used_in_bytes() / K,
+ 448                         young_gen-&gt;capacity_in_bytes() / K, new_young_size / K);
+ 449   }
+ 450 
+ 451   // Fill the unused part of the old gen.
+ 452   MutableSpace* const old_space = old_gen-&gt;object_space();
+ 453   HeapWord* const unused_start = old_space-&gt;top();
+ 454   size_t const unused_words = pointer_delta(old_space-&gt;end(), unused_start);
+ 455 
+ 456   if (unused_words &gt; 0) {
+ 457     if (unused_words &lt; CollectedHeap::min_fill_size()) {
+ 458       return false;  // If the old gen cannot be filled, must give up.
+ 459     }
+ 460     CollectedHeap::fill_with_objects(unused_start, unused_words);
+ 461   }
+ 462 
+ 463   // Take the live data from eden and set both top and end in the old gen to
+ 464   // eden top.  (Need to set end because reset_after_change() mangles the region
+ 465   // from end to virtual_space-&gt;high() in debug builds).
+ 466   HeapWord* const new_top = eden_space-&gt;top();
+ 467   old_gen-&gt;virtual_space()-&gt;expand_into(young_gen-&gt;virtual_space(),
+ 468                                         absorb_size);
+ 469   young_gen-&gt;reset_after_change();
+ 470   old_space-&gt;set_top(new_top);
+ 471   old_space-&gt;set_end(new_top);
+ 472   old_gen-&gt;reset_after_change();
+ 473 
+ 474   // Update the object start array for the filler object and the data from eden.
+ 475   ObjectStartArray* const start_array = old_gen-&gt;start_array();
+ 476   for (HeapWord* p = unused_start; p &lt; new_top; p += oop(p)-&gt;size()) {
+ 477     start_array-&gt;allocate_block(p);
+ 478   }
+ 479 
+ 480   // Could update the promoted average here, but it is not typically updated at
+ 481   // full GCs and the value to use is unclear.  Something like
+ 482   //
+ 483   // cur_promoted_avg + absorb_size / number_of_scavenges_since_last_full_gc.
+ 484 
+ 485   size_policy-&gt;set_bytes_absorbed_from_eden(absorb_size);
+ 486   return true;
+ 487 }
+ 488 
+ 489 void PSMarkSweep::allocate_stacks() {
+ 490   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+ 491   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 492 
+ 493   PSYoungGen* young_gen = heap-&gt;young_gen();
+ 494 
+ 495   MutableSpace* to_space = young_gen-&gt;to_space();
+ 496   _preserved_marks = (PreservedMark*)to_space-&gt;top();
+ 497   _preserved_count = 0;
+ 498 
+ 499   // We want to calculate the size in bytes first.
+ 500   _preserved_count_max  = pointer_delta(to_space-&gt;end(), to_space-&gt;top(), sizeof(jbyte));
+ 501   // Now divide by the size of a PreservedMark
+ 502   _preserved_count_max /= sizeof(PreservedMark);
+ 503 }
+ 504 
+ 505 
+ 506 void PSMarkSweep::deallocate_stacks() {
+ 507   _preserved_mark_stack.clear(true);
+ 508   _preserved_oop_stack.clear(true);
+ 509   _marking_stack.clear();
+ 510   _objarray_stack.clear(true);
+ 511 }
+ 512 
+ 513 void PSMarkSweep::mark_sweep_phase1(bool clear_all_softrefs) {
+ 514   // Recursively traverse all live objects and mark them
+ 515   GCTraceTime tm("phase 1", PrintGCDetails &amp;&amp; Verbose, true, _gc_timer, _gc_tracer-&gt;gc_id());
+ 516   trace(" 1");
+ 517 
+ 518   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+ 519   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 520 
+ 521   // Need to clear claim bits before the tracing starts.
+ 522   ClassLoaderDataGraph::clear_claimed_marks();
+ 523 
+ 524   // General strong roots.
+ 525   {
+ 526     ParallelScavengeHeap::ParStrongRootsScope psrs;
+ 527     Universe::oops_do(mark_and_push_closure());
+ 528     JNIHandles::oops_do(mark_and_push_closure());   // Global (strong) JNI handles
+ 529     CLDToOopClosure mark_and_push_from_cld(mark_and_push_closure());
+ 530     MarkingCodeBlobClosure each_active_code_blob(mark_and_push_closure(), !CodeBlobToOopClosure::FixRelocations);
+ 531     Threads::oops_do(mark_and_push_closure(), &amp;mark_and_push_from_cld, &amp;each_active_code_blob);
+ 532     ObjectSynchronizer::oops_do(mark_and_push_closure());
+ 533     FlatProfiler::oops_do(mark_and_push_closure());
+ 534     Management::oops_do(mark_and_push_closure());
+ 535     JvmtiExport::oops_do(mark_and_push_closure());
+ 536     SystemDictionary::always_strong_oops_do(mark_and_push_closure());
+ 537     ClassLoaderDataGraph::always_strong_cld_do(follow_cld_closure());
+ 538     // Do not treat nmethods as strong roots for mark/sweep, since we can unload them.
+ 539     //CodeCache::scavenge_root_nmethods_do(CodeBlobToOopClosure(mark_and_push_closure()));
+ 540   }
+ 541 
+ 542   // Flush marking stack.
+ 543   follow_stack();
+ 544 
+ 545   // Process reference objects found during marking
+ 546   {
+ 547     ref_processor()-&gt;setup_policy(clear_all_softrefs);
+ 548     const ReferenceProcessorStats&amp; stats =
+ 549       ref_processor()-&gt;process_discovered_references(
+ 550         is_alive_closure(), mark_and_push_closure(), follow_stack_closure(), NULL, _gc_timer, _gc_tracer-&gt;gc_id());
+ 551     gc_tracer()-&gt;report_gc_reference_stats(stats);
+ 552   }
+ 553 
+ 554   // This is the point where the entire marking should have completed.
+ 555   assert(_marking_stack.is_empty(), "Marking should have completed");
+ 556 
+ 557   // Unload classes and purge the SystemDictionary.
+ 558   bool purged_class = SystemDictionary::do_unloading(is_alive_closure());
+ 559 
+ 560   // Unload nmethods.
+ 561   CodeCache::do_unloading(is_alive_closure(), purged_class);
+ 562 
+ 563   // Prune dead klasses from subklass/sibling/implementor lists.
+ 564   Klass::clean_weak_klass_links(is_alive_closure());
+ 565 
+ 566   // Delete entries for dead interned strings.
+ 567   StringTable::unlink(is_alive_closure());
+ 568 
+ 569   // Clean up unreferenced symbols in symbol table.
+ 570   SymbolTable::unlink();
+ 571   _gc_tracer-&gt;report_object_count_after_gc(is_alive_closure());
+ 572 }
+ 573 
+ 574 
+ 575 void PSMarkSweep::mark_sweep_phase2() {
+ 576   GCTraceTime tm("phase 2", PrintGCDetails &amp;&amp; Verbose, true, _gc_timer, _gc_tracer-&gt;gc_id());
+ 577   trace("2");
+ 578 
+ 579   // Now all live objects are marked, compute the new object addresses.
+ 580 
+ 581   // It is not required that we traverse spaces in the same order in
+ 582   // phase2, phase3 and phase4, but the ValidateMarkSweep live oops
+ 583   // tracking expects us to do so. See comment under phase4.
+ 584 
+ 585   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+ 586   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 587 
+ 588   PSOldGen* old_gen = heap-&gt;old_gen();
+ 589 
+ 590   // Begin compacting into the old gen
+ 591   PSMarkSweepDecorator::set_destination_decorator_tenured();
+ 592 
+ 593   // This will also compact the young gen spaces.
+ 594   old_gen-&gt;precompact();
+ 595 }
+ 596 
+ 597 // This should be moved to the shared markSweep code!
+ 598 class PSAlwaysTrueClosure: public BoolObjectClosure {
+ 599 public:
+ 600   bool do_object_b(oop p) { return true; }
+ 601 };
+ 602 static PSAlwaysTrueClosure always_true;
+ 603 
+ 604 void PSMarkSweep::mark_sweep_phase3() {
+ 605   // Adjust the pointers to reflect the new locations
+ 606   GCTraceTime tm("phase 3", PrintGCDetails &amp;&amp; Verbose, true, _gc_timer, _gc_tracer-&gt;gc_id());
+ 607   trace("3");
+ 608 
+ 609   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+ 610   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 611 
+ 612   PSYoungGen* young_gen = heap-&gt;young_gen();
+ 613   PSOldGen* old_gen = heap-&gt;old_gen();
+ 614 
+ 615   // Need to clear claim bits before the tracing starts.
+ 616   ClassLoaderDataGraph::clear_claimed_marks();
+ 617 
+ 618   // General strong roots.
+ 619   Universe::oops_do(adjust_pointer_closure());
+ 620   JNIHandles::oops_do(adjust_pointer_closure());   // Global (strong) JNI handles
+ 621   CLDToOopClosure adjust_from_cld(adjust_pointer_closure());
+ 622   Threads::oops_do(adjust_pointer_closure(), &amp;adjust_from_cld, NULL);
+ 623   ObjectSynchronizer::oops_do(adjust_pointer_closure());
+ 624   FlatProfiler::oops_do(adjust_pointer_closure());
+ 625   Management::oops_do(adjust_pointer_closure());
+ 626   JvmtiExport::oops_do(adjust_pointer_closure());
+ 627   SystemDictionary::oops_do(adjust_pointer_closure());
+ 628   ClassLoaderDataGraph::cld_do(adjust_cld_closure());
+ 629 
+ 630   // Now adjust pointers in remaining weak roots.  (All of which should
+ 631   // have been cleared if they pointed to non-surviving objects.)
+ 632   // Global (weak) JNI handles
+ 633   JNIHandles::weak_oops_do(&amp;always_true, adjust_pointer_closure());
+ 634 
+ 635   CodeBlobToOopClosure adjust_from_blobs(adjust_pointer_closure(), CodeBlobToOopClosure::FixRelocations);
+ 636   CodeCache::blobs_do(&amp;adjust_from_blobs);
+ 637   StringTable::oops_do(adjust_pointer_closure());
+ 638   ref_processor()-&gt;weak_oops_do(adjust_pointer_closure());
+ 639   PSScavenge::reference_processor()-&gt;weak_oops_do(adjust_pointer_closure());
+ 640 
+ 641   adjust_marks();
+ 642 
+ 643   young_gen-&gt;adjust_pointers();
+ 644   old_gen-&gt;adjust_pointers();
+ 645 }
+ 646 
+ 647 void PSMarkSweep::mark_sweep_phase4() {
+ 648   EventMark m("4 compact heap");
+ 649   GCTraceTime tm("phase 4", PrintGCDetails &amp;&amp; Verbose, true, _gc_timer, _gc_tracer-&gt;gc_id());
+ 650   trace("4");
+ 651 
+ 652   // All pointers are now adjusted, move objects accordingly
+ 653 
+ 654   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+ 655   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 656 
+ 657   PSYoungGen* young_gen = heap-&gt;young_gen();
+ 658   PSOldGen* old_gen = heap-&gt;old_gen();
+ 659 
+ 660   old_gen-&gt;compact();
+ 661   young_gen-&gt;compact();
+ 662 }
+ 663 
+ 664 jlong PSMarkSweep::millis_since_last_gc() {
+ 665   // We need a monotonically non-deccreasing time in ms but
+ 666   // os::javaTimeMillis() does not guarantee monotonicity.
+ 667   jlong now = os::javaTimeNanos() / NANOSECS_PER_MILLISEC;
+ 668   jlong ret_val = now - _time_of_last_gc;
+ 669   // XXX See note in genCollectedHeap::millis_since_last_gc().
+ 670   if (ret_val &lt; 0) {
+ 671     NOT_PRODUCT(warning("time warp: "INT64_FORMAT, ret_val);)
+ 672     return 0;
+ 673   }
+ 674   return ret_val;
+ 675 }
+ 676 
+ 677 void PSMarkSweep::reset_millis_since_last_gc() {
+ 678   // We need a monotonically non-deccreasing time in ms but
+ 679   // os::javaTimeMillis() does not guarantee monotonicity.
+ 680   _time_of_last_gc = os::javaTimeNanos() / NANOSECS_PER_MILLISEC;
+ 681 }
+<a name="8" id="anc8"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="8" type="hidden" /></form></body></html>

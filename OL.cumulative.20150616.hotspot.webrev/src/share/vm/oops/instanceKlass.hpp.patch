@@ -1,0 +1,86 @@
+--- old/src/share/vm/oops/instanceKlass.hpp	2015-06-16 10:25:44.742427332 -0700
++++ new/src/share/vm/oops/instanceKlass.hpp	2015-06-16 10:25:44.674428965 -0700
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+  *
+  * This code is free software; you can redistribute it and/or modify it
+@@ -358,8 +358,6 @@
+   Array<Method*>* methods() const          { return _methods; }
+   void set_methods(Array<Method*>* a)      { _methods = a; }
+   Method* method_with_idnum(int idnum);
+-  Method* method_with_orig_idnum(int idnum);
+-  Method* method_with_orig_idnum(int idnum, int version);
+ 
+   // method ordering
+   Array<int>* method_ordering() const     { return _method_ordering; }
+@@ -660,7 +658,6 @@
+     return _previous_versions;
+   }
+ 
+-  InstanceKlass* get_klass_version(int version);
+   static void purge_previous_versions(InstanceKlass* ik);
+ 
+   // JVMTI: Support for caching a class file before it is modified by an agent that can do retransformation
+@@ -754,11 +751,25 @@
+   Array<AnnotationArray*>* fields_type_annotations() const {
+     return (_annotations != NULL) ? _annotations->fields_type_annotations() : NULL;
+   }
+-  // allocation
++
++  // Instance allocation
+   instanceOop allocate_instance(TRAPS);
++  instanceHandle allocate_instance_handle(TRAPS) {
++    return instanceHandle(THREAD, allocate_instance(THREAD));
++  }
++  instanceOop allocate_instance(int size, TRAPS);
++  instanceHandle allocate_instance_handle(int size, TRAPS) {
++    return instanceHandle(THREAD, allocate_instance(size, THREAD));
++  }
+ 
+-  // additional member function to return a handle
+-  instanceHandle allocate_instance_handle(TRAPS)      { return instanceHandle(THREAD, allocate_instance(THREAD)); }
++  // Instance allocation at the given address (in preallocated memory region)
++  instanceOop allocate_instance_at(address obj_addr,
++      bool is_contained, bool is_container, TRAPS);
++  instanceHandle allocate_instance_at_handle(address obj_addr,
++      bool is_contained, bool is_container, TRAPS) {
++    return instanceHandle(THREAD, allocate_instance_at(obj_addr,
++        is_contained, is_container, THREAD));
++  }
+ 
+   objArrayOop allocate_objArray(int n, int length, TRAPS);
+   // Helper function
+@@ -962,12 +973,17 @@
+   Method* method_at_itable(Klass* holder, int index, TRAPS);
+ 
+ #if INCLUDE_JVMTI
+-  void adjust_default_methods(InstanceKlass* holder, bool* trace_name_printed);
++  void adjust_default_methods(Method** old_methods, Method** new_methods,
++                              int methods_length, bool* trace_name_printed);
+ #endif // INCLUDE_JVMTI
+ 
+-  // Garbage collection
++  // Garbage collection support
++  // Mark-Sweep GCs
+   void oop_follow_contents(oop obj);
+-  int  oop_adjust_pointers(oop obj);
++  int oop_adjust_pointers(oop obj);
++
++  // Parallel Scavenge and Parallel Old GCs
++  PARALLEL_GC_DECLS
+ 
+   void clean_implementors_list(BoolObjectClosure* is_alive);
+   void clean_method_data(BoolObjectClosure* is_alive);
+@@ -992,9 +1008,6 @@
+   static void notify_unload_class(InstanceKlass* ik);
+   static void release_C_heap_structures(InstanceKlass* ik);
+ 
+-  // Parallel Scavenge and Parallel Old
+-  PARALLEL_GC_DECLS
+-
+   // Naming
+   const char* signature_name() const;
+ 

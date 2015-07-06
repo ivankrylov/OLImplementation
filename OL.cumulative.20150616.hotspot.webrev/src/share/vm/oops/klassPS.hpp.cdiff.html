@@ -1,0 +1,131 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Cdiff src/share/vm/oops/klassPS.hpp</title>
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/oops/klassPS.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+<hr /><span class="oldmarker">*** 23,45 ****</span>
+   */
+  
+  #ifndef SHARE_VM_OOPS_KLASSPS_HPP
+  #define SHARE_VM_OOPS_KLASSPS_HPP
+  
+<span class="removed">-   // Expands to Parallel Scavenge and Parallel Old declarations</span>
+<span class="removed">- </span>
+  #include "utilities/macros.hpp"
+  
+  #if INCLUDE_ALL_GCS
+  #define PARALLEL_GC_DECLS \
+    virtual void oop_push_contents(PSPromotionManager* pm, oop obj);          \
+<span class="removed">-   /* Parallel Old GC support                                                \</span>
+<span class="removed">-                                                                             \</span>
+<span class="removed">-    The 2-arg version of oop_update_pointers is for objects that are         \</span>
+<span class="removed">-    known not to cross chunk boundaries.  The 4-arg version is for           \</span>
+<span class="removed">-    objects that do (or may) cross chunk boundaries; it updates only those   \</span>
+<span class="removed">-    oops that are in the region [beg_addr, end_addr).  */                    \</span>
+    virtual void oop_follow_contents(ParCompactionManager* cm, oop obj);      \
+    virtual int  oop_update_pointers(ParCompactionManager* cm, oop obj);
+  
+  // Pure virtual version for klass.hpp
+  #define PARALLEL_GC_DECLS_PV \
+<span class="newmarker">--- 23,40 ----</span>
+   */
+  
+  #ifndef SHARE_VM_OOPS_KLASSPS_HPP
+  #define SHARE_VM_OOPS_KLASSPS_HPP
+  
+  #include "utilities/macros.hpp"
+  
+<span class="new">+ // Macros that expand to Parallel Scavenge and Parallel Old GC related</span>
+<span class="new">+ // declarations</span>
+<span class="new">+ </span>
+  #if INCLUDE_ALL_GCS
+  #define PARALLEL_GC_DECLS                                              \
+    virtual void oop_push_contents(PSPromotionManager* pm, oop obj);     \
+    virtual void oop_follow_contents(ParCompactionManager* cm, oop obj); \
+    virtual int oop_update_pointers(ParCompactionManager* cm, oop obj);
+  
+  // Pure virtual version for klass.hpp
+  #define PARALLEL_GC_DECLS_PV                                               \
+</pre></body></html>
+

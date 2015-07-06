@@ -1,0 +1,187 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/oops </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/oops/klass.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 375 }
+ 376 
+ 377 void Klass::append_to_sibling_list() {
+ 378   debug_only(verify();)
+ 379   // add ourselves to superklass' subklass list
+ 380   InstanceKlass* super = superklass();
+ 381   if (super == NULL) return;        // special case: class Object
+ 382   assert((!super-&gt;is_interface()    // interfaces cannot be supers
+ 383           &amp;&amp; (super-&gt;superklass() == NULL || !is_interface())),
+ 384          "an interface can only be a subklass of Object");
+ 385   Klass* prev_first_subklass = super-&gt;subklass_oop();
+ 386   if (prev_first_subklass != NULL) {
+ 387     // set our sibling to be the superklass' previous first subklass
+ 388     set_next_sibling(prev_first_subklass);
+ 389   }
+ 390   // make ourselves the superklass' first subklass
+ 391   super-&gt;set_subklass(this);
+ 392   debug_only(verify();)
+ 393 }
+ 394 
+
+
+
+
+ 395 bool Klass::is_loader_alive(BoolObjectClosure* is_alive) {
+ 396 #ifdef ASSERT
+ 397   // The class is alive iff the class loader is alive.
+ 398   oop loader = class_loader();
+ 399   bool loader_alive = (loader == NULL) || is_alive-&gt;do_object_b(loader);
+ 400 #endif // ASSERT
+ 401 
+ 402   // The class is alive if it's mirror is alive (which should be marked if the
+ 403   // loader is alive) unless it's an anoymous class.
+ 404   bool mirror_alive = is_alive-&gt;do_object_b(java_mirror());
+ 405   assert(!mirror_alive || loader_alive, "loader must be alive if the mirror is"
+ 406                         " but not the other way around with anonymous classes");
+ 407   return mirror_alive;
+ 408 }
+ 409 
+ 410 void Klass::clean_weak_klass_links(BoolObjectClosure* is_alive, bool clean_alive_klasses) {
+ 411   if (!ClassUnloading) {
+ 412     return;
+ 413   }
+ 414 
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 375 }
+ 376 
+ 377 void Klass::append_to_sibling_list() {
+ 378   debug_only(verify();)
+ 379   // add ourselves to superklass' subklass list
+ 380   InstanceKlass* super = superklass();
+ 381   if (super == NULL) return;        // special case: class Object
+ 382   assert((!super-&gt;is_interface()    // interfaces cannot be supers
+ 383           &amp;&amp; (super-&gt;superklass() == NULL || !is_interface())),
+ 384          "an interface can only be a subklass of Object");
+ 385   Klass* prev_first_subklass = super-&gt;subklass_oop();
+ 386   if (prev_first_subklass != NULL) {
+ 387     // set our sibling to be the superklass' previous first subklass
+ 388     set_next_sibling(prev_first_subklass);
+ 389   }
+ 390   // make ourselves the superklass' first subklass
+ 391   super-&gt;set_subklass(this);
+ 392   debug_only(verify();)
+ 393 }
+ 394 
+<span class="new"> 395 bool Klass::oop_is_container() const {</span>
+<span class="new"> 396   return is_subclass_of(SystemDictionary::AbstractStructuredArray_klass());</span>
+<span class="new"> 397 }</span>
+<span class="new"> 398 </span>
+ 399 bool Klass::is_loader_alive(BoolObjectClosure* is_alive) {
+ 400 #ifdef ASSERT
+ 401   // The class is alive iff the class loader is alive.
+ 402   oop loader = class_loader();
+ 403   bool loader_alive = (loader == NULL) || is_alive-&gt;do_object_b(loader);
+ 404 #endif // ASSERT
+ 405 
+ 406   // The class is alive if it's mirror is alive (which should be marked if the
+ 407   // loader is alive) unless it's an anoymous class.
+ 408   bool mirror_alive = is_alive-&gt;do_object_b(java_mirror());
+ 409   assert(!mirror_alive || loader_alive, "loader must be alive if the mirror is"
+ 410                         " but not the other way around with anonymous classes");
+ 411   return mirror_alive;
+ 412 }
+ 413 
+ 414 void Klass::clean_weak_klass_links(BoolObjectClosure* is_alive, bool clean_alive_klasses) {
+ 415   if (!ClassUnloading) {
+ 416     return;
+ 417   }
+ 418 
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

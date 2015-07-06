@@ -1,0 +1,189 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/c1 </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/c1/c1_GraphBuilder.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+3552       // Use the intrinsic version of Reference.get() so that the value in
+3553       // the referent field can be registered by the G1 pre-barrier code.
+3554       // Also to prevent commoning reads from this field across safepoint
+3555       // since GC can change its value.
+3556       preserves_state = true;
+3557       break;
+3558 
+3559     case vmIntrinsics::_updateCRC32:
+3560     case vmIntrinsics::_updateBytesCRC32:
+3561     case vmIntrinsics::_updateByteBufferCRC32:
+3562       if (!UseCRC32Intrinsics) return false;
+3563       cantrap = false;
+3564       preserves_state = true;
+3565       break;
+3566 
+3567     case vmIntrinsics::_loadFence :
+3568     case vmIntrinsics::_storeFence:
+3569     case vmIntrinsics::_fullFence :
+3570       break;
+3571 
+
+
+
+
+
+3572     default                       : return false; // do not inline
+3573   }
+3574   // create intrinsic node
+3575   const bool has_receiver = !callee-&gt;is_static();
+3576   ValueType* result_type = as_ValueType(callee-&gt;return_type());
+3577   ValueStack* state_before = copy_state_for_exception();
+3578 
+3579   Values* args = state()-&gt;pop_arguments(callee-&gt;arg_size());
+3580 
+3581   if (is_profiling()) {
+3582     // Don't profile in the special case where the root method
+3583     // is the intrinsic
+3584     if (callee != method()) {
+3585       // Note that we'd collect profile data in this method if we wanted it.
+3586       compilation()-&gt;set_would_profile(true);
+3587       if (profile_calls()) {
+3588         Value recv = NULL;
+3589         if (has_receiver) {
+3590           recv = args-&gt;at(0);
+3591           null_check(recv);
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+3552       // Use the intrinsic version of Reference.get() so that the value in
+3553       // the referent field can be registered by the G1 pre-barrier code.
+3554       // Also to prevent commoning reads from this field across safepoint
+3555       // since GC can change its value.
+3556       preserves_state = true;
+3557       break;
+3558 
+3559     case vmIntrinsics::_updateCRC32:
+3560     case vmIntrinsics::_updateBytesCRC32:
+3561     case vmIntrinsics::_updateByteBufferCRC32:
+3562       if (!UseCRC32Intrinsics) return false;
+3563       cantrap = false;
+3564       preserves_state = true;
+3565       break;
+3566 
+3567     case vmIntrinsics::_loadFence :
+3568     case vmIntrinsics::_storeFence:
+3569     case vmIntrinsics::_fullFence :
+3570       break;
+3571 
+<span class="new">3572     // ObjectLayout intrinsics support</span>
+<span class="new">3573     case vmIntrinsics::_deriveContainedObjectAtOffset:</span>
+<span class="new">3574       if (!UseObjectLayoutIntrinsics) return false;</span>
+<span class="new">3575       return false; // FIXME: not yet implemented</span>
+<span class="new">3576 </span>
+3577     default                       : return false; // do not inline
+3578   }
+3579   // create intrinsic node
+3580   const bool has_receiver = !callee-&gt;is_static();
+3581   ValueType* result_type = as_ValueType(callee-&gt;return_type());
+3582   ValueStack* state_before = copy_state_for_exception();
+3583 
+3584   Values* args = state()-&gt;pop_arguments(callee-&gt;arg_size());
+3585 
+3586   if (is_profiling()) {
+3587     // Don't profile in the special case where the root method
+3588     // is the intrinsic
+3589     if (callee != method()) {
+3590       // Note that we'd collect profile data in this method if we wanted it.
+3591       compilation()-&gt;set_would_profile(true);
+3592       if (profile_calls()) {
+3593         Value recv = NULL;
+3594         if (has_receiver) {
+3595           recv = args-&gt;at(0);
+3596           null_check(recv);
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

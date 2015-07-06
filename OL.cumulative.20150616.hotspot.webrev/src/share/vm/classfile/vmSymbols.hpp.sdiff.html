@@ -1,0 +1,585 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/classfile </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/classfile/vmSymbols.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 227   template(modifiers_name,                            "modifiers")                                \
+ 228   template(newConstructor_name,                       "newConstructor")                           \
+ 229   template(newConstructor_signature,                  "(Lsun/reflect/MethodInfo;)Ljava/lang/reflect/Constructor;") \
+ 230   template(newField_name,                             "newField")                                 \
+ 231   template(newField_signature,                        "(Lsun/reflect/FieldInfo;)Ljava/lang/reflect/Field;") \
+ 232   template(newMethod_name,                            "newMethod")                                \
+ 233   template(newMethod_signature,                       "(Lsun/reflect/MethodInfo;)Ljava/lang/reflect/Method;") \
+ 234   template(invokeBasic_name,                          "invokeBasic")                              \
+ 235   template(linkToVirtual_name,                        "linkToVirtual")                            \
+ 236   template(linkToStatic_name,                         "linkToStatic")                             \
+ 237   template(linkToSpecial_name,                        "linkToSpecial")                            \
+ 238   template(linkToInterface_name,                      "linkToInterface")                          \
+ 239   template(compiledLambdaForm_name,                   "&lt;compiledLambdaForm&gt;")  /*fake name*/      \
+ 240   template(star_name,                                 "*") /*not really a name*/                  \
+ 241   template(invoke_name,                               "invoke")                                   \
+ 242   template(override_name,                             "override")                                 \
+ 243   template(parameterTypes_name,                       "parameterTypes")                           \
+ 244   template(returnType_name,                           "returnType")                               \
+ 245   template(signature_name,                            "signature")                                \
+ 246   template(slot_name,                                 "slot")                                     \
+
+ 247                                                                                                   \
+ 248   /* Support for annotations (JDK 1.5 and above) */                                               \
+ 249                                                                                                   \
+ 250   template(annotations_name,                          "annotations")                              \
+ 251   template(index_name,                                "index")                                    \
+ 252   template(executable_name,                           "executable")                               \
+ 253   template(parameter_annotations_name,                "parameterAnnotations")                     \
+ 254   template(annotation_default_name,                   "annotationDefault")                        \
+ 255   template(sun_reflect_ConstantPool,                  "sun/reflect/ConstantPool")                 \
+ 256   template(ConstantPool_name,                         "constantPoolOop")                          \
+ 257   template(sun_reflect_UnsafeStaticFieldAccessorImpl, "sun/reflect/UnsafeStaticFieldAccessorImpl")\
+ 258   template(base_name,                                 "base")                                     \
+ 259   /* Type Annotations (JDK 8 and above) */                                                        \
+ 260   template(type_annotations_name,                     "typeAnnotations")                          \
+ 261                                                                                                   \
+ 262                                                                                                   \
+ 263   /* Support for JSR 292 &amp; invokedynamic (JDK 1.7 and above) */                                   \
+ 264   template(java_lang_invoke_CallSite,                 "java/lang/invoke/CallSite")                \
+ 265   template(java_lang_invoke_ConstantCallSite,         "java/lang/invoke/ConstantCallSite")        \
+ 266   template(java_lang_invoke_DirectMethodHandle,       "java/lang/invoke/DirectMethodHandle")      \
+
+</pre><hr></hr><pre>
+ 278   template(java_lang_invoke_LambdaForm,               "java/lang/invoke/LambdaForm")              \
+ 279   template(java_lang_invoke_ForceInline_signature,    "Ljava/lang/invoke/ForceInline;")           \
+ 280   template(java_lang_invoke_DontInline_signature,     "Ljava/lang/invoke/DontInline;")            \
+ 281   template(java_lang_invoke_Stable_signature,         "Ljava/lang/invoke/Stable;")                \
+ 282   template(java_lang_invoke_LambdaForm_Compiled_signature, "Ljava/lang/invoke/LambdaForm$Compiled;") \
+ 283   template(java_lang_invoke_LambdaForm_Hidden_signature, "Ljava/lang/invoke/LambdaForm$Hidden;")  \
+ 284   /* internal up-calls made only by the JVM, via class sun.invoke.MethodHandleNatives: */         \
+ 285   template(findMethodHandleType_name,                 "findMethodHandleType")                     \
+ 286   template(findMethodHandleType_signature,       "(Ljava/lang/Class;[Ljava/lang/Class;)Ljava/lang/invoke/MethodType;") \
+ 287   template(linkMethodHandleConstant_name,             "linkMethodHandleConstant")                 \
+ 288   template(linkMethodHandleConstant_signature, "(Ljava/lang/Class;ILjava/lang/Class;Ljava/lang/String;Ljava/lang/Object;)Ljava/lang/invoke/MethodHandle;") \
+ 289   template(linkMethod_name,                           "linkMethod")                               \
+ 290   template(linkMethod_signature, "(Ljava/lang/Class;ILjava/lang/Class;Ljava/lang/String;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/invoke/MemberName;") \
+ 291   template(linkCallSite_name,                         "linkCallSite")                             \
+ 292   template(linkCallSite_signature, "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/invoke/MemberName;") \
+ 293   template(setTargetNormal_name,                      "setTargetNormal")                          \
+ 294   template(setTargetVolatile_name,                    "setTargetVolatile")                        \
+ 295   template(setTarget_signature,                       "(Ljava/lang/invoke/MethodHandle;)V")       \
+ 296   NOT_LP64(  do_alias(intptr_signature,               int_signature)  )                           \
+ 297   LP64_ONLY( do_alias(intptr_signature,               long_signature) )                           \
+
+ 298                                                                                                   \
+ 299   /* common method and field names */                                                             \
+ 300   template(object_initializer_name,                   "&lt;init&gt;")                                   \
+ 301   template(class_initializer_name,                    "&lt;clinit&gt;")                                 \
+ 302   template(println_name,                              "println")                                  \
+ 303   template(printStackTrace_name,                      "printStackTrace")                          \
+ 304   template(main_name,                                 "main")                                     \
+ 305   template(name_name,                                 "name")                                     \
+ 306   template(priority_name,                             "priority")                                 \
+ 307   template(stillborn_name,                            "stillborn")                                \
+ 308   template(group_name,                                "group")                                    \
+ 309   template(daemon_name,                               "daemon")                                   \
+ 310   template(eetop_name,                                "eetop")                                    \
+ 311   template(thread_status_name,                        "threadStatus")                             \
+ 312   template(run_method_name,                           "run")                                      \
+ 313   template(exit_method_name,                          "exit")                                     \
+ 314   template(add_method_name,                           "add")                                      \
+ 315   template(remove_method_name,                        "remove")                                   \
+ 316   template(parent_name,                               "parent")                                   \
+ 317   template(threads_name,                              "threads")                                  \
+
+</pre><hr></hr><pre>
+ 458   template(object_int_signature,                      "(Ljava/lang/Object;)I")                    \
+ 459   template(object_boolean_signature,                  "(Ljava/lang/Object;)Z")                    \
+ 460   template(string_void_signature,                     "(Ljava/lang/String;)V")                    \
+ 461   template(string_int_signature,                      "(Ljava/lang/String;)I")                    \
+ 462   template(throwable_void_signature,                  "(Ljava/lang/Throwable;)V")                 \
+ 463   template(void_throwable_signature,                  "()Ljava/lang/Throwable;")                  \
+ 464   template(throwable_throwable_signature,             "(Ljava/lang/Throwable;)Ljava/lang/Throwable;")             \
+ 465   template(class_void_signature,                      "(Ljava/lang/Class;)V")                     \
+ 466   template(class_int_signature,                       "(Ljava/lang/Class;)I")                     \
+ 467   template(class_long_signature,                      "(Ljava/lang/Class;)J")                     \
+ 468   template(class_boolean_signature,                   "(Ljava/lang/Class;)Z")                     \
+ 469   template(throwable_string_void_signature,           "(Ljava/lang/Throwable;Ljava/lang/String;)V")               \
+ 470   template(string_array_void_signature,               "([Ljava/lang/String;)V")                                   \
+ 471   template(string_array_string_array_void_signature,  "([Ljava/lang/String;[Ljava/lang/String;)V")                \
+ 472   template(thread_throwable_void_signature,           "(Ljava/lang/Thread;Ljava/lang/Throwable;)V")               \
+ 473   template(thread_void_signature,                     "(Ljava/lang/Thread;)V")                                    \
+ 474   template(threadgroup_runnable_void_signature,       "(Ljava/lang/ThreadGroup;Ljava/lang/Runnable;)V")           \
+ 475   template(threadgroup_string_void_signature,         "(Ljava/lang/ThreadGroup;Ljava/lang/String;)V")             \
+ 476   template(string_class_signature,                    "(Ljava/lang/String;)Ljava/lang/Class;")                    \
+ 477   template(object_object_object_signature,            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;") \
+
+ 478   template(string_string_string_signature,            "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;") \
+ 479   template(string_string_signature,                   "(Ljava/lang/String;)Ljava/lang/String;")                   \
+ 480   template(classloader_string_long_signature,         "(Ljava/lang/ClassLoader;Ljava/lang/String;)J")             \
+ 481   template(byte_array_void_signature,                 "([B)V")                                                    \
+ 482   template(char_array_void_signature,                 "([C)V")                                                    \
+ 483   template(int_int_void_signature,                    "(II)V")                                                    \
+ 484   template(long_long_void_signature,                  "(JJ)V")                                                    \
+ 485   template(void_classloader_signature,                "()Ljava/lang/ClassLoader;")                                \
+ 486   template(void_object_signature,                     "()Ljava/lang/Object;")                                     \
+ 487   template(void_class_signature,                      "()Ljava/lang/Class;")                                      \
+ 488   template(void_class_array_signature,                "()[Ljava/lang/Class;")                                     \
+ 489   template(void_string_signature,                     "()Ljava/lang/String;")                                     \
+ 490   template(object_array_object_signature,             "([Ljava/lang/Object;)Ljava/lang/Object;")                  \
+ 491   template(object_object_array_object_signature,      "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;")\
+ 492   template(exception_void_signature,                  "(Ljava/lang/Exception;)V")                                 \
+ 493   template(protectiondomain_signature,                "[Ljava/security/ProtectionDomain;")                        \
+ 494   template(accesscontrolcontext_signature,            "Ljava/security/AccessControlContext;")                     \
+ 495   template(class_protectiondomain_signature,          "(Ljava/lang/Class;Ljava/security/ProtectionDomain;)V")     \
+ 496   template(thread_signature,                          "Ljava/lang/Thread;")                                       \
+ 497   template(thread_array_signature,                    "[Ljava/lang/Thread;")                                      \
+
+</pre><hr></hr><pre>
+ 572   template(createMemoryManager_name,                   "createMemoryManager")                                     \
+ 573   template(createGarbageCollector_name,                "createGarbageCollector")                                  \
+ 574   template(createMemoryPool_signature,                 "(Ljava/lang/String;ZJJ)Ljava/lang/management/MemoryPoolMXBean;") \
+ 575   template(createMemoryManager_signature,              "(Ljava/lang/String;)Ljava/lang/management/MemoryManagerMXBean;") \
+ 576   template(createGarbageCollector_signature,           "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/management/GarbageCollectorMXBean;") \
+ 577   template(addThreadDumpForMonitors_name,              "addThreadDumpForMonitors")                                \
+ 578   template(addThreadDumpForSynchronizers_name,         "addThreadDumpForSynchronizers")                           \
+ 579   template(addThreadDumpForMonitors_signature,         "(Ljava/lang/management/ThreadInfo;[Ljava/lang/Object;[I)V") \
+ 580   template(addThreadDumpForSynchronizers_signature,    "(Ljava/lang/management/ThreadInfo;[Ljava/lang/Object;)V")   \
+ 581                                                                                                                   \
+ 582   /* JVMTI/java.lang.instrument support and VM Attach mechanism */                                                \
+ 583   template(sun_misc_VMSupport,                         "sun/misc/VMSupport")                                      \
+ 584   template(appendToClassPathForInstrumentation_name,   "appendToClassPathForInstrumentation")                     \
+ 585   do_alias(appendToClassPathForInstrumentation_signature, string_void_signature)                                  \
+ 586   template(serializePropertiesToByteArray_name,        "serializePropertiesToByteArray")                          \
+ 587   template(serializePropertiesToByteArray_signature,   "()[B")                                                    \
+ 588   template(serializeAgentPropertiesToByteArray_name,   "serializeAgentPropertiesToByteArray")                     \
+ 589   template(classRedefinedCount_name,                   "classRedefinedCount")                                     \
+ 590   template(classLoader_name,                           "classLoader")                                             \
+ 591                                                                                                                   \
+
+
+
+
+
+
+
+
+
+ 592   /* trace signatures */                                                                                          \
+ 593   TRACE_TEMPLATES(template)                                                                                       \
+ 594                                                                                                                   \
+ 595   /*end*/
+ 596 
+ 597 // Here are all the intrinsics known to the runtime and the CI.
+ 598 // Each intrinsic consists of a public enum name (like _hashCode),
+ 599 // followed by a specification of its klass, name, and signature:
+ 600 //    template(&lt;id&gt;,  &lt;klass&gt;,  &lt;name&gt;, &lt;sig&gt;, &lt;FCODE&gt;)
+ 601 //
+ 602 // If you add an intrinsic here, you must also define its name
+ 603 // and signature as members of the VM symbols.  The VM symbols for
+ 604 // the intrinsic name and signature may be defined above.
+ 605 //
+ 606 // Because the VM_SYMBOLS_DO macro makes reference to VM_INTRINSICS_DO,
+ 607 // you can also define an intrinsic's name and/or signature locally to the
+ 608 // intrinsic, if this makes sense.  (It often does make sense.)
+ 609 //
+ 610 // For example:
+ 611 //    do_intrinsic(_foo,  java_lang_Object,  foo_name, foo_signature, F_xx)
+
+</pre><hr></hr><pre>
+ 849    do_signature(allocateInstance_signature,   "(Ljava/lang/Class;)Ljava/lang/Object;")                                  \
+ 850   do_intrinsic(_copyMemory,               sun_misc_Unsafe,        copyMemory_name, copyMemory_signature,         F_RN)  \
+ 851    do_name(     copyMemory_name,                                 "copyMemory")                                          \
+ 852    do_signature(copyMemory_signature,         "(Ljava/lang/Object;JLjava/lang/Object;JJ)V")                             \
+ 853   do_intrinsic(_park,                     sun_misc_Unsafe,        park_name, park_signature,                     F_RN)  \
+ 854    do_name(     park_name,                                       "park")                                                \
+ 855    do_signature(park_signature,                                  "(ZJ)V")                                               \
+ 856   do_intrinsic(_unpark,                   sun_misc_Unsafe,        unpark_name, unpark_signature,                 F_RN)  \
+ 857    do_name(     unpark_name,                                     "unpark")                                              \
+ 858    do_alias(    unpark_signature,                               /*(LObject;)V*/ object_void_signature)                  \
+ 859   do_intrinsic(_loadFence,                sun_misc_Unsafe,        loadFence_name, loadFence_signature,           F_RN)  \
+ 860    do_name(     loadFence_name,                                  "loadFence")                                           \
+ 861    do_alias(    loadFence_signature,                              void_method_signature)                                \
+ 862   do_intrinsic(_storeFence,               sun_misc_Unsafe,        storeFence_name, storeFence_signature,         F_RN)  \
+ 863    do_name(     storeFence_name,                                 "storeFence")                                          \
+ 864    do_alias(    storeFence_signature,                             void_method_signature)                                \
+ 865   do_intrinsic(_fullFence,                sun_misc_Unsafe,        fullFence_name, fullFence_signature,           F_RN)  \
+ 866    do_name(     fullFence_name,                                  "fullFence")                                           \
+ 867    do_alias(    fullFence_signature,                              void_method_signature)                                \
+ 868                                                                                                                         \
+<span class="changed"> 869   /* Custom branch frequencies profiling support for JSR292 */                                                          \</span>
+<span class="changed"> 870   do_class(java_lang_invoke_MethodHandleImpl,               "java/lang/invoke/MethodHandleImpl")                        \</span>
+<span class="changed"> 871   do_intrinsic(_profileBoolean, java_lang_invoke_MethodHandleImpl, profileBoolean_name, profileBoolean_signature,    F_S)  \</span>
+<span class="changed"> 872    do_name(     profileBoolean_name,                               "profileBoolean")                                     \</span>
+<span class="changed"> 873    do_signature(profileBoolean_signature,                           "(Z[I)Z")                                            \</span>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 874                                                                                                                         \
+ 875   /* unsafe memory references (there are a lot of them...) */                                                           \
+<span class="changed"> 876   do_signature(getObject_signature,       "(Ljava/lang/Object;J)Ljava/lang/Object;")                                    \</span>
+ 877   do_signature(putObject_signature,       "(Ljava/lang/Object;JLjava/lang/Object;)V")                                   \
+ 878   do_signature(getBoolean_signature,      "(Ljava/lang/Object;J)Z")                                                     \
+ 879   do_signature(putBoolean_signature,      "(Ljava/lang/Object;JZ)V")                                                    \
+ 880   do_signature(getByte_signature,         "(Ljava/lang/Object;J)B")                                                     \
+ 881   do_signature(putByte_signature,         "(Ljava/lang/Object;JB)V")                                                    \
+ 882   do_signature(getShort_signature,        "(Ljava/lang/Object;J)S")                                                     \
+ 883   do_signature(putShort_signature,        "(Ljava/lang/Object;JS)V")                                                    \
+ 884   do_signature(getChar_signature,         "(Ljava/lang/Object;J)C")                                                     \
+ 885   do_signature(putChar_signature,         "(Ljava/lang/Object;JC)V")                                                    \
+ 886   do_signature(getInt_signature,          "(Ljava/lang/Object;J)I")                                                     \
+ 887   do_signature(putInt_signature,          "(Ljava/lang/Object;JI)V")                                                    \
+ 888   do_signature(getLong_signature,         "(Ljava/lang/Object;J)J")                                                     \
+ 889   do_signature(putLong_signature,         "(Ljava/lang/Object;JJ)V")                                                    \
+ 890   do_signature(getFloat_signature,        "(Ljava/lang/Object;J)F")                                                     \
+ 891   do_signature(putFloat_signature,        "(Ljava/lang/Object;JF)V")                                                    \
+ 892   do_signature(getDouble_signature,       "(Ljava/lang/Object;J)D")                                                     \
+ 893   do_signature(putDouble_signature,       "(Ljava/lang/Object;JD)V")                                                    \
+ 894                                                                                                                         \
+ 895   do_name(getObject_name,"getObject")           do_name(putObject_name,"putObject")                                     \
+ 896   do_name(getBoolean_name,"getBoolean")         do_name(putBoolean_name,"putBoolean")                                   \
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 227   template(modifiers_name,                            "modifiers")                                \
+ 228   template(newConstructor_name,                       "newConstructor")                           \
+ 229   template(newConstructor_signature,                  "(Lsun/reflect/MethodInfo;)Ljava/lang/reflect/Constructor;") \
+ 230   template(newField_name,                             "newField")                                 \
+ 231   template(newField_signature,                        "(Lsun/reflect/FieldInfo;)Ljava/lang/reflect/Field;") \
+ 232   template(newMethod_name,                            "newMethod")                                \
+ 233   template(newMethod_signature,                       "(Lsun/reflect/MethodInfo;)Ljava/lang/reflect/Method;") \
+ 234   template(invokeBasic_name,                          "invokeBasic")                              \
+ 235   template(linkToVirtual_name,                        "linkToVirtual")                            \
+ 236   template(linkToStatic_name,                         "linkToStatic")                             \
+ 237   template(linkToSpecial_name,                        "linkToSpecial")                            \
+ 238   template(linkToInterface_name,                      "linkToInterface")                          \
+ 239   template(compiledLambdaForm_name,                   "&lt;compiledLambdaForm&gt;")  /*fake name*/      \
+ 240   template(star_name,                                 "*") /*not really a name*/                  \
+ 241   template(invoke_name,                               "invoke")                                   \
+ 242   template(override_name,                             "override")                                 \
+ 243   template(parameterTypes_name,                       "parameterTypes")                           \
+ 244   template(returnType_name,                           "returnType")                               \
+ 245   template(signature_name,                            "signature")                                \
+ 246   template(slot_name,                                 "slot")                                     \
+<span class="new"> 247   template(selectAlternative_name,                    "selectAlternative")                        \</span>
+ 248                                                                                                   \
+ 249   /* Support for annotations (JDK 1.5 and above) */                                               \
+ 250                                                                                                   \
+ 251   template(annotations_name,                          "annotations")                              \
+ 252   template(index_name,                                "index")                                    \
+ 253   template(executable_name,                           "executable")                               \
+ 254   template(parameter_annotations_name,                "parameterAnnotations")                     \
+ 255   template(annotation_default_name,                   "annotationDefault")                        \
+ 256   template(sun_reflect_ConstantPool,                  "sun/reflect/ConstantPool")                 \
+ 257   template(ConstantPool_name,                         "constantPoolOop")                          \
+ 258   template(sun_reflect_UnsafeStaticFieldAccessorImpl, "sun/reflect/UnsafeStaticFieldAccessorImpl")\
+ 259   template(base_name,                                 "base")                                     \
+ 260   /* Type Annotations (JDK 8 and above) */                                                        \
+ 261   template(type_annotations_name,                     "typeAnnotations")                          \
+ 262                                                                                                   \
+ 263                                                                                                   \
+ 264   /* Support for JSR 292 &amp; invokedynamic (JDK 1.7 and above) */                                   \
+ 265   template(java_lang_invoke_CallSite,                 "java/lang/invoke/CallSite")                \
+ 266   template(java_lang_invoke_ConstantCallSite,         "java/lang/invoke/ConstantCallSite")        \
+ 267   template(java_lang_invoke_DirectMethodHandle,       "java/lang/invoke/DirectMethodHandle")      \
+
+</pre><hr></hr><pre>
+ 279   template(java_lang_invoke_LambdaForm,               "java/lang/invoke/LambdaForm")              \
+ 280   template(java_lang_invoke_ForceInline_signature,    "Ljava/lang/invoke/ForceInline;")           \
+ 281   template(java_lang_invoke_DontInline_signature,     "Ljava/lang/invoke/DontInline;")            \
+ 282   template(java_lang_invoke_Stable_signature,         "Ljava/lang/invoke/Stable;")                \
+ 283   template(java_lang_invoke_LambdaForm_Compiled_signature, "Ljava/lang/invoke/LambdaForm$Compiled;") \
+ 284   template(java_lang_invoke_LambdaForm_Hidden_signature, "Ljava/lang/invoke/LambdaForm$Hidden;")  \
+ 285   /* internal up-calls made only by the JVM, via class sun.invoke.MethodHandleNatives: */         \
+ 286   template(findMethodHandleType_name,                 "findMethodHandleType")                     \
+ 287   template(findMethodHandleType_signature,       "(Ljava/lang/Class;[Ljava/lang/Class;)Ljava/lang/invoke/MethodType;") \
+ 288   template(linkMethodHandleConstant_name,             "linkMethodHandleConstant")                 \
+ 289   template(linkMethodHandleConstant_signature, "(Ljava/lang/Class;ILjava/lang/Class;Ljava/lang/String;Ljava/lang/Object;)Ljava/lang/invoke/MethodHandle;") \
+ 290   template(linkMethod_name,                           "linkMethod")                               \
+ 291   template(linkMethod_signature, "(Ljava/lang/Class;ILjava/lang/Class;Ljava/lang/String;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/invoke/MemberName;") \
+ 292   template(linkCallSite_name,                         "linkCallSite")                             \
+ 293   template(linkCallSite_signature, "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/invoke/MemberName;") \
+ 294   template(setTargetNormal_name,                      "setTargetNormal")                          \
+ 295   template(setTargetVolatile_name,                    "setTargetVolatile")                        \
+ 296   template(setTarget_signature,                       "(Ljava/lang/invoke/MethodHandle;)V")       \
+ 297   NOT_LP64(  do_alias(intptr_signature,               int_signature)  )                           \
+ 298   LP64_ONLY( do_alias(intptr_signature,               long_signature) )                           \
+<span class="new"> 299   template(selectAlternative_signature, "(ZLjava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodHandle;)Ljava/lang/invoke/MethodHandle;") \</span>
+ 300                                                                       \
+ 301   /* common method and field names */                                                             \
+ 302   template(object_initializer_name,                   "&lt;init&gt;")                                   \
+ 303   template(class_initializer_name,                    "&lt;clinit&gt;")                                 \
+ 304   template(println_name,                              "println")                                  \
+ 305   template(printStackTrace_name,                      "printStackTrace")                          \
+ 306   template(main_name,                                 "main")                                     \
+ 307   template(name_name,                                 "name")                                     \
+ 308   template(priority_name,                             "priority")                                 \
+ 309   template(stillborn_name,                            "stillborn")                                \
+ 310   template(group_name,                                "group")                                    \
+ 311   template(daemon_name,                               "daemon")                                   \
+ 312   template(eetop_name,                                "eetop")                                    \
+ 313   template(thread_status_name,                        "threadStatus")                             \
+ 314   template(run_method_name,                           "run")                                      \
+ 315   template(exit_method_name,                          "exit")                                     \
+ 316   template(add_method_name,                           "add")                                      \
+ 317   template(remove_method_name,                        "remove")                                   \
+ 318   template(parent_name,                               "parent")                                   \
+ 319   template(threads_name,                              "threads")                                  \
+
+</pre><hr></hr><pre>
+ 460   template(object_int_signature,                      "(Ljava/lang/Object;)I")                    \
+ 461   template(object_boolean_signature,                  "(Ljava/lang/Object;)Z")                    \
+ 462   template(string_void_signature,                     "(Ljava/lang/String;)V")                    \
+ 463   template(string_int_signature,                      "(Ljava/lang/String;)I")                    \
+ 464   template(throwable_void_signature,                  "(Ljava/lang/Throwable;)V")                 \
+ 465   template(void_throwable_signature,                  "()Ljava/lang/Throwable;")                  \
+ 466   template(throwable_throwable_signature,             "(Ljava/lang/Throwable;)Ljava/lang/Throwable;")             \
+ 467   template(class_void_signature,                      "(Ljava/lang/Class;)V")                     \
+ 468   template(class_int_signature,                       "(Ljava/lang/Class;)I")                     \
+ 469   template(class_long_signature,                      "(Ljava/lang/Class;)J")                     \
+ 470   template(class_boolean_signature,                   "(Ljava/lang/Class;)Z")                     \
+ 471   template(throwable_string_void_signature,           "(Ljava/lang/Throwable;Ljava/lang/String;)V")               \
+ 472   template(string_array_void_signature,               "([Ljava/lang/String;)V")                                   \
+ 473   template(string_array_string_array_void_signature,  "([Ljava/lang/String;[Ljava/lang/String;)V")                \
+ 474   template(thread_throwable_void_signature,           "(Ljava/lang/Thread;Ljava/lang/Throwable;)V")               \
+ 475   template(thread_void_signature,                     "(Ljava/lang/Thread;)V")                                    \
+ 476   template(threadgroup_runnable_void_signature,       "(Ljava/lang/ThreadGroup;Ljava/lang/Runnable;)V")           \
+ 477   template(threadgroup_string_void_signature,         "(Ljava/lang/ThreadGroup;Ljava/lang/String;)V")             \
+ 478   template(string_class_signature,                    "(Ljava/lang/String;)Ljava/lang/Class;")                    \
+ 479   template(object_object_object_signature,            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;") \
+<span class="new"> 480   template(object_long_object_signature,              "(Ljava/lang/Object;J)Ljava/lang/Object;")                  \</span>
+ 481   template(string_string_string_signature,            "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;") \
+ 482   template(string_string_signature,                   "(Ljava/lang/String;)Ljava/lang/String;")                   \
+ 483   template(classloader_string_long_signature,         "(Ljava/lang/ClassLoader;Ljava/lang/String;)J")             \
+ 484   template(byte_array_void_signature,                 "([B)V")                                                    \
+ 485   template(char_array_void_signature,                 "([C)V")                                                    \
+ 486   template(int_int_void_signature,                    "(II)V")                                                    \
+ 487   template(long_long_void_signature,                  "(JJ)V")                                                    \
+ 488   template(void_classloader_signature,                "()Ljava/lang/ClassLoader;")                                \
+ 489   template(void_object_signature,                     "()Ljava/lang/Object;")                                     \
+ 490   template(void_class_signature,                      "()Ljava/lang/Class;")                                      \
+ 491   template(void_class_array_signature,                "()[Ljava/lang/Class;")                                     \
+ 492   template(void_string_signature,                     "()Ljava/lang/String;")                                     \
+ 493   template(object_array_object_signature,             "([Ljava/lang/Object;)Ljava/lang/Object;")                  \
+ 494   template(object_object_array_object_signature,      "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;")\
+ 495   template(exception_void_signature,                  "(Ljava/lang/Exception;)V")                                 \
+ 496   template(protectiondomain_signature,                "[Ljava/security/ProtectionDomain;")                        \
+ 497   template(accesscontrolcontext_signature,            "Ljava/security/AccessControlContext;")                     \
+ 498   template(class_protectiondomain_signature,          "(Ljava/lang/Class;Ljava/security/ProtectionDomain;)V")     \
+ 499   template(thread_signature,                          "Ljava/lang/Thread;")                                       \
+ 500   template(thread_array_signature,                    "[Ljava/lang/Thread;")                                      \
+
+</pre><hr></hr><pre>
+ 575   template(createMemoryManager_name,                   "createMemoryManager")                                     \
+ 576   template(createGarbageCollector_name,                "createGarbageCollector")                                  \
+ 577   template(createMemoryPool_signature,                 "(Ljava/lang/String;ZJJ)Ljava/lang/management/MemoryPoolMXBean;") \
+ 578   template(createMemoryManager_signature,              "(Ljava/lang/String;)Ljava/lang/management/MemoryManagerMXBean;") \
+ 579   template(createGarbageCollector_signature,           "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/management/GarbageCollectorMXBean;") \
+ 580   template(addThreadDumpForMonitors_name,              "addThreadDumpForMonitors")                                \
+ 581   template(addThreadDumpForSynchronizers_name,         "addThreadDumpForSynchronizers")                           \
+ 582   template(addThreadDumpForMonitors_signature,         "(Ljava/lang/management/ThreadInfo;[Ljava/lang/Object;[I)V") \
+ 583   template(addThreadDumpForSynchronizers_signature,    "(Ljava/lang/management/ThreadInfo;[Ljava/lang/Object;)V")   \
+ 584                                                                                                                   \
+ 585   /* JVMTI/java.lang.instrument support and VM Attach mechanism */                                                \
+ 586   template(sun_misc_VMSupport,                         "sun/misc/VMSupport")                                      \
+ 587   template(appendToClassPathForInstrumentation_name,   "appendToClassPathForInstrumentation")                     \
+ 588   do_alias(appendToClassPathForInstrumentation_signature, string_void_signature)                                  \
+ 589   template(serializePropertiesToByteArray_name,        "serializePropertiesToByteArray")                          \
+ 590   template(serializePropertiesToByteArray_signature,   "()[B")                                                    \
+ 591   template(serializeAgentPropertiesToByteArray_name,   "serializeAgentPropertiesToByteArray")                     \
+ 592   template(classRedefinedCount_name,                   "classRedefinedCount")                                     \
+ 593   template(classLoader_name,                           "classLoader")                                             \
+ 594                                                                                                                   \
+<span class="new"> 595   /* ObjectLayout support */                                                                                      \</span>
+<span class="new"> 596   template(org_ObjectLayout_AbstractStructuredArray,   "org/ObjectLayout/AbstractStructuredArray")                \</span>
+<span class="new"> 597   template(existenceIndicatesIntrinsic_name,           "existenceIndicatesIntrinsic")                             \</span>
+<span class="new"> 598   template(bodySize_name,                              "bodySize")                                                \</span>
+<span class="new"> 599   template(length_name,                                "length")                                                  \</span>
+<span class="new"> 600   template(elementSize_name,                           "elementSize")                                             \</span>
+<span class="new"> 601   template(paddingSize_name,                           "paddingSize")                                             \</span>
+<span class="new"> 602   template(elementClass_name,                          "elementClass")                                            \</span>
+<span class="new"> 603                                                                                                                   \</span>
+ 604   /* trace signatures */                                                                                          \
+ 605   TRACE_TEMPLATES(template)                                                                                       \
+ 606                                                                                                                   \
+ 607   /*end*/
+ 608 
+ 609 // Here are all the intrinsics known to the runtime and the CI.
+ 610 // Each intrinsic consists of a public enum name (like _hashCode),
+ 611 // followed by a specification of its klass, name, and signature:
+ 612 //    template(&lt;id&gt;,  &lt;klass&gt;,  &lt;name&gt;, &lt;sig&gt;, &lt;FCODE&gt;)
+ 613 //
+ 614 // If you add an intrinsic here, you must also define its name
+ 615 // and signature as members of the VM symbols.  The VM symbols for
+ 616 // the intrinsic name and signature may be defined above.
+ 617 //
+ 618 // Because the VM_SYMBOLS_DO macro makes reference to VM_INTRINSICS_DO,
+ 619 // you can also define an intrinsic's name and/or signature locally to the
+ 620 // intrinsic, if this makes sense.  (It often does make sense.)
+ 621 //
+ 622 // For example:
+ 623 //    do_intrinsic(_foo,  java_lang_Object,  foo_name, foo_signature, F_xx)
+
+</pre><hr></hr><pre>
+ 861    do_signature(allocateInstance_signature,   "(Ljava/lang/Class;)Ljava/lang/Object;")                                  \
+ 862   do_intrinsic(_copyMemory,               sun_misc_Unsafe,        copyMemory_name, copyMemory_signature,         F_RN)  \
+ 863    do_name(     copyMemory_name,                                 "copyMemory")                                          \
+ 864    do_signature(copyMemory_signature,         "(Ljava/lang/Object;JLjava/lang/Object;JJ)V")                             \
+ 865   do_intrinsic(_park,                     sun_misc_Unsafe,        park_name, park_signature,                     F_RN)  \
+ 866    do_name(     park_name,                                       "park")                                                \
+ 867    do_signature(park_signature,                                  "(ZJ)V")                                               \
+ 868   do_intrinsic(_unpark,                   sun_misc_Unsafe,        unpark_name, unpark_signature,                 F_RN)  \
+ 869    do_name(     unpark_name,                                     "unpark")                                              \
+ 870    do_alias(    unpark_signature,                               /*(LObject;)V*/ object_void_signature)                  \
+ 871   do_intrinsic(_loadFence,                sun_misc_Unsafe,        loadFence_name, loadFence_signature,           F_RN)  \
+ 872    do_name(     loadFence_name,                                  "loadFence")                                           \
+ 873    do_alias(    loadFence_signature,                              void_method_signature)                                \
+ 874   do_intrinsic(_storeFence,               sun_misc_Unsafe,        storeFence_name, storeFence_signature,         F_RN)  \
+ 875    do_name(     storeFence_name,                                 "storeFence")                                          \
+ 876    do_alias(    storeFence_signature,                             void_method_signature)                                \
+ 877   do_intrinsic(_fullFence,                sun_misc_Unsafe,        fullFence_name, fullFence_signature,           F_RN)  \
+ 878    do_name(     fullFence_name,                                  "fullFence")                                           \
+ 879    do_alias(    fullFence_signature,                              void_method_signature)                                \
+ 880                                                                                                                         \
+<span class="changed"> 881   /* ObjectLayout intrinsics */                                                                                         \</span>
+<span class="changed"> 882    do_signature(class_long_long_long_signature,                  "(Ljava/lang/Class;JJ)J")                              \</span>
+<span class="changed"> 883   do_intrinsic(_getInstanceSize,                                  sun_misc_Unsafe, getInstanceSize_name, class_long_signature, F_RN) \</span>
+<span class="changed"> 884    do_name(     getInstanceSize_name,                            "getInstanceSize")                                     \</span>
+<span class="changed"> 885   do_intrinsic(_getInstanceFootprintWhenContained,                sun_misc_Unsafe, getInstanceFootprintWhenContained_name, class_long_signature, F_RN) \</span>
+<span class="changed"> 886    do_name(     getInstanceFootprintWhenContained_name,          "getInstanceFootprintWhenContained")                   \</span>
+<span class="changed"> 887   do_intrinsic(_getContainingObjectFootprint,                     sun_misc_Unsafe, getContainingObjectFootprint_name, class_long_long_long_signature, F_RN) \</span>
+<span class="changed"> 888    do_name(     getContainingObjectFootprint_name,               "getContainingObjectFootprint")                        \</span>
+<span class="changed"> 889   do_intrinsic(_getContainingObjectFootprintWhenContained,        sun_misc_Unsafe, getContainingObjectFootprintWhenContained_name, class_long_long_long_signature, F_RN) \</span>
+<span class="changed"> 890    do_name(     getContainingObjectFootprintWhenContained_name,  "getContainingObjectFootprintWhenContained")           \</span>
+<span class="changed"> 891   do_intrinsic(_getPrePaddingInObjectFootprint,                   sun_misc_Unsafe, getPrePaddingInObjectFootprint_name, long_long_signature, F_RN) \</span>
+<span class="changed"> 892    do_name(     getPrePaddingInObjectFootprint_name,             "getPrePaddingInObjectFootprint")                      \</span>
+<span class="changed"> 893   do_intrinsic(_allocateHeapForElementArrayClass,                 sun_misc_Unsafe, allocateHeapForElementArrayClass_name, allocateHeapForElementArrayClass_signature, F_RN) \</span>
+<span class="changed"> 894    do_name(     allocateHeapForElementArrayClass_name,           "allocateHeapForElementArrayClass")                    \</span>
+<span class="changed"> 895    do_signature(allocateHeapForElementArrayClass_signature,      "(Ljava/lang/Class;[J[Ljava/lang/Class;)Ljava/lang/Object;") \</span>
+<span class="changed"> 896   do_intrinsic(_constructObjectAtOffset,                          sun_misc_Unsafe, constructObjectAtOffset_name, constructObjectAtOffset_signature, F_RN) \</span>
+<span class="changed"> 897    do_name(     constructObjectAtOffset_name,                    "constructObjectAtOffset")                             \</span>
+<span class="changed"> 898    do_signature(constructObjectAtOffset_signature,               "(Ljava/lang/Object;JJZZJLjava/lang/reflect/Constructor;[Ljava/lang/Object;)V") \</span>
+<span class="changed"> 899   do_intrinsic(_deriveContainedObjectAtOffset,                    sun_misc_Unsafe, deriveContainedObjectAtOffset_name, object_long_object_signature, F_RN) \</span>
+<span class="changed"> 900    do_name(     deriveContainedObjectAtOffset_name,              "deriveContainedObjectAtOffset")                       \</span>
+ 901                                                                                                                         \
+ 902   /* unsafe memory references (there are a lot of them...) */                                                           \
+<span class="changed"> 903   do_alias(    getObject_signature,        object_long_object_signature)                                                \</span>
+ 904   do_signature(putObject_signature,       "(Ljava/lang/Object;JLjava/lang/Object;)V")                                   \
+ 905   do_signature(getBoolean_signature,      "(Ljava/lang/Object;J)Z")                                                     \
+ 906   do_signature(putBoolean_signature,      "(Ljava/lang/Object;JZ)V")                                                    \
+ 907   do_signature(getByte_signature,         "(Ljava/lang/Object;J)B")                                                     \
+ 908   do_signature(putByte_signature,         "(Ljava/lang/Object;JB)V")                                                    \
+ 909   do_signature(getShort_signature,        "(Ljava/lang/Object;J)S")                                                     \
+ 910   do_signature(putShort_signature,        "(Ljava/lang/Object;JS)V")                                                    \
+ 911   do_signature(getChar_signature,         "(Ljava/lang/Object;J)C")                                                     \
+ 912   do_signature(putChar_signature,         "(Ljava/lang/Object;JC)V")                                                    \
+ 913   do_signature(getInt_signature,          "(Ljava/lang/Object;J)I")                                                     \
+ 914   do_signature(putInt_signature,          "(Ljava/lang/Object;JI)V")                                                    \
+ 915   do_signature(getLong_signature,         "(Ljava/lang/Object;J)J")                                                     \
+ 916   do_signature(putLong_signature,         "(Ljava/lang/Object;JJ)V")                                                    \
+ 917   do_signature(getFloat_signature,        "(Ljava/lang/Object;J)F")                                                     \
+ 918   do_signature(putFloat_signature,        "(Ljava/lang/Object;JF)V")                                                    \
+ 919   do_signature(getDouble_signature,       "(Ljava/lang/Object;J)D")                                                     \
+ 920   do_signature(putDouble_signature,       "(Ljava/lang/Object;JD)V")                                                    \
+ 921                                                                                                                         \
+ 922   do_name(getObject_name,"getObject")           do_name(putObject_name,"putObject")                                     \
+ 923   do_name(getBoolean_name,"getBoolean")         do_name(putBoolean_name,"putBoolean")                                   \
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

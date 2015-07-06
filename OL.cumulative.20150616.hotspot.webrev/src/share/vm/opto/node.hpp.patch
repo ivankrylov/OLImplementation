@@ -1,0 +1,49 @@
+--- old/src/share/vm/opto/node.hpp	2015-06-16 10:25:48.298341506 -0700
++++ new/src/share/vm/opto/node.hpp	2015-06-16 10:25:48.218343446 -0700
+@@ -51,6 +51,8 @@
+ class CallNode;
+ class CallRuntimeNode;
+ class CallStaticJavaNode;
++class CastDerivedNode;
++class CastPPNode;
+ class CatchNode;
+ class CatchProjNode;
+ class CheckCastPPNode;
+@@ -98,7 +100,6 @@
+ class MachSafePointNode;
+ class MachSpillCopyNode;
+ class MachTempNode;
+-class MachMergeNode;
+ class Matcher;
+ class MemBarNode;
+ class MemBarStoreStoreNode;
+@@ -592,11 +593,12 @@
+       DEFINE_CLASS_ID(MachTemp,         Mach, 3)
+       DEFINE_CLASS_ID(MachConstantBase, Mach, 4)
+       DEFINE_CLASS_ID(MachConstant,     Mach, 5)
+-      DEFINE_CLASS_ID(MachMerge,        Mach, 6)
+ 
+     DEFINE_CLASS_ID(Type,  Node, 2)
+       DEFINE_CLASS_ID(Phi,   Type, 0)
+       DEFINE_CLASS_ID(ConstraintCast, Type, 1)
++        DEFINE_CLASS_ID(CastPP, ConstraintCast, 0)
++          DEFINE_CLASS_ID(CastDerived, CastPP, 0)
+       DEFINE_CLASS_ID(CheckCastPP, Type, 2)
+       DEFINE_CLASS_ID(CMove, Type, 3)
+       DEFINE_CLASS_ID(SafePointScalarObject, Type, 4)
+@@ -718,6 +720,7 @@
+   DEFINE_CLASS_QUERY(CallLeaf)
+   DEFINE_CLASS_QUERY(CallRuntime)
+   DEFINE_CLASS_QUERY(CallStaticJava)
++  DEFINE_CLASS_QUERY(CastDerived)
+   DEFINE_CLASS_QUERY(Catch)
+   DEFINE_CLASS_QUERY(CatchProj)
+   DEFINE_CLASS_QUERY(CheckCastPP)
+@@ -763,7 +766,6 @@
+   DEFINE_CLASS_QUERY(MachSafePoint)
+   DEFINE_CLASS_QUERY(MachSpillCopy)
+   DEFINE_CLASS_QUERY(MachTemp)
+-  DEFINE_CLASS_QUERY(MachMerge)
+   DEFINE_CLASS_QUERY(Mem)
+   DEFINE_CLASS_QUERY(MemBar)
+   DEFINE_CLASS_QUERY(MemBarStoreStore)

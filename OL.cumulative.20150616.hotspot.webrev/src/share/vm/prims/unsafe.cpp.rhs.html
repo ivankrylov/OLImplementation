@@ -1,0 +1,2545 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #include "precompiled.hpp"
+  26 #include "classfile/vmSymbols.hpp"
+  27 #include "utilities/macros.hpp"
+  28 #if INCLUDE_ALL_GCS
+  29 #include "gc_implementation/g1/g1SATBCardTableModRefBS.hpp"
+  30 #endif // INCLUDE_ALL_GCS
+  31 #include "memory/allocation.inline.hpp"
+  32 #include "prims/jni.h"
+  33 #include "prims/jvm.h"
+  34 #include "runtime/globals.hpp"
+  35 #include "runtime/interfaceSupport.hpp"
+  36 #include "runtime/prefetch.inline.hpp"
+  37 #include "runtime/orderAccess.inline.hpp"
+  38 #include "runtime/reflection.hpp"
+  39 #include "runtime/synchronizer.hpp"
+  40 #include "services/threadService.hpp"
+  41 #include "trace/tracing.hpp"
+  42 #include "utilities/copy.hpp"
+  43 #include "utilities/dtrace.hpp"
+  44 
+  45 PRAGMA_FORMAT_MUTE_WARNINGS_FOR_GCC
+  46 
+  47 /*
+  48  *      Implementation of class sun.misc.Unsafe
+  49  */
+  50 
+  51 #ifndef USDT2
+  52 HS_DTRACE_PROBE_DECL3(hotspot, thread__park__begin, uintptr_t, int, long long);
+  53 HS_DTRACE_PROBE_DECL1(hotspot, thread__park__end, uintptr_t);
+  54 HS_DTRACE_PROBE_DECL1(hotspot, thread__unpark, uintptr_t);
+  55 #endif /* !USDT2 */
+  56 
+  57 #define MAX_OBJECT_SIZE \
+  58   ( arrayOopDesc::header_size(T_DOUBLE) * HeapWordSize \
+  59     + ((julong)max_jint * sizeof(double)) )
+  60 
+  61 
+  62 #define UNSAFE_ENTRY(result_type, header) \
+  63   JVM_ENTRY(result_type, header)
+  64 
+  65 // Can't use UNSAFE_LEAF because it has the signature of a straight
+  66 // call into the runtime (just like JVM_LEAF, funny that) but it's
+  67 // called like a Java Native and thus the wrapper built for it passes
+  68 // arguments like a JNI call.  It expects those arguments to be popped
+  69 // from the stack on Intel like all good JNI args are, and adjusts the
+  70 // stack according.  Since the JVM_LEAF call expects no extra
+  71 // arguments the stack isn't popped in the C code, is pushed by the
+  72 // wrapper and we get sick.
+  73 //#define UNSAFE_LEAF(result_type, header) \
+  74 //  JVM_LEAF(result_type, header)
+  75 
+  76 #define UNSAFE_END JVM_END
+  77 
+  78 #define UnsafeWrapper(arg) /*nothing, for the present*/
+  79 
+  80 
+  81 inline void* addr_from_java(jlong addr) {
+  82   // This assert fails in a variety of ways on 32-bit systems.
+  83   // It is impossible to predict whether native code that converts
+  84   // pointers to longs will sign-extend or zero-extend the addresses.
+  85   //assert(addr == (uintptr_t)addr, "must not be odd high bits");
+  86   return (void*)(uintptr_t)addr;
+  87 }
+  88 
+  89 inline jlong addr_to_java(void* p) {
+  90   assert(p == (void*)(uintptr_t)p, "must not be odd high bits");
+  91   return (uintptr_t)p;
+  92 }
+  93 
+  94 
+  95 // Note: The VM's obj_field and related accessors use byte-scaled
+  96 // ("unscaled") offsets, just as the unsafe methods do.
+  97 
+  98 // However, the method Unsafe.fieldOffset explicitly declines to
+  99 // guarantee this.  The field offset values manipulated by the Java user
+ 100 // through the Unsafe API are opaque cookies that just happen to be byte
+ 101 // offsets.  We represent this state of affairs by passing the cookies
+ 102 // through conversion functions when going between the VM and the Unsafe API.
+ 103 // The conversion functions just happen to be no-ops at present.
+ 104 
+ 105 inline jlong field_offset_to_byte_offset(jlong field_offset) {
+ 106   return field_offset;
+ 107 }
+ 108 
+ 109 inline jlong field_offset_from_byte_offset(jlong byte_offset) {
+ 110   return byte_offset;
+ 111 }
+ 112 
+ 113 inline jint invocation_key_from_method_slot(jint slot) {
+ 114   return slot;
+ 115 }
+ 116 
+ 117 inline jint invocation_key_to_method_slot(jint key) {
+ 118   return key;
+ 119 }
+ 120 
+ 121 inline void* index_oop_from_field_offset_long(oop p, jlong field_offset) {
+ 122   jlong byte_offset = field_offset_to_byte_offset(field_offset);
+ 123 #ifdef ASSERT
+ 124   if (p != NULL) {
+ 125     assert(byte_offset &gt;= 0 &amp;&amp; byte_offset &lt;= (jlong)MAX_OBJECT_SIZE, "sane offset");
+ 126     if (byte_offset == (jint)byte_offset) {
+ 127       void* ptr_plus_disp = (address)p + byte_offset;
+ 128       assert((void*)p-&gt;obj_field_addr&lt;oop&gt;((jint)byte_offset) == ptr_plus_disp,
+ 129              "raw [ptr+disp] must be consistent with oop::field_base");
+ 130     }
+ 131     jlong p_size = HeapWordSize * (jlong)(p-&gt;size());
+ 132     assert(byte_offset &lt; p_size, err_msg("Unsafe access: offset " INT64_FORMAT " &gt; object's size " INT64_FORMAT, byte_offset, p_size));
+ 133   }
+ 134 #endif
+ 135   if (sizeof(char*) == sizeof(jint))    // (this constant folds!)
+ 136     return (address)p + (jint) byte_offset;
+ 137   else
+ 138     return (address)p +        byte_offset;
+ 139 }
+ 140 
+ 141 // Externally callable versions:
+ 142 // (Use these in compiler intrinsics which emulate unsafe primitives.)
+ 143 jlong Unsafe_field_offset_to_byte_offset(jlong field_offset) {
+ 144   return field_offset;
+ 145 }
+ 146 jlong Unsafe_field_offset_from_byte_offset(jlong byte_offset) {
+ 147   return byte_offset;
+ 148 }
+ 149 jint Unsafe_invocation_key_from_method_slot(jint slot) {
+ 150   return invocation_key_from_method_slot(slot);
+ 151 }
+ 152 jint Unsafe_invocation_key_to_method_slot(jint key) {
+ 153   return invocation_key_to_method_slot(key);
+ 154 }
+ 155 
+ 156 
+ 157 ///// Data in the Java heap.
+ 158 
+ 159 #define GET_FIELD(obj, offset, type_name, v) \
+ 160   oop p = JNIHandles::resolve(obj); \
+ 161   type_name v = *(type_name*)index_oop_from_field_offset_long(p, offset)
+ 162 
+ 163 #define SET_FIELD(obj, offset, type_name, x) \
+ 164   oop p = JNIHandles::resolve(obj); \
+ 165   *(type_name*)index_oop_from_field_offset_long(p, offset) = x
+ 166 
+ 167 #define GET_FIELD_VOLATILE(obj, offset, type_name, v) \
+ 168   oop p = JNIHandles::resolve(obj); \
+ 169   if (support_IRIW_for_not_multiple_copy_atomic_cpu) { \
+ 170     OrderAccess::fence(); \
+ 171   } \
+ 172   volatile type_name v = OrderAccess::load_acquire((volatile type_name*)index_oop_from_field_offset_long(p, offset));
+ 173 
+ 174 #define SET_FIELD_VOLATILE(obj, offset, type_name, x) \
+ 175   oop p = JNIHandles::resolve(obj); \
+ 176   OrderAccess::release_store_fence((volatile type_name*)index_oop_from_field_offset_long(p, offset), x);
+ 177 
+ 178 // Macros for oops that check UseCompressedOops
+ 179 
+ 180 #define GET_OOP_FIELD(obj, offset, v) \
+ 181   oop p = JNIHandles::resolve(obj);   \
+ 182   oop v;                              \
+ 183   if (UseCompressedOops) {            \
+ 184     narrowOop n = *(narrowOop*)index_oop_from_field_offset_long(p, offset); \
+ 185     v = oopDesc::decode_heap_oop(n);                                \
+ 186   } else {                            \
+ 187     v = *(oop*)index_oop_from_field_offset_long(p, offset);                 \
+ 188   }
+ 189 
+ 190 
+ 191 // Get/SetObject must be special-cased, since it works with handles.
+ 192 
+ 193 // The xxx140 variants for backward compatibility do not allow a full-width offset.
+ 194 UNSAFE_ENTRY(jobject, Unsafe_GetObject140(JNIEnv *env, jobject unsafe, jobject obj, jint offset))
+ 195   UnsafeWrapper("Unsafe_GetObject");
+ 196   if (obj == NULL)  THROW_0(vmSymbols::java_lang_NullPointerException());
+ 197   GET_OOP_FIELD(obj, offset, v)
+ 198   jobject ret = JNIHandles::make_local(env, v);
+ 199 #if INCLUDE_ALL_GCS
+ 200   // We could be accessing the referent field in a reference
+ 201   // object. If G1 is enabled then we need to register a non-null
+ 202   // referent with the SATB barrier.
+ 203   if (UseG1GC) {
+ 204     bool needs_barrier = false;
+ 205 
+ 206     if (ret != NULL) {
+ 207       if (offset == java_lang_ref_Reference::referent_offset) {
+ 208         oop o = JNIHandles::resolve_non_null(obj);
+ 209         Klass* k = o-&gt;klass();
+ 210         if (InstanceKlass::cast(k)-&gt;reference_type() != REF_NONE) {
+ 211           assert(InstanceKlass::cast(k)-&gt;is_subclass_of(SystemDictionary::Reference_klass()), "sanity");
+ 212           needs_barrier = true;
+ 213         }
+ 214       }
+ 215     }
+ 216 
+ 217     if (needs_barrier) {
+ 218       oop referent = JNIHandles::resolve(ret);
+ 219       G1SATBCardTableModRefBS::enqueue(referent);
+ 220     }
+ 221   }
+ 222 #endif // INCLUDE_ALL_GCS
+ 223   return ret;
+ 224 UNSAFE_END
+ 225 
+ 226 UNSAFE_ENTRY(void, Unsafe_SetObject140(JNIEnv *env, jobject unsafe, jobject obj, jint offset, jobject x_h))
+ 227   UnsafeWrapper("Unsafe_SetObject");
+ 228   if (obj == NULL)  THROW(vmSymbols::java_lang_NullPointerException());
+ 229   oop x = JNIHandles::resolve(x_h);
+ 230   //SET_FIELD(obj, offset, oop, x);
+ 231   oop p = JNIHandles::resolve(obj);
+ 232   if (UseCompressedOops) {
+ 233     if (x != NULL) {
+ 234       // If there is a heap base pointer, we are obliged to emit a store barrier.
+ 235       oop_store((narrowOop*)index_oop_from_field_offset_long(p, offset), x);
+ 236     } else {
+ 237       narrowOop n = oopDesc::encode_heap_oop_not_null(x);
+ 238       *(narrowOop*)index_oop_from_field_offset_long(p, offset) = n;
+ 239     }
+ 240   } else {
+ 241     if (x != NULL) {
+ 242       // If there is a heap base pointer, we are obliged to emit a store barrier.
+ 243       oop_store((oop*)index_oop_from_field_offset_long(p, offset), x);
+ 244     } else {
+ 245       *(oop*)index_oop_from_field_offset_long(p, offset) = x;
+ 246     }
+ 247   }
+ 248 UNSAFE_END
+ 249 
+ 250 // The normal variants allow a null base pointer with an arbitrary address.
+ 251 // But if the base pointer is non-null, the offset should make some sense.
+ 252 // That is, it should be in the range [0, MAX_OBJECT_SIZE].
+ 253 UNSAFE_ENTRY(jobject, Unsafe_GetObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset))
+ 254   UnsafeWrapper("Unsafe_GetObject");
+ 255   GET_OOP_FIELD(obj, offset, v)
+ 256   jobject ret = JNIHandles::make_local(env, v);
+ 257 #if INCLUDE_ALL_GCS
+ 258   // We could be accessing the referent field in a reference
+ 259   // object. If G1 is enabled then we need to register non-null
+ 260   // referent with the SATB barrier.
+ 261   if (UseG1GC) {
+ 262     bool needs_barrier = false;
+ 263 
+ 264     if (ret != NULL) {
+ 265       if (offset == java_lang_ref_Reference::referent_offset &amp;&amp; obj != NULL) {
+ 266         oop o = JNIHandles::resolve(obj);
+ 267         Klass* k = o-&gt;klass();
+ 268         if (InstanceKlass::cast(k)-&gt;reference_type() != REF_NONE) {
+ 269           assert(InstanceKlass::cast(k)-&gt;is_subclass_of(SystemDictionary::Reference_klass()), "sanity");
+ 270           needs_barrier = true;
+ 271         }
+ 272       }
+ 273     }
+ 274 
+ 275     if (needs_barrier) {
+ 276       oop referent = JNIHandles::resolve(ret);
+ 277       G1SATBCardTableModRefBS::enqueue(referent);
+ 278     }
+ 279   }
+ 280 #endif // INCLUDE_ALL_GCS
+ 281   return ret;
+ 282 UNSAFE_END
+ 283 
+ 284 UNSAFE_ENTRY(void, Unsafe_SetObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject x_h))
+ 285   UnsafeWrapper("Unsafe_SetObject");
+ 286   oop x = JNIHandles::resolve(x_h);
+ 287   oop p = JNIHandles::resolve(obj);
+ 288   if (UseCompressedOops) {
+ 289     oop_store((narrowOop*)index_oop_from_field_offset_long(p, offset), x);
+ 290   } else {
+ 291     oop_store((oop*)index_oop_from_field_offset_long(p, offset), x);
+ 292   }
+ 293 UNSAFE_END
+ 294 
+ 295 UNSAFE_ENTRY(jobject, Unsafe_GetObjectVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset))
+ 296   UnsafeWrapper("Unsafe_GetObjectVolatile");
+ 297   oop p = JNIHandles::resolve(obj);
+ 298   void* addr = index_oop_from_field_offset_long(p, offset);
+ 299   volatile oop v;
+ 300   if (UseCompressedOops) {
+ 301     volatile narrowOop n = *(volatile narrowOop*) addr;
+ 302     (void)const_cast&lt;oop&amp;&gt;(v = oopDesc::decode_heap_oop(n));
+ 303   } else {
+ 304     (void)const_cast&lt;oop&amp;&gt;(v = *(volatile oop*) addr);
+ 305   }
+ 306   OrderAccess::acquire();
+ 307   return JNIHandles::make_local(env, v);
+ 308 UNSAFE_END
+ 309 
+ 310 UNSAFE_ENTRY(void, Unsafe_SetObjectVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject x_h))
+ 311   UnsafeWrapper("Unsafe_SetObjectVolatile");
+ 312   oop x = JNIHandles::resolve(x_h);
+ 313   oop p = JNIHandles::resolve(obj);
+ 314   void* addr = index_oop_from_field_offset_long(p, offset);
+ 315   OrderAccess::release();
+ 316   if (UseCompressedOops) {
+ 317     oop_store((narrowOop*)addr, x);
+ 318   } else {
+ 319     oop_store((oop*)addr, x);
+ 320   }
+ 321   OrderAccess::fence();
+ 322 UNSAFE_END
+ 323 
+ 324 #ifndef SUPPORTS_NATIVE_CX8
+<a name="1" id="anc1"></a><span class="new"> 325 // Keep old code for platforms which may not have atomic jlong (8 bytes) instructions</span>
+ 326 
+<a name="2" id="anc2"></a><span class="changed"> 327 // Volatile long versions must use locks if !VM_Version::supports_cx8().</span>
+<span class="changed"> 328 // support_cx8 is a surrogate for 'supports atomic long memory ops'.</span>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 329 
+ 330 UNSAFE_ENTRY(jlong, Unsafe_GetLongVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset))
+ 331   UnsafeWrapper("Unsafe_GetLongVolatile");
+ 332   {
+ 333     if (VM_Version::supports_cx8()) {
+ 334       GET_FIELD_VOLATILE(obj, offset, jlong, v);
+ 335       return v;
+ 336     }
+ 337     else {
+ 338       Handle p (THREAD, JNIHandles::resolve(obj));
+ 339       jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+<a name="3" id="anc3"></a><span class="changed"> 340       ObjectLocker ol(p, THREAD);</span>
+<span class="changed"> 341       jlong value = *addr;</span>
+ 342       return value;
+ 343     }
+ 344   }
+ 345 UNSAFE_END
+ 346 
+ 347 UNSAFE_ENTRY(void, Unsafe_SetLongVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong x))
+ 348   UnsafeWrapper("Unsafe_SetLongVolatile");
+ 349   {
+ 350     if (VM_Version::supports_cx8()) {
+ 351       SET_FIELD_VOLATILE(obj, offset, jlong, x);
+ 352     }
+ 353     else {
+ 354       Handle p (THREAD, JNIHandles::resolve(obj));
+ 355       jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+<a name="4" id="anc4"></a><span class="changed"> 356       ObjectLocker ol(p, THREAD);</span>
+<span class="changed"> 357       *addr = x;</span>
+ 358     }
+ 359   }
+ 360 UNSAFE_END
+ 361 
+ 362 #endif // not SUPPORTS_NATIVE_CX8
+ 363 
+ 364 #define DEFINE_GETSETOOP(jboolean, Boolean) \
+ 365  \
+ 366 UNSAFE_ENTRY(jboolean, Unsafe_Get##Boolean##140(JNIEnv *env, jobject unsafe, jobject obj, jint offset)) \
+ 367   UnsafeWrapper("Unsafe_Get"#Boolean); \
+ 368   if (obj == NULL)  THROW_0(vmSymbols::java_lang_NullPointerException()); \
+ 369   GET_FIELD(obj, offset, jboolean, v); \
+ 370   return v; \
+ 371 UNSAFE_END \
+ 372  \
+ 373 UNSAFE_ENTRY(void, Unsafe_Set##Boolean##140(JNIEnv *env, jobject unsafe, jobject obj, jint offset, jboolean x)) \
+ 374   UnsafeWrapper("Unsafe_Set"#Boolean); \
+ 375   if (obj == NULL)  THROW(vmSymbols::java_lang_NullPointerException()); \
+ 376   SET_FIELD(obj, offset, jboolean, x); \
+ 377 UNSAFE_END \
+ 378  \
+ 379 UNSAFE_ENTRY(jboolean, Unsafe_Get##Boolean(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) \
+ 380   UnsafeWrapper("Unsafe_Get"#Boolean); \
+ 381   GET_FIELD(obj, offset, jboolean, v); \
+ 382   return v; \
+ 383 UNSAFE_END \
+ 384  \
+ 385 UNSAFE_ENTRY(void, Unsafe_Set##Boolean(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jboolean x)) \
+ 386   UnsafeWrapper("Unsafe_Set"#Boolean); \
+ 387   SET_FIELD(obj, offset, jboolean, x); \
+ 388 UNSAFE_END \
+ 389  \
+ 390 // END DEFINE_GETSETOOP.
+ 391 
+ 392 DEFINE_GETSETOOP(jboolean, Boolean)
+ 393 DEFINE_GETSETOOP(jbyte, Byte)
+ 394 DEFINE_GETSETOOP(jshort, Short);
+ 395 DEFINE_GETSETOOP(jchar, Char);
+ 396 DEFINE_GETSETOOP(jint, Int);
+ 397 DEFINE_GETSETOOP(jlong, Long);
+ 398 DEFINE_GETSETOOP(jfloat, Float);
+ 399 DEFINE_GETSETOOP(jdouble, Double);
+ 400 
+ 401 #undef DEFINE_GETSETOOP
+ 402 
+ 403 #define DEFINE_GETSETOOP_VOLATILE(jboolean, Boolean) \
+ 404  \
+ 405 UNSAFE_ENTRY(jboolean, Unsafe_Get##Boolean##Volatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) \
+ 406   UnsafeWrapper("Unsafe_Get"#Boolean); \
+ 407   GET_FIELD_VOLATILE(obj, offset, jboolean, v); \
+ 408   return v; \
+ 409 UNSAFE_END \
+ 410  \
+ 411 UNSAFE_ENTRY(void, Unsafe_Set##Boolean##Volatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jboolean x)) \
+ 412   UnsafeWrapper("Unsafe_Set"#Boolean); \
+ 413   SET_FIELD_VOLATILE(obj, offset, jboolean, x); \
+ 414 UNSAFE_END \
+ 415  \
+ 416 // END DEFINE_GETSETOOP_VOLATILE.
+ 417 
+ 418 DEFINE_GETSETOOP_VOLATILE(jboolean, Boolean)
+ 419 DEFINE_GETSETOOP_VOLATILE(jbyte, Byte)
+ 420 DEFINE_GETSETOOP_VOLATILE(jshort, Short);
+ 421 DEFINE_GETSETOOP_VOLATILE(jchar, Char);
+ 422 DEFINE_GETSETOOP_VOLATILE(jint, Int);
+ 423 DEFINE_GETSETOOP_VOLATILE(jfloat, Float);
+ 424 DEFINE_GETSETOOP_VOLATILE(jdouble, Double);
+ 425 
+ 426 #ifdef SUPPORTS_NATIVE_CX8
+ 427 DEFINE_GETSETOOP_VOLATILE(jlong, Long);
+ 428 #endif
+ 429 
+ 430 #undef DEFINE_GETSETOOP_VOLATILE
+ 431 
+ 432 // The non-intrinsified versions of setOrdered just use setVolatile
+ 433 
+ 434 UNSAFE_ENTRY(void, Unsafe_SetOrderedInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jint x))
+ 435   UnsafeWrapper("Unsafe_SetOrderedInt");
+ 436   SET_FIELD_VOLATILE(obj, offset, jint, x);
+ 437 UNSAFE_END
+ 438 
+ 439 UNSAFE_ENTRY(void, Unsafe_SetOrderedObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject x_h))
+ 440   UnsafeWrapper("Unsafe_SetOrderedObject");
+ 441   oop x = JNIHandles::resolve(x_h);
+ 442   oop p = JNIHandles::resolve(obj);
+ 443   void* addr = index_oop_from_field_offset_long(p, offset);
+ 444   OrderAccess::release();
+ 445   if (UseCompressedOops) {
+ 446     oop_store((narrowOop*)addr, x);
+ 447   } else {
+ 448     oop_store((oop*)addr, x);
+ 449   }
+ 450   OrderAccess::fence();
+ 451 UNSAFE_END
+ 452 
+ 453 UNSAFE_ENTRY(void, Unsafe_SetOrderedLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong x))
+ 454   UnsafeWrapper("Unsafe_SetOrderedLong");
+ 455 #ifdef SUPPORTS_NATIVE_CX8
+ 456   SET_FIELD_VOLATILE(obj, offset, jlong, x);
+ 457 #else
+ 458   // Keep old code for platforms which may not have atomic long (8 bytes) instructions
+ 459   {
+ 460     if (VM_Version::supports_cx8()) {
+ 461       SET_FIELD_VOLATILE(obj, offset, jlong, x);
+ 462     }
+ 463     else {
+ 464       Handle p (THREAD, JNIHandles::resolve(obj));
+ 465       jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+<a name="5" id="anc5"></a><span class="changed"> 466       ObjectLocker ol(p, THREAD);</span>
+<span class="changed"> 467       *addr = x;</span>
+ 468     }
+ 469   }
+ 470 #endif
+ 471 UNSAFE_END
+ 472 
+ 473 UNSAFE_ENTRY(void, Unsafe_LoadFence(JNIEnv *env, jobject unsafe))
+ 474   UnsafeWrapper("Unsafe_LoadFence");
+ 475   OrderAccess::acquire();
+ 476 UNSAFE_END
+ 477 
+ 478 UNSAFE_ENTRY(void, Unsafe_StoreFence(JNIEnv *env, jobject unsafe))
+ 479   UnsafeWrapper("Unsafe_StoreFence");
+ 480   OrderAccess::release();
+ 481 UNSAFE_END
+ 482 
+ 483 UNSAFE_ENTRY(void, Unsafe_FullFence(JNIEnv *env, jobject unsafe))
+ 484   UnsafeWrapper("Unsafe_FullFence");
+ 485   OrderAccess::fence();
+ 486 UNSAFE_END
+ 487 
+ 488 ////// Data in the C heap.
+ 489 
+ 490 // Note:  These do not throw NullPointerException for bad pointers.
+ 491 // They just crash.  Only a oop base pointer can generate a NullPointerException.
+ 492 //
+ 493 #define DEFINE_GETSETNATIVE(java_type, Type, native_type) \
+ 494  \
+ 495 UNSAFE_ENTRY(java_type, Unsafe_GetNative##Type(JNIEnv *env, jobject unsafe, jlong addr)) \
+ 496   UnsafeWrapper("Unsafe_GetNative"#Type); \
+ 497   void* p = addr_from_java(addr); \
+ 498   JavaThread* t = JavaThread::current(); \
+ 499   t-&gt;set_doing_unsafe_access(true); \
+ 500   java_type x = *(volatile native_type*)p; \
+ 501   t-&gt;set_doing_unsafe_access(false); \
+ 502   return x; \
+ 503 UNSAFE_END \
+ 504  \
+ 505 UNSAFE_ENTRY(void, Unsafe_SetNative##Type(JNIEnv *env, jobject unsafe, jlong addr, java_type x)) \
+ 506   UnsafeWrapper("Unsafe_SetNative"#Type); \
+ 507   JavaThread* t = JavaThread::current(); \
+ 508   t-&gt;set_doing_unsafe_access(true); \
+ 509   void* p = addr_from_java(addr); \
+ 510   *(volatile native_type*)p = x; \
+ 511   t-&gt;set_doing_unsafe_access(false); \
+ 512 UNSAFE_END \
+ 513  \
+ 514 // END DEFINE_GETSETNATIVE.
+ 515 
+ 516 DEFINE_GETSETNATIVE(jbyte, Byte, signed char)
+ 517 DEFINE_GETSETNATIVE(jshort, Short, signed short);
+ 518 DEFINE_GETSETNATIVE(jchar, Char, unsigned short);
+ 519 DEFINE_GETSETNATIVE(jint, Int, jint);
+ 520 // no long -- handled specially
+ 521 DEFINE_GETSETNATIVE(jfloat, Float, float);
+ 522 DEFINE_GETSETNATIVE(jdouble, Double, double);
+ 523 
+ 524 #undef DEFINE_GETSETNATIVE
+ 525 
+ 526 UNSAFE_ENTRY(jlong, Unsafe_GetNativeLong(JNIEnv *env, jobject unsafe, jlong addr))
+ 527   UnsafeWrapper("Unsafe_GetNativeLong");
+ 528   JavaThread* t = JavaThread::current();
+ 529   // We do it this way to avoid problems with access to heap using 64
+ 530   // bit loads, as jlong in heap could be not 64-bit aligned, and on
+ 531   // some CPUs (SPARC) it leads to SIGBUS.
+ 532   t-&gt;set_doing_unsafe_access(true);
+ 533   void* p = addr_from_java(addr);
+ 534   jlong x;
+ 535   if (((intptr_t)p &amp; 7) == 0) {
+ 536     // jlong is aligned, do a volatile access
+ 537     x = *(volatile jlong*)p;
+ 538   } else {
+ 539     jlong_accessor acc;
+ 540     acc.words[0] = ((volatile jint*)p)[0];
+ 541     acc.words[1] = ((volatile jint*)p)[1];
+ 542     x = acc.long_value;
+ 543   }
+ 544   t-&gt;set_doing_unsafe_access(false);
+ 545   return x;
+ 546 UNSAFE_END
+ 547 
+ 548 UNSAFE_ENTRY(void, Unsafe_SetNativeLong(JNIEnv *env, jobject unsafe, jlong addr, jlong x))
+ 549   UnsafeWrapper("Unsafe_SetNativeLong");
+ 550   JavaThread* t = JavaThread::current();
+ 551   // see comment for Unsafe_GetNativeLong
+ 552   t-&gt;set_doing_unsafe_access(true);
+ 553   void* p = addr_from_java(addr);
+ 554   if (((intptr_t)p &amp; 7) == 0) {
+ 555     // jlong is aligned, do a volatile access
+ 556     *(volatile jlong*)p = x;
+ 557   } else {
+ 558     jlong_accessor acc;
+ 559     acc.long_value = x;
+ 560     ((volatile jint*)p)[0] = acc.words[0];
+ 561     ((volatile jint*)p)[1] = acc.words[1];
+ 562   }
+ 563   t-&gt;set_doing_unsafe_access(false);
+ 564 UNSAFE_END
+ 565 
+ 566 
+ 567 UNSAFE_ENTRY(jlong, Unsafe_GetNativeAddress(JNIEnv *env, jobject unsafe, jlong addr))
+ 568   UnsafeWrapper("Unsafe_GetNativeAddress");
+ 569   void* p = addr_from_java(addr);
+ 570   return addr_to_java(*(void**)p);
+ 571 UNSAFE_END
+ 572 
+ 573 UNSAFE_ENTRY(void, Unsafe_SetNativeAddress(JNIEnv *env, jobject unsafe, jlong addr, jlong x))
+ 574   UnsafeWrapper("Unsafe_SetNativeAddress");
+ 575   void* p = addr_from_java(addr);
+ 576   *(void**)p = addr_from_java(x);
+ 577 UNSAFE_END
+ 578 
+ 579 
+ 580 ////// Allocation requests
+ 581 
+ 582 UNSAFE_ENTRY(jobject, Unsafe_AllocateInstance(JNIEnv *env, jobject unsafe, jclass cls))
+ 583   UnsafeWrapper("Unsafe_AllocateInstance");
+ 584   {
+ 585     ThreadToNativeFromVM ttnfv(thread);
+ 586     return env-&gt;AllocObject(cls);
+ 587   }
+ 588 UNSAFE_END
+ 589 
+ 590 UNSAFE_ENTRY(jlong, Unsafe_AllocateMemory(JNIEnv *env, jobject unsafe, jlong size))
+ 591   UnsafeWrapper("Unsafe_AllocateMemory");
+ 592   size_t sz = (size_t)size;
+ 593   if (sz != (julong)size || size &lt; 0) {
+ 594     THROW_0(vmSymbols::java_lang_IllegalArgumentException());
+ 595   }
+ 596   if (sz == 0) {
+ 597     return 0;
+ 598   }
+ 599   sz = round_to(sz, HeapWordSize);
+ 600   void* x = os::malloc(sz, mtInternal);
+ 601   if (x == NULL) {
+ 602     THROW_0(vmSymbols::java_lang_OutOfMemoryError());
+ 603   }
+ 604   //Copy::fill_to_words((HeapWord*)x, sz / HeapWordSize);
+ 605   return addr_to_java(x);
+ 606 UNSAFE_END
+ 607 
+ 608 UNSAFE_ENTRY(jlong, Unsafe_ReallocateMemory(JNIEnv *env, jobject unsafe, jlong addr, jlong size))
+ 609   UnsafeWrapper("Unsafe_ReallocateMemory");
+ 610   void* p = addr_from_java(addr);
+ 611   size_t sz = (size_t)size;
+ 612   if (sz != (julong)size || size &lt; 0) {
+ 613     THROW_0(vmSymbols::java_lang_IllegalArgumentException());
+ 614   }
+ 615   if (sz == 0) {
+ 616     os::free(p);
+ 617     return 0;
+ 618   }
+ 619   sz = round_to(sz, HeapWordSize);
+ 620   void* x = (p == NULL) ? os::malloc(sz, mtInternal) : os::realloc(p, sz, mtInternal);
+ 621   if (x == NULL) {
+ 622     THROW_0(vmSymbols::java_lang_OutOfMemoryError());
+ 623   }
+ 624   return addr_to_java(x);
+ 625 UNSAFE_END
+ 626 
+ 627 UNSAFE_ENTRY(void, Unsafe_FreeMemory(JNIEnv *env, jobject unsafe, jlong addr))
+ 628   UnsafeWrapper("Unsafe_FreeMemory");
+ 629   void* p = addr_from_java(addr);
+ 630   if (p == NULL) {
+ 631     return;
+ 632   }
+ 633   os::free(p);
+ 634 UNSAFE_END
+ 635 
+ 636 UNSAFE_ENTRY(void, Unsafe_SetMemory(JNIEnv *env, jobject unsafe, jlong addr, jlong size, jbyte value))
+ 637   UnsafeWrapper("Unsafe_SetMemory");
+ 638   size_t sz = (size_t)size;
+ 639   if (sz != (julong)size || size &lt; 0) {
+ 640     THROW(vmSymbols::java_lang_IllegalArgumentException());
+ 641   }
+ 642   char* p = (char*) addr_from_java(addr);
+ 643   Copy::fill_to_memory_atomic(p, sz, value);
+ 644 UNSAFE_END
+ 645 
+ 646 UNSAFE_ENTRY(void, Unsafe_SetMemory2(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong size, jbyte value))
+ 647   UnsafeWrapper("Unsafe_SetMemory");
+ 648   size_t sz = (size_t)size;
+ 649   if (sz != (julong)size || size &lt; 0) {
+ 650     THROW(vmSymbols::java_lang_IllegalArgumentException());
+ 651   }
+ 652   oop base = JNIHandles::resolve(obj);
+ 653   void* p = index_oop_from_field_offset_long(base, offset);
+ 654   Copy::fill_to_memory_atomic(p, sz, value);
+ 655 UNSAFE_END
+ 656 
+ 657 UNSAFE_ENTRY(void, Unsafe_CopyMemory(JNIEnv *env, jobject unsafe, jlong srcAddr, jlong dstAddr, jlong size))
+ 658   UnsafeWrapper("Unsafe_CopyMemory");
+ 659   if (size == 0) {
+ 660     return;
+ 661   }
+ 662   size_t sz = (size_t)size;
+ 663   if (sz != (julong)size || size &lt; 0) {
+ 664     THROW(vmSymbols::java_lang_IllegalArgumentException());
+ 665   }
+ 666   void* src = addr_from_java(srcAddr);
+ 667   void* dst = addr_from_java(dstAddr);
+ 668   Copy::conjoint_memory_atomic(src, dst, sz);
+ 669 UNSAFE_END
+ 670 
+ 671 UNSAFE_ENTRY(void, Unsafe_CopyMemory2(JNIEnv *env, jobject unsafe, jobject srcObj, jlong srcOffset, jobject dstObj, jlong dstOffset, jlong size))
+ 672   UnsafeWrapper("Unsafe_CopyMemory");
+ 673   if (size == 0) {
+ 674     return;
+ 675   }
+ 676   size_t sz = (size_t)size;
+ 677   if (sz != (julong)size || size &lt; 0) {
+ 678     THROW(vmSymbols::java_lang_IllegalArgumentException());
+ 679   }
+ 680   oop srcp = JNIHandles::resolve(srcObj);
+ 681   oop dstp = JNIHandles::resolve(dstObj);
+ 682   if (dstp != NULL &amp;&amp; !dstp-&gt;is_typeArray()) {
+ 683     // NYI:  This works only for non-oop arrays at present.
+ 684     // Generalizing it would be reasonable, but requires card marking.
+ 685     // Also, autoboxing a Long from 0L in copyMemory(x,y, 0L,z, n) would be bad.
+ 686     THROW(vmSymbols::java_lang_IllegalArgumentException());
+ 687   }
+ 688   void* src = index_oop_from_field_offset_long(srcp, srcOffset);
+ 689   void* dst = index_oop_from_field_offset_long(dstp, dstOffset);
+ 690   Copy::conjoint_memory_atomic(src, dst, sz);
+ 691 UNSAFE_END
+ 692 
+ 693 
+ 694 ////// Random queries
+ 695 
+ 696 // See comment at file start about UNSAFE_LEAF
+ 697 //UNSAFE_LEAF(jint, Unsafe_AddressSize())
+ 698 UNSAFE_ENTRY(jint, Unsafe_AddressSize(JNIEnv *env, jobject unsafe))
+ 699   UnsafeWrapper("Unsafe_AddressSize");
+ 700   return sizeof(void*);
+ 701 UNSAFE_END
+ 702 
+ 703 // See comment at file start about UNSAFE_LEAF
+ 704 //UNSAFE_LEAF(jint, Unsafe_PageSize())
+ 705 UNSAFE_ENTRY(jint, Unsafe_PageSize(JNIEnv *env, jobject unsafe))
+ 706   UnsafeWrapper("Unsafe_PageSize");
+ 707   return os::vm_page_size();
+ 708 UNSAFE_END
+ 709 
+ 710 jint find_field_offset(jobject field, int must_be_static, TRAPS) {
+ 711   if (field == NULL) {
+ 712     THROW_0(vmSymbols::java_lang_NullPointerException());
+ 713   }
+ 714 
+ 715   oop reflected   = JNIHandles::resolve_non_null(field);
+ 716   oop mirror      = java_lang_reflect_Field::clazz(reflected);
+ 717   Klass* k      = java_lang_Class::as_Klass(mirror);
+ 718   int slot        = java_lang_reflect_Field::slot(reflected);
+ 719   int modifiers   = java_lang_reflect_Field::modifiers(reflected);
+ 720 
+ 721   if (must_be_static &gt;= 0) {
+ 722     int really_is_static = ((modifiers &amp; JVM_ACC_STATIC) != 0);
+ 723     if (must_be_static != really_is_static) {
+ 724       THROW_0(vmSymbols::java_lang_IllegalArgumentException());
+ 725     }
+ 726   }
+ 727 
+ 728   int offset = InstanceKlass::cast(k)-&gt;field_offset(slot);
+ 729   return field_offset_from_byte_offset(offset);
+ 730 }
+ 731 
+ 732 UNSAFE_ENTRY(jlong, Unsafe_ObjectFieldOffset(JNIEnv *env, jobject unsafe, jobject field))
+ 733   UnsafeWrapper("Unsafe_ObjectFieldOffset");
+ 734   return find_field_offset(field, 0, THREAD);
+ 735 UNSAFE_END
+ 736 
+ 737 UNSAFE_ENTRY(jlong, Unsafe_StaticFieldOffset(JNIEnv *env, jobject unsafe, jobject field))
+ 738   UnsafeWrapper("Unsafe_StaticFieldOffset");
+ 739   return find_field_offset(field, 1, THREAD);
+ 740 UNSAFE_END
+ 741 
+ 742 UNSAFE_ENTRY(jobject, Unsafe_StaticFieldBaseFromField(JNIEnv *env, jobject unsafe, jobject field))
+ 743   UnsafeWrapper("Unsafe_StaticFieldBase");
+ 744   // Note:  In this VM implementation, a field address is always a short
+ 745   // offset from the base of a a klass metaobject.  Thus, the full dynamic
+ 746   // range of the return type is never used.  However, some implementations
+ 747   // might put the static field inside an array shared by many classes,
+ 748   // or even at a fixed address, in which case the address could be quite
+ 749   // large.  In that last case, this function would return NULL, since
+ 750   // the address would operate alone, without any base pointer.
+ 751 
+ 752   if (field == NULL)  THROW_0(vmSymbols::java_lang_NullPointerException());
+ 753 
+ 754   oop reflected   = JNIHandles::resolve_non_null(field);
+ 755   oop mirror      = java_lang_reflect_Field::clazz(reflected);
+ 756   int modifiers   = java_lang_reflect_Field::modifiers(reflected);
+ 757 
+ 758   if ((modifiers &amp; JVM_ACC_STATIC) == 0) {
+ 759     THROW_0(vmSymbols::java_lang_IllegalArgumentException());
+ 760   }
+ 761 
+ 762   return JNIHandles::make_local(env, mirror);
+ 763 UNSAFE_END
+ 764 
+ 765 //@deprecated
+ 766 UNSAFE_ENTRY(jint, Unsafe_FieldOffset(JNIEnv *env, jobject unsafe, jobject field))
+ 767   UnsafeWrapper("Unsafe_FieldOffset");
+ 768   // tries (but fails) to be polymorphic between static and non-static:
+ 769   jlong offset = find_field_offset(field, -1, THREAD);
+ 770   guarantee(offset == (jint)offset, "offset fits in 32 bits");
+ 771   return (jint)offset;
+ 772 UNSAFE_END
+ 773 
+ 774 //@deprecated
+ 775 UNSAFE_ENTRY(jobject, Unsafe_StaticFieldBaseFromClass(JNIEnv *env, jobject unsafe, jobject clazz))
+ 776   UnsafeWrapper("Unsafe_StaticFieldBase");
+ 777   if (clazz == NULL) {
+ 778     THROW_0(vmSymbols::java_lang_NullPointerException());
+ 779   }
+ 780   return JNIHandles::make_local(env, JNIHandles::resolve_non_null(clazz));
+ 781 UNSAFE_END
+ 782 
+ 783 UNSAFE_ENTRY(void, Unsafe_EnsureClassInitialized(JNIEnv *env, jobject unsafe, jobject clazz)) {
+ 784   UnsafeWrapper("Unsafe_EnsureClassInitialized");
+ 785   if (clazz == NULL) {
+ 786     THROW(vmSymbols::java_lang_NullPointerException());
+ 787   }
+ 788   oop mirror = JNIHandles::resolve_non_null(clazz);
+ 789 
+ 790   Klass* klass = java_lang_Class::as_Klass(mirror);
+ 791   if (klass != NULL &amp;&amp; klass-&gt;should_be_initialized()) {
+ 792     InstanceKlass* k = InstanceKlass::cast(klass);
+ 793     k-&gt;initialize(CHECK);
+ 794   }
+ 795 }
+ 796 UNSAFE_END
+ 797 
+ 798 UNSAFE_ENTRY(jboolean, Unsafe_ShouldBeInitialized(JNIEnv *env, jobject unsafe, jobject clazz)) {
+ 799   UnsafeWrapper("Unsafe_ShouldBeInitialized");
+ 800   if (clazz == NULL) {
+ 801     THROW_(vmSymbols::java_lang_NullPointerException(), false);
+ 802   }
+ 803   oop mirror = JNIHandles::resolve_non_null(clazz);
+ 804   Klass* klass = java_lang_Class::as_Klass(mirror);
+ 805   if (klass != NULL &amp;&amp; klass-&gt;should_be_initialized()) {
+ 806     return true;
+ 807   }
+ 808   return false;
+ 809 }
+ 810 UNSAFE_END
+ 811 
+ 812 static void getBaseAndScale(int&amp; base, int&amp; scale, jclass acls, TRAPS) {
+ 813   if (acls == NULL) {
+ 814     THROW(vmSymbols::java_lang_NullPointerException());
+ 815   }
+ 816   oop      mirror = JNIHandles::resolve_non_null(acls);
+ 817   Klass* k      = java_lang_Class::as_Klass(mirror);
+ 818   if (k == NULL || !k-&gt;oop_is_array()) {
+ 819     THROW(vmSymbols::java_lang_InvalidClassException());
+ 820   } else if (k-&gt;oop_is_objArray()) {
+ 821     base  = arrayOopDesc::base_offset_in_bytes(T_OBJECT);
+ 822     scale = heapOopSize;
+ 823   } else if (k-&gt;oop_is_typeArray()) {
+ 824     TypeArrayKlass* tak = TypeArrayKlass::cast(k);
+ 825     base  = tak-&gt;array_header_in_bytes();
+ 826     assert(base == arrayOopDesc::base_offset_in_bytes(tak-&gt;element_type()), "array_header_size semantics ok");
+ 827     scale = (1 &lt;&lt; tak-&gt;log2_element_size());
+ 828   } else {
+ 829     ShouldNotReachHere();
+ 830   }
+ 831 }
+ 832 
+ 833 UNSAFE_ENTRY(jint, Unsafe_ArrayBaseOffset(JNIEnv *env, jobject unsafe, jclass acls))
+ 834   UnsafeWrapper("Unsafe_ArrayBaseOffset");
+ 835   int base, scale;
+ 836   getBaseAndScale(base, scale, acls, CHECK_0);
+ 837   return field_offset_from_byte_offset(base);
+ 838 UNSAFE_END
+ 839 
+ 840 
+ 841 UNSAFE_ENTRY(jint, Unsafe_ArrayIndexScale(JNIEnv *env, jobject unsafe, jclass acls))
+ 842   UnsafeWrapper("Unsafe_ArrayIndexScale");
+ 843   int base, scale;
+ 844   getBaseAndScale(base, scale, acls, CHECK_0);
+ 845   // This VM packs both fields and array elements down to the byte.
+ 846   // But watch out:  If this changes, so that array references for
+ 847   // a given primitive type (say, T_BOOLEAN) use different memory units
+ 848   // than fields, this method MUST return zero for such arrays.
+ 849   // For example, the VM used to store sub-word sized fields in full
+ 850   // words in the object layout, so that accessors like getByte(Object,int)
+ 851   // did not really do what one might expect for arrays.  Therefore,
+ 852   // this function used to report a zero scale factor, so that the user
+ 853   // would know not to attempt to access sub-word array elements.
+ 854   // // Code for unpacked fields:
+ 855   // if (scale &lt; wordSize)  return 0;
+ 856 
+ 857   // The following allows for a pretty general fieldOffset cookie scheme,
+ 858   // but requires it to be linear in byte offset.
+ 859   return field_offset_from_byte_offset(scale) - field_offset_from_byte_offset(0);
+ 860 UNSAFE_END
+ 861 
+ 862 
+ 863 static inline void throw_new(JNIEnv *env, const char *ename) {
+ 864   char buf[100];
+ 865   strcpy(buf, "java/lang/");
+ 866   strcat(buf, ename);
+ 867   jclass cls = env-&gt;FindClass(buf);
+ 868   if (env-&gt;ExceptionCheck()) {
+ 869     env-&gt;ExceptionClear();
+ 870     tty-&gt;print_cr("Unsafe: cannot throw %s because FindClass has failed", buf);
+ 871     return;
+ 872   }
+ 873   char* msg = NULL;
+ 874   env-&gt;ThrowNew(cls, msg);
+ 875 }
+ 876 
+ 877 static jclass Unsafe_DefineClass_impl(JNIEnv *env, jstring name, jbyteArray data, int offset, int length, jobject loader, jobject pd) {
+ 878   {
+ 879     // Code lifted from JDK 1.3 ClassLoader.c
+ 880 
+ 881     jbyte *body;
+ 882     char *utfName;
+ 883     jclass result = 0;
+ 884     char buf[128];
+ 885 
+ 886     if (UsePerfData) {
+ 887       ClassLoader::unsafe_defineClassCallCounter()-&gt;inc();
+ 888     }
+ 889 
+ 890     if (data == NULL) {
+ 891         throw_new(env, "NullPointerException");
+ 892         return 0;
+ 893     }
+ 894 
+ 895     /* Work around 4153825. malloc crashes on Solaris when passed a
+ 896      * negative size.
+ 897      */
+ 898     if (length &lt; 0) {
+ 899         throw_new(env, "ArrayIndexOutOfBoundsException");
+ 900         return 0;
+ 901     }
+ 902 
+ 903     body = NEW_C_HEAP_ARRAY(jbyte, length, mtInternal);
+ 904 
+ 905     if (body == 0) {
+ 906         throw_new(env, "OutOfMemoryError");
+ 907         return 0;
+ 908     }
+ 909 
+ 910     env-&gt;GetByteArrayRegion(data, offset, length, body);
+ 911 
+ 912     if (env-&gt;ExceptionOccurred())
+ 913         goto free_body;
+ 914 
+ 915     if (name != NULL) {
+ 916         uint len = env-&gt;GetStringUTFLength(name);
+ 917         int unicode_len = env-&gt;GetStringLength(name);
+ 918         if (len &gt;= sizeof(buf)) {
+ 919             utfName = NEW_C_HEAP_ARRAY(char, len + 1, mtInternal);
+ 920             if (utfName == NULL) {
+ 921                 throw_new(env, "OutOfMemoryError");
+ 922                 goto free_body;
+ 923             }
+ 924         } else {
+ 925             utfName = buf;
+ 926         }
+ 927         env-&gt;GetStringUTFRegion(name, 0, unicode_len, utfName);
+ 928         //VerifyFixClassname(utfName);
+ 929         for (uint i = 0; i &lt; len; i++) {
+ 930           if (utfName[i] == '.')   utfName[i] = '/';
+ 931         }
+ 932     } else {
+ 933         utfName = NULL;
+ 934     }
+ 935 
+ 936     result = JVM_DefineClass(env, utfName, loader, body, length, pd);
+ 937 
+ 938     if (utfName &amp;&amp; utfName != buf)
+ 939         FREE_C_HEAP_ARRAY(char, utfName, mtInternal);
+ 940 
+ 941  free_body:
+ 942     FREE_C_HEAP_ARRAY(jbyte, body, mtInternal);
+ 943     return result;
+ 944   }
+ 945 }
+ 946 
+ 947 
+ 948 UNSAFE_ENTRY(jclass, Unsafe_DefineClass(JNIEnv *env, jobject unsafe, jstring name, jbyteArray data, int offset, int length, jobject loader, jobject pd))
+ 949   UnsafeWrapper("Unsafe_DefineClass");
+ 950   {
+ 951     ThreadToNativeFromVM ttnfv(thread);
+ 952     return Unsafe_DefineClass_impl(env, name, data, offset, length, loader, pd);
+ 953   }
+ 954 UNSAFE_END
+ 955 
+ 956 static jobject get_class_loader(JNIEnv* env, jclass cls) {
+ 957   if (java_lang_Class::is_primitive(JNIHandles::resolve_non_null(cls))) {
+ 958     return NULL;
+ 959   }
+ 960   Klass* k = java_lang_Class::as_Klass(JNIHandles::resolve_non_null(cls));
+ 961   oop loader = k-&gt;class_loader();
+ 962   return JNIHandles::make_local(env, loader);
+ 963 }
+ 964 
+ 965 UNSAFE_ENTRY(jclass, Unsafe_DefineClass0(JNIEnv *env, jobject unsafe, jstring name, jbyteArray data, int offset, int length))
+ 966   UnsafeWrapper("Unsafe_DefineClass");
+ 967   {
+ 968     ThreadToNativeFromVM ttnfv(thread);
+ 969 
+ 970     int depthFromDefineClass0 = 1;
+ 971     jclass  caller = JVM_GetCallerClass(env, depthFromDefineClass0);
+ 972     jobject loader = (caller == NULL) ? NULL : get_class_loader(env, caller);
+ 973     jobject pd     = (caller == NULL) ? NULL : JVM_GetProtectionDomain(env, caller);
+ 974 
+ 975     return Unsafe_DefineClass_impl(env, name, data, offset, length, loader, pd);
+ 976   }
+ 977 UNSAFE_END
+ 978 
+ 979 
+ 980 #define DAC_Args CLS"[B["OBJ
+ 981 // define a class but do not make it known to the class loader or system dictionary
+ 982 // - host_class:  supplies context for linkage, access control, protection domain, and class loader
+ 983 // - data:  bytes of a class file, a raw memory address (length gives the number of bytes)
+ 984 // - cp_patches:  where non-null entries exist, they replace corresponding CP entries in data
+ 985 
+ 986 // When you load an anonymous class U, it works as if you changed its name just before loading,
+ 987 // to a name that you will never use again.  Since the name is lost, no other class can directly
+ 988 // link to any member of U.  Just after U is loaded, the only way to use it is reflectively,
+ 989 // through java.lang.Class methods like Class.newInstance.
+ 990 
+ 991 // Access checks for linkage sites within U continue to follow the same rules as for named classes.
+ 992 // The package of an anonymous class is given by the package qualifier on the name under which it was loaded.
+ 993 // An anonymous class also has special privileges to access any member of its host class.
+ 994 // This is the main reason why this loading operation is unsafe.  The purpose of this is to
+ 995 // allow language implementations to simulate "open classes"; a host class in effect gets
+ 996 // new code when an anonymous class is loaded alongside it.  A less convenient but more
+ 997 // standard way to do this is with reflection, which can also be set to ignore access
+ 998 // restrictions.
+ 999 
+1000 // Access into an anonymous class is possible only through reflection.  Therefore, there
+1001 // are no special access rules for calling into an anonymous class.  The relaxed access
+1002 // rule for the host class is applied in the opposite direction:  A host class reflectively
+1003 // access one of its anonymous classes.
+1004 
+1005 // If you load the same bytecodes twice, you get two different classes.  You can reload
+1006 // the same bytecodes with or without varying CP patches.
+1007 
+1008 // By using the CP patching array, you can have a new anonymous class U2 refer to an older one U1.
+1009 // The bytecodes for U2 should refer to U1 by a symbolic name (doesn't matter what the name is).
+1010 // The CONSTANT_Class entry for that name can be patched to refer directly to U1.
+1011 
+1012 // This allows, for example, U2 to use U1 as a superclass or super-interface, or as
+1013 // an outer class (so that U2 is an anonymous inner class of anonymous U1).
+1014 // It is not possible for a named class, or an older anonymous class, to refer by
+1015 // name (via its CP) to a newer anonymous class.
+1016 
+1017 // CP patching may also be used to modify (i.e., hack) the names of methods, classes,
+1018 // or type descriptors used in the loaded anonymous class.
+1019 
+1020 // Finally, CP patching may be used to introduce "live" objects into the constant pool,
+1021 // instead of "dead" strings.  A compiled statement like println((Object)"hello") can
+1022 // be changed to println(greeting), where greeting is an arbitrary object created before
+1023 // the anonymous class is loaded.  This is useful in dynamic languages, in which
+1024 // various kinds of metaobjects must be introduced as constants into bytecode.
+1025 // Note the cast (Object), which tells the verifier to expect an arbitrary object,
+1026 // not just a literal string.  For such ldc instructions, the verifier uses the
+1027 // type Object instead of String, if the loaded constant is not in fact a String.
+1028 
+1029 static instanceKlassHandle
+1030 Unsafe_DefineAnonymousClass_impl(JNIEnv *env,
+1031                                  jclass host_class, jbyteArray data, jobjectArray cp_patches_jh,
+1032                                  HeapWord* *temp_alloc,
+1033                                  TRAPS) {
+1034 
+1035   if (UsePerfData) {
+1036     ClassLoader::unsafe_defineClassCallCounter()-&gt;inc();
+1037   }
+1038 
+1039   if (data == NULL) {
+1040     THROW_0(vmSymbols::java_lang_NullPointerException());
+1041   }
+1042 
+1043   jint length = typeArrayOop(JNIHandles::resolve_non_null(data))-&gt;length();
+1044   jint word_length = (length + sizeof(HeapWord)-1) / sizeof(HeapWord);
+1045   HeapWord* body = NEW_C_HEAP_ARRAY(HeapWord, word_length, mtInternal);
+1046   if (body == NULL) {
+1047     THROW_0(vmSymbols::java_lang_OutOfMemoryError());
+1048   }
+1049 
+1050   // caller responsible to free it:
+1051   (*temp_alloc) = body;
+1052 
+1053   {
+1054     jbyte* array_base = typeArrayOop(JNIHandles::resolve_non_null(data))-&gt;byte_at_addr(0);
+1055     Copy::conjoint_words((HeapWord*) array_base, body, word_length);
+1056   }
+1057 
+1058   u1* class_bytes = (u1*) body;
+1059   int class_bytes_length = (int) length;
+1060   if (class_bytes_length &lt; 0)  class_bytes_length = 0;
+1061   if (class_bytes == NULL
+1062       || host_class == NULL
+1063       || length != class_bytes_length)
+1064     THROW_0(vmSymbols::java_lang_IllegalArgumentException());
+1065 
+1066   objArrayHandle cp_patches_h;
+1067   if (cp_patches_jh != NULL) {
+1068     oop p = JNIHandles::resolve_non_null(cp_patches_jh);
+1069     if (!p-&gt;is_objArray())
+1070       THROW_0(vmSymbols::java_lang_IllegalArgumentException());
+1071     cp_patches_h = objArrayHandle(THREAD, (objArrayOop)p);
+1072   }
+1073 
+1074   KlassHandle host_klass(THREAD, java_lang_Class::as_Klass(JNIHandles::resolve_non_null(host_class)));
+1075   const char* host_source = host_klass-&gt;external_name();
+1076   Handle      host_loader(THREAD, host_klass-&gt;class_loader());
+1077   Handle      host_domain(THREAD, host_klass-&gt;protection_domain());
+1078 
+1079   GrowableArray&lt;Handle&gt;* cp_patches = NULL;
+1080   if (cp_patches_h.not_null()) {
+1081     int alen = cp_patches_h-&gt;length();
+1082     for (int i = alen-1; i &gt;= 0; i--) {
+1083       oop p = cp_patches_h-&gt;obj_at(i);
+1084       if (p != NULL) {
+1085         Handle patch(THREAD, p);
+1086         if (cp_patches == NULL)
+1087           cp_patches = new GrowableArray&lt;Handle&gt;(i+1, i+1, Handle());
+1088         cp_patches-&gt;at_put(i, patch);
+1089       }
+1090     }
+1091   }
+1092 
+1093   ClassFileStream st(class_bytes, class_bytes_length, (char*) host_source);
+1094 
+1095   instanceKlassHandle anon_klass;
+1096   {
+1097     Symbol* no_class_name = NULL;
+1098     Klass* anonk = SystemDictionary::parse_stream(no_class_name,
+1099                                                     host_loader, host_domain,
+1100                                                     &amp;st, host_klass, cp_patches,
+1101                                                     CHECK_NULL);
+1102     if (anonk == NULL)  return NULL;
+1103     anon_klass = instanceKlassHandle(THREAD, anonk);
+1104   }
+1105 
+1106   return anon_klass;
+1107 }
+1108 
+1109 UNSAFE_ENTRY(jclass, Unsafe_DefineAnonymousClass(JNIEnv *env, jobject unsafe, jclass host_class, jbyteArray data, jobjectArray cp_patches_jh))
+1110 {
+1111   instanceKlassHandle anon_klass;
+1112   jobject res_jh = NULL;
+1113 
+1114   UnsafeWrapper("Unsafe_DefineAnonymousClass");
+1115   ResourceMark rm(THREAD);
+1116 
+1117   HeapWord* temp_alloc = NULL;
+1118 
+1119   anon_klass = Unsafe_DefineAnonymousClass_impl(env, host_class, data,
+1120                                                 cp_patches_jh,
+1121                                                    &amp;temp_alloc, THREAD);
+1122   if (anon_klass() != NULL)
+1123     res_jh = JNIHandles::make_local(env, anon_klass-&gt;java_mirror());
+1124 
+1125   // try/finally clause:
+1126   if (temp_alloc != NULL) {
+1127     FREE_C_HEAP_ARRAY(HeapWord, temp_alloc, mtInternal);
+1128   }
+1129 
+1130   // The anonymous class loader data has been artificially been kept alive to
+1131   // this point.   The mirror and any instances of this class have to keep
+1132   // it alive afterwards.
+1133   if (anon_klass() != NULL) {
+1134     anon_klass-&gt;class_loader_data()-&gt;set_keep_alive(false);
+1135   }
+1136 
+1137   // let caller initialize it as needed...
+1138 
+1139   return (jclass) res_jh;
+1140 }
+1141 UNSAFE_END
+1142 
+1143 
+1144 
+1145 UNSAFE_ENTRY(void, Unsafe_MonitorEnter(JNIEnv *env, jobject unsafe, jobject jobj))
+1146   UnsafeWrapper("Unsafe_MonitorEnter");
+1147   {
+1148     if (jobj == NULL) {
+1149       THROW(vmSymbols::java_lang_NullPointerException());
+1150     }
+1151     Handle obj(thread, JNIHandles::resolve_non_null(jobj));
+1152     ObjectSynchronizer::jni_enter(obj, CHECK);
+1153   }
+1154 UNSAFE_END
+1155 
+1156 
+1157 UNSAFE_ENTRY(jboolean, Unsafe_TryMonitorEnter(JNIEnv *env, jobject unsafe, jobject jobj))
+1158   UnsafeWrapper("Unsafe_TryMonitorEnter");
+1159   {
+1160     if (jobj == NULL) {
+1161       THROW_(vmSymbols::java_lang_NullPointerException(), JNI_FALSE);
+1162     }
+1163     Handle obj(thread, JNIHandles::resolve_non_null(jobj));
+1164     bool res = ObjectSynchronizer::jni_try_enter(obj, CHECK_0);
+1165     return (res ? JNI_TRUE : JNI_FALSE);
+1166   }
+1167 UNSAFE_END
+1168 
+1169 
+1170 UNSAFE_ENTRY(void, Unsafe_MonitorExit(JNIEnv *env, jobject unsafe, jobject jobj))
+1171   UnsafeWrapper("Unsafe_MonitorExit");
+1172   {
+1173     if (jobj == NULL) {
+1174       THROW(vmSymbols::java_lang_NullPointerException());
+1175     }
+1176     Handle obj(THREAD, JNIHandles::resolve_non_null(jobj));
+1177     ObjectSynchronizer::jni_exit(obj(), CHECK);
+1178   }
+1179 UNSAFE_END
+1180 
+1181 
+1182 UNSAFE_ENTRY(void, Unsafe_ThrowException(JNIEnv *env, jobject unsafe, jthrowable thr))
+1183   UnsafeWrapper("Unsafe_ThrowException");
+1184   {
+1185     ThreadToNativeFromVM ttnfv(thread);
+1186     env-&gt;Throw(thr);
+1187   }
+1188 UNSAFE_END
+1189 
+1190 // JSR166 ------------------------------------------------------------------
+1191 
+1192 UNSAFE_ENTRY(jboolean, Unsafe_CompareAndSwapObject(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jobject e_h, jobject x_h))
+1193   UnsafeWrapper("Unsafe_CompareAndSwapObject");
+1194   oop x = JNIHandles::resolve(x_h);
+1195   oop e = JNIHandles::resolve(e_h);
+1196   oop p = JNIHandles::resolve(obj);
+1197   HeapWord* addr = (HeapWord *)index_oop_from_field_offset_long(p, offset);
+1198   oop res = oopDesc::atomic_compare_exchange_oop(x, addr, e, true);
+1199   jboolean success  = (res == e);
+1200   if (success)
+1201     update_barrier_set((void*)addr, x);
+1202   return success;
+1203 UNSAFE_END
+1204 
+1205 UNSAFE_ENTRY(jboolean, Unsafe_CompareAndSwapInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jint e, jint x))
+1206   UnsafeWrapper("Unsafe_CompareAndSwapInt");
+1207   oop p = JNIHandles::resolve(obj);
+1208   jint* addr = (jint *) index_oop_from_field_offset_long(p, offset);
+1209   return (jint)(Atomic::cmpxchg(x, addr, e)) == e;
+1210 UNSAFE_END
+1211 
+1212 UNSAFE_ENTRY(jboolean, Unsafe_CompareAndSwapLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong e, jlong x))
+1213   UnsafeWrapper("Unsafe_CompareAndSwapLong");
+1214   Handle p (THREAD, JNIHandles::resolve(obj));
+1215   jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+<a name="6" id="anc6"></a>
+
+
+1216   if (VM_Version::supports_cx8())
+1217     return (jlong)(Atomic::cmpxchg(x, addr, e)) == e;
+1218   else {
+1219     jboolean success = false;
+<a name="7" id="anc7"></a><span class="changed">1220     ObjectLocker ol(p, THREAD);</span>
+<span class="changed">1221     if (*addr == e) { *addr = x; success = true; }</span>
+
+1222     return success;
+1223   }
+<a name="8" id="anc8"></a>
+1224 UNSAFE_END
+1225 
+1226 UNSAFE_ENTRY(void, Unsafe_Park(JNIEnv *env, jobject unsafe, jboolean isAbsolute, jlong time))
+1227   UnsafeWrapper("Unsafe_Park");
+1228   EventThreadPark event;
+1229 #ifndef USDT2
+1230   HS_DTRACE_PROBE3(hotspot, thread__park__begin, thread-&gt;parker(), (int) isAbsolute, time);
+1231 #else /* USDT2 */
+1232    HOTSPOT_THREAD_PARK_BEGIN(
+1233                              (uintptr_t) thread-&gt;parker(), (int) isAbsolute, time);
+1234 #endif /* USDT2 */
+1235   JavaThreadParkedState jtps(thread, time != 0);
+1236   thread-&gt;parker()-&gt;park(isAbsolute != 0, time);
+1237 #ifndef USDT2
+1238   HS_DTRACE_PROBE1(hotspot, thread__park__end, thread-&gt;parker());
+1239 #else /* USDT2 */
+1240   HOTSPOT_THREAD_PARK_END(
+1241                           (uintptr_t) thread-&gt;parker());
+1242 #endif /* USDT2 */
+1243   if (event.should_commit()) {
+1244     oop obj = thread-&gt;current_park_blocker();
+1245     event.set_klass((obj != NULL) ? obj-&gt;klass() : NULL);
+1246     event.set_timeout(time);
+1247     event.set_address((obj != NULL) ? (TYPE_ADDRESS) cast_from_oop&lt;uintptr_t&gt;(obj) : 0);
+1248     event.commit();
+1249   }
+1250 UNSAFE_END
+1251 
+1252 UNSAFE_ENTRY(void, Unsafe_Unpark(JNIEnv *env, jobject unsafe, jobject jthread))
+1253   UnsafeWrapper("Unsafe_Unpark");
+1254   Parker* p = NULL;
+1255   if (jthread != NULL) {
+1256     oop java_thread = JNIHandles::resolve_non_null(jthread);
+1257     if (java_thread != NULL) {
+1258       jlong lp = java_lang_Thread::park_event(java_thread);
+1259       if (lp != 0) {
+1260         // This cast is OK even though the jlong might have been read
+1261         // non-atomically on 32bit systems, since there, one word will
+1262         // always be zero anyway and the value set is always the same
+1263         p = (Parker*)addr_from_java(lp);
+1264       } else {
+1265         // Grab lock if apparently null or using older version of library
+1266         MutexLocker mu(Threads_lock);
+1267         java_thread = JNIHandles::resolve_non_null(jthread);
+1268         if (java_thread != NULL) {
+1269           JavaThread* thr = java_lang_Thread::thread(java_thread);
+1270           if (thr != NULL) {
+1271             p = thr-&gt;parker();
+1272             if (p != NULL) { // Bind to Java thread for next time.
+1273               java_lang_Thread::set_park_event(java_thread, addr_to_java(p));
+1274             }
+1275           }
+1276         }
+1277       }
+1278     }
+1279   }
+1280   if (p != NULL) {
+1281 #ifndef USDT2
+1282     HS_DTRACE_PROBE1(hotspot, thread__unpark, p);
+1283 #else /* USDT2 */
+1284     HOTSPOT_THREAD_UNPARK(
+1285                           (uintptr_t) p);
+1286 #endif /* USDT2 */
+1287     p-&gt;unpark();
+1288   }
+1289 UNSAFE_END
+1290 
+1291 UNSAFE_ENTRY(jint, Unsafe_Loadavg(JNIEnv *env, jobject unsafe, jdoubleArray loadavg, jint nelem))
+1292   UnsafeWrapper("Unsafe_Loadavg");
+1293   const int max_nelem = 3;
+1294   double la[max_nelem];
+1295   jint ret;
+1296 
+1297   typeArrayOop a = typeArrayOop(JNIHandles::resolve_non_null(loadavg));
+1298   assert(a-&gt;is_typeArray(), "must be type array");
+1299 
+1300   if (nelem &lt; 0 || nelem &gt; max_nelem || a-&gt;length() &lt; nelem) {
+1301     ThreadToNativeFromVM ttnfv(thread);
+1302     throw_new(env, "ArrayIndexOutOfBoundsException");
+1303     return -1;
+1304   }
+1305 
+1306   ret = os::loadavg(la, nelem);
+1307   if (ret == -1) return -1;
+1308 
+1309   // if successful, ret is the number of samples actually retrieved.
+1310   assert(ret &gt;= 0 &amp;&amp; ret &lt;= max_nelem, "Unexpected loadavg return value");
+1311   switch(ret) {
+1312     case 3: a-&gt;double_at_put(2, (jdouble)la[2]); // fall through
+1313     case 2: a-&gt;double_at_put(1, (jdouble)la[1]); // fall through
+1314     case 1: a-&gt;double_at_put(0, (jdouble)la[0]); break;
+1315   }
+1316   return ret;
+1317 UNSAFE_END
+1318 
+1319 UNSAFE_ENTRY(void, Unsafe_PrefetchRead(JNIEnv* env, jclass ignored, jobject obj, jlong offset))
+1320   UnsafeWrapper("Unsafe_PrefetchRead");
+1321   oop p = JNIHandles::resolve(obj);
+1322   void* addr = index_oop_from_field_offset_long(p, 0);
+1323   Prefetch::read(addr, (intx)offset);
+1324 UNSAFE_END
+1325 
+1326 UNSAFE_ENTRY(void, Unsafe_PrefetchWrite(JNIEnv* env, jclass ignored, jobject obj, jlong offset))
+1327   UnsafeWrapper("Unsafe_PrefetchWrite");
+1328   oop p = JNIHandles::resolve(obj);
+1329   void* addr = index_oop_from_field_offset_long(p, 0);
+1330   Prefetch::write(addr, (intx)offset);
+1331 UNSAFE_END
+1332 
+<a name="9" id="anc9"></a><span class="new">1333 // Implementation of ObjectLayout intrinsics</span>
+<span class="new">1334 </span>
+<span class="new">1335 // Return the size, in words, of an instance of the given class. The class is</span>
+<span class="new">1336 // specified by the object that is an instance of java.lang.Class.</span>
+<span class="new">1337 static jlong get_instance_size_helper(oop obj, TRAPS) {</span>
+<span class="new">1338   instanceKlassHandle h_klass(THREAD, java_lang_Class::as_Klass(obj));</span>
+<span class="new">1339 </span>
+<span class="new">1340   // Make sure we are not fetching the instance size of an abstract klass</span>
+<span class="new">1341   h_klass-&gt;check_valid_for_instantiation(true, CHECK_0);</span>
+<span class="new">1342 </span>
+<span class="new">1343   // Make sure klass is initialized</span>
+<span class="new">1344   h_klass-&gt;initialize(CHECK_0);</span>
+<span class="new">1345 </span>
+<span class="new">1346   return (jlong) h_klass-&gt;size_helper();</span>
+<span class="new">1347 }</span>
+<span class="new">1348 </span>
+<span class="new">1349 // Return the size, in words, of an instance of the given class</span>
+<span class="new">1350 static jlong get_instance_size_helper(jclass cls, TRAPS) {</span>
+<span class="new">1351   return get_instance_size_helper(JNIHandles::resolve_non_null(cls), THREAD);</span>
+<span class="new">1352 }</span>
+<span class="new">1353 </span>
+<span class="new">1354 // Return the size, in words, of prepadding for a contained object, which is</span>
+<span class="new">1355 // used to allocate the corresponding relative container offset (RCO) object.</span>
+<span class="new">1356 // RCO objects are implemented as standard filler objects (arrays of integers)</span>
+<span class="new">1357 // able to store the payload of 8 bytes.</span>
+<span class="new">1358 static jlong get_prepadding_helper() {</span>
+<span class="new">1359   jlong size_in_bytes =</span>
+<span class="new">1360       arrayOopDesc::base_offset_in_bytes(T_INT) + sizeof(jlong);</span>
+<span class="new">1361   jlong size_in_words =</span>
+<span class="new">1362       (size_in_bytes + (HeapWordSize - 1)) &gt;&gt; LogHeapWordSize;</span>
+<span class="new">1363   return (jlong) align_object_size((intptr_t) size_in_words);</span>
+<span class="new">1364 }</span>
+<span class="new">1365 </span>
+<span class="new">1366 // Create the RCO object for the object that will be allocated at the given</span>
+<span class="new">1367 // address and initialize it with the given offset value</span>
+<span class="new">1368 static void create_rco_object(address obj_addr, jlong offset_in_bytes) {</span>
+<span class="new">1369   // Create the RCO object</span>
+<span class="new">1370   jlong prepadding_in_words = get_prepadding_helper();</span>
+<span class="new">1371   address rco_obj_addr = obj_addr - (prepadding_in_words &lt;&lt; LogHeapWordSize);</span>
+<span class="new">1372   CollectedHeap::fill_with_object((HeapWord*) rco_obj_addr,</span>
+<span class="new">1373       (size_t) prepadding_in_words, false);</span>
+<span class="new">1374 </span>
+<span class="new">1375   // Store the offset value in the last 8 bytes of the RCO object</span>
+<span class="new">1376   *((jlong*) (obj_addr - sizeof(jlong))) = offset_in_bytes;</span>
+<span class="new">1377 }</span>
+<span class="new">1378 </span>
+<span class="new">1379 // Utility class describing the configuration of a structured array. It is used</span>
+<span class="new">1380 // to configure objects extending org.ObjectLayout.AbstractStructuredArray class</span>
+<span class="new">1381 // before their actual construction. All fields have exactly the same meanings</span>
+<span class="new">1382 // as the corresponding fields of org.ObjectLayout.AbstractStructuredArray</span>
+<span class="new">1383 // class. All sizes are in bytes.</span>
+<span class="new">1384 class AbstractStructuredArrayConfiguration VALUE_OBJ_CLASS_SPEC {</span>
+<span class="new">1385  public:</span>
+<span class="new">1386   jint body_size;</span>
+<span class="new">1387   jlong length;</span>
+<span class="new">1388   jlong element_size;</span>
+<span class="new">1389   jlong padding_size;</span>
+<span class="new">1390   instanceHandle h_element_class;</span>
+<span class="new">1391 </span>
+<span class="new">1392  public:</span>
+<span class="new">1393   // Configure the given object extending</span>
+<span class="new">1394   // org.ObjectLayout.AbstractStructuredArray class</span>
+<span class="new">1395   void configure_instance(oop obj) {</span>
+<span class="new">1396     org_ObjectLayout_AbstractStructuredArray::set_bodySize(obj, body_size);</span>
+<span class="new">1397     org_ObjectLayout_AbstractStructuredArray::set_length(obj, length);</span>
+<span class="new">1398     org_ObjectLayout_AbstractStructuredArray::set_elementSize(</span>
+<span class="new">1399         obj, element_size);</span>
+<span class="new">1400     org_ObjectLayout_AbstractStructuredArray::set_paddingSize(</span>
+<span class="new">1401         obj, padding_size);</span>
+<span class="new">1402     org_ObjectLayout_AbstractStructuredArray::set_elementClass(</span>
+<span class="new">1403         obj, h_element_class());</span>
+<span class="new">1404   }</span>
+<span class="new">1405 };</span>
+<span class="new">1406 </span>
+<span class="new">1407 // Utility class describing the configurations of all nesting levels of</span>
+<span class="new">1408 // a structured array. Numbering of levels starts from the outermost one.</span>
+<span class="new">1409 class UnfoldedStructuredArrayConfiguration VALUE_OBJ_CLASS_SPEC {</span>
+<span class="new">1410  private:</span>
+<span class="new">1411   int dims;</span>
+<span class="new">1412   AbstractStructuredArrayConfiguration* configs;</span>
+<span class="new">1413 </span>
+<span class="new">1414  public:</span>
+<span class="new">1415   UnfoldedStructuredArrayConfiguration() {</span>
+<span class="new">1416     dims = 0;</span>
+<span class="new">1417     configs = NULL;</span>
+<span class="new">1418   }</span>
+<span class="new">1419 </span>
+<span class="new">1420   ~UnfoldedStructuredArrayConfiguration() {</span>
+<span class="new">1421     if (configs != NULL) {</span>
+<span class="new">1422       FREE_C_HEAP_ARRAY(AbstractStructuredArrayConfiguration, configs,</span>
+<span class="new">1423           mtInternal);</span>
+<span class="new">1424     }</span>
+<span class="new">1425   }</span>
+<span class="new">1426 </span>
+<span class="new">1427   // Initialize the configurations from the given outermost structured array</span>
+<span class="new">1428   // class and two parallel arrays determining counts of the elements and their</span>
+<span class="new">1429   // classes for all nesting levels, starting from the outermost one. The caller</span>
+<span class="new">1430   // is responsible for providing the correct input data.</span>
+<span class="new">1431   void initialize(jclass container_cls, typeArrayHandle h_element_counts,</span>
+<span class="new">1432       objArrayHandle h_element_classes, TRAPS) {</span>
+<span class="new">1433     dims = h_element_counts-&gt;length();</span>
+<span class="new">1434 </span>
+<span class="new">1435     configs = NEW_C_HEAP_ARRAY(AbstractStructuredArrayConfiguration, dims,</span>
+<span class="new">1436         mtInternal);</span>
+<span class="new">1437     if (configs == NULL) {</span>
+<span class="new">1438       dims = 0;</span>
+<span class="new">1439       THROW(vmSymbols::java_lang_OutOfMemoryError());</span>
+<span class="new">1440     }</span>
+<span class="new">1441 </span>
+<span class="new">1442     int i = dims - 1;</span>
+<span class="new">1443     jlong prepadding_in_words = get_prepadding_helper();</span>
+<span class="new">1444     jlong body_size_in_words = get_instance_size_helper(</span>
+<span class="new">1445         h_element_classes-&gt;obj_at(i), THREAD);</span>
+<span class="new">1446     jlong size_in_words = prepadding_in_words + body_size_in_words;</span>
+<span class="new">1447     configs[i].length = h_element_counts-&gt;long_at(i);</span>
+<span class="new">1448     configs[i].element_size = size_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">1449     configs[i].padding_size = prepadding_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">1450     instanceHandle h_temp_element_class(THREAD,</span>
+<span class="new">1451         (instanceOop) (h_element_classes-&gt;obj_at(i)));</span>
+<span class="new">1452     configs[i].h_element_class = h_temp_element_class;</span>
+<span class="new">1453 </span>
+<span class="new">1454     while (--i &gt;= 0) {</span>
+<span class="new">1455       body_size_in_words = get_instance_size_helper(</span>
+<span class="new">1456           h_element_classes-&gt;obj_at(i), THREAD);</span>
+<span class="new">1457       size_in_words = prepadding_in_words + body_size_in_words +</span>
+<span class="new">1458           (h_element_counts-&gt;long_at(i + 1) * size_in_words);</span>
+<span class="new">1459       configs[i + 1].body_size = (jint) (body_size_in_words &lt;&lt; LogHeapWordSize);</span>
+<span class="new">1460       configs[i].length = h_element_counts-&gt;long_at(i);</span>
+<span class="new">1461       configs[i].element_size = size_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">1462       configs[i].padding_size = prepadding_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">1463       instanceHandle h_temp_element_class(THREAD,</span>
+<span class="new">1464           (instanceOop) (h_element_classes-&gt;obj_at(i)));</span>
+<span class="new">1465       configs[i].h_element_class = h_temp_element_class;</span>
+<span class="new">1466     }</span>
+<span class="new">1467 </span>
+<span class="new">1468     body_size_in_words = get_instance_size_helper(container_cls, THREAD);</span>
+<span class="new">1469     configs[0].body_size = (jint) (body_size_in_words &lt;&lt; LogHeapWordSize);</span>
+<span class="new">1470   }</span>
+<span class="new">1471 </span>
+<span class="new">1472   // Accessors</span>
+<span class="new">1473 </span>
+<span class="new">1474   int dimensions() {</span>
+<span class="new">1475     assert(configs != NULL, "object must be initialized");</span>
+<span class="new">1476     return dims;</span>
+<span class="new">1477   }</span>
+<span class="new">1478 </span>
+<span class="new">1479   jint body_size(int level) {</span>
+<span class="new">1480     assert(configs != NULL, "object must be initialized");</span>
+<span class="new">1481     assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">1482     return configs[level].body_size;</span>
+<span class="new">1483   }</span>
+<span class="new">1484 </span>
+<span class="new">1485   jlong length(int level) {</span>
+<span class="new">1486     assert(configs != NULL, "object must be initialized");</span>
+<span class="new">1487     assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">1488     return configs[level].length;</span>
+<span class="new">1489   }</span>
+<span class="new">1490 </span>
+<span class="new">1491   jlong element_size(int level) {</span>
+<span class="new">1492     assert(configs != NULL, "object must be initialized");</span>
+<span class="new">1493     assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">1494     return configs[level].element_size;</span>
+<span class="new">1495   }</span>
+<span class="new">1496 </span>
+<span class="new">1497   jlong padding_size(int level) {</span>
+<span class="new">1498     assert(configs != NULL, "object must be initialized");</span>
+<span class="new">1499     assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">1500     return configs[level].padding_size;</span>
+<span class="new">1501   }</span>
+<span class="new">1502 </span>
+<span class="new">1503   instanceHandle element_class(int level) {</span>
+<span class="new">1504     assert(configs != NULL, "object must be initialized");</span>
+<span class="new">1505     assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">1506     return configs[level].h_element_class;</span>
+<span class="new">1507   }</span>
+<span class="new">1508 </span>
+<span class="new">1509   // Configure the given object extending</span>
+<span class="new">1510   // org.ObjectLayout.AbstractStructuredArray class and belonging to the given</span>
+<span class="new">1511   // nesting level</span>
+<span class="new">1512   void configure_instance(oop obj, int level) {</span>
+<span class="new">1513     assert(configs != NULL, "object must be initialized");</span>
+<span class="new">1514     assert(level &gt;= 0 &amp;&amp; level &lt; dims, "level out of bounds");</span>
+<span class="new">1515     configs[level].configure_instance(obj);</span>
+<span class="new">1516   }</span>
+<span class="new">1517 };</span>
+<span class="new">1518 </span>
+<span class="new">1519 UNSAFE_ENTRY(jlong, Unsafe_GetInstanceSize(JNIEnv* env, jobject unsafe,</span>
+<span class="new">1520     jclass cls))</span>
+<span class="new">1521   UnsafeWrapper("Unsafe_GetInstanceSize");</span>
+<span class="new">1522   if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">1523     ResourceMark rm;</span>
+<span class="new">1524     tty-&gt;print("Unsafe_GetInstanceSize: cls=");</span>
+<span class="new">1525     if (cls != NULL) {</span>
+<span class="new">1526       java_lang_Class::print_signature(JNIHandles::resolve_non_null(cls), tty);</span>
+<span class="new">1527       tty-&gt;cr();</span>
+<span class="new">1528     } else {</span>
+<span class="new">1529       tty-&gt;print_cr("&lt;null&gt;");</span>
+<span class="new">1530     }</span>
+<span class="new">1531   }</span>
+<span class="new">1532   if (cls == NULL) {</span>
+<span class="new">1533     THROW_0(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">1534   }</span>
+<span class="new">1535 </span>
+<span class="new">1536   jlong size_in_words = get_instance_size_helper(cls, CHECK_0);</span>
+<span class="new">1537   return size_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">1538 UNSAFE_END</span>
+<span class="new">1539 </span>
+<span class="new">1540 UNSAFE_ENTRY(jlong, Unsafe_GetInstanceFootprintWhenContained(JNIEnv* env,</span>
+<span class="new">1541     jobject unsafe, jclass cls))</span>
+<span class="new">1542   UnsafeWrapper("Unsafe_GetInstanceFootprintWhenContained");</span>
+<span class="new">1543   if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">1544     ResourceMark rm;</span>
+<span class="new">1545     tty-&gt;print("Unsafe_GetInstanceFootprintWhenContained: cls=");</span>
+<span class="new">1546     if (cls != NULL) {</span>
+<span class="new">1547       java_lang_Class::print_signature(JNIHandles::resolve_non_null(cls), tty);</span>
+<span class="new">1548       tty-&gt;cr();</span>
+<span class="new">1549     } else {</span>
+<span class="new">1550       tty-&gt;print_cr("&lt;null&gt;");</span>
+<span class="new">1551     }</span>
+<span class="new">1552   }</span>
+<span class="new">1553   if (cls == NULL) {</span>
+<span class="new">1554     THROW_0(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">1555   }</span>
+<span class="new">1556 </span>
+<span class="new">1557   jlong size_in_words = get_prepadding_helper() +</span>
+<span class="new">1558       get_instance_size_helper(cls, CHECK_0);</span>
+<span class="new">1559   return size_in_words &lt;&lt; LogHeapWordSize;</span>
+<span class="new">1560 UNSAFE_END</span>
+<span class="new">1561 </span>
+<span class="new">1562 UNSAFE_ENTRY(jlong, Unsafe_GetContainingObjectFootprint(JNIEnv* env,</span>
+<span class="new">1563     jobject unsafe, jclass container_cls, jlong element_size_in_bytes,</span>
+<span class="new">1564     jlong number_of_elements))</span>
+<span class="new">1565   UnsafeWrapper("Unsafe_GetContainingObjectFootprint");</span>
+<span class="new">1566   if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">1567     ResourceMark rm;</span>
+<span class="new">1568     tty-&gt;print("Unsafe_GetContainingObjectFootprint: container_cls=");</span>
+<span class="new">1569     if (container_cls != NULL) {</span>
+<span class="new">1570       java_lang_Class::print_signature(</span>
+<span class="new">1571           JNIHandles::resolve_non_null(container_cls), tty);</span>
+<span class="new">1572     } else {</span>
+<span class="new">1573       tty-&gt;print("&lt;null&gt;");</span>
+<span class="new">1574     }</span>
+<span class="new">1575     tty-&gt;print_cr(", element_size_in_bytes=%ld(0x%lX), number_of_elements=%ld",</span>
+<span class="new">1576         element_size_in_bytes, element_size_in_bytes, number_of_elements);</span>
+<span class="new">1577   }</span>
+<span class="new">1578   if (container_cls == NULL) {</span>
+<span class="new">1579     THROW_0(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">1580   }</span>
+<span class="new">1581   if (!is_size_aligned((size_t) element_size_in_bytes, HeapWordSize) ||</span>
+<span class="new">1582       element_size_in_bytes &lt;= 0 || number_of_elements &lt; 0) {</span>
+<span class="new">1583     THROW_0(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">1584   }</span>
+<span class="new">1585 </span>
+<span class="new">1586   jlong body_size_in_words = get_instance_size_helper(container_cls, CHECK_0);</span>
+<span class="new">1587   jlong element_size_in_words = element_size_in_bytes &gt;&gt; LogHeapWordSize;</span>
+<span class="new">1588   return (body_size_in_words + (number_of_elements * element_size_in_words)) &lt;&lt;</span>
+<span class="new">1589       LogHeapWordSize;</span>
+<span class="new">1590 UNSAFE_END</span>
+<span class="new">1591 </span>
+<span class="new">1592 UNSAFE_ENTRY(jlong, Unsafe_GetContainingObjectFootprintWhenContained(</span>
+<span class="new">1593     JNIEnv* env, jobject unsafe, jclass container_cls,</span>
+<span class="new">1594     jlong element_size_in_bytes, jlong number_of_elements))</span>
+<span class="new">1595   UnsafeWrapper("Unsafe_GetContainingObjectFootprintWhenContained");</span>
+<span class="new">1596   if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">1597     ResourceMark rm;</span>
+<span class="new">1598     tty-&gt;print("Unsafe_GetContainingObjectFootprintWhenContained: "</span>
+<span class="new">1599         "container_cls=");</span>
+<span class="new">1600     if (container_cls != NULL) {</span>
+<span class="new">1601       java_lang_Class::print_signature(</span>
+<span class="new">1602           JNIHandles::resolve_non_null(container_cls), tty);</span>
+<span class="new">1603     } else {</span>
+<span class="new">1604       tty-&gt;print("&lt;null&gt;");</span>
+<span class="new">1605     }</span>
+<span class="new">1606     tty-&gt;print_cr(", element_size_in_bytes=%ld(0x%lX), number_of_elements=%ld",</span>
+<span class="new">1607         element_size_in_bytes, element_size_in_bytes, number_of_elements);</span>
+<span class="new">1608   }</span>
+<span class="new">1609   if (container_cls == NULL) {</span>
+<span class="new">1610     THROW_0(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">1611   }</span>
+<span class="new">1612   if (!is_size_aligned((size_t) element_size_in_bytes, HeapWordSize) ||</span>
+<span class="new">1613       element_size_in_bytes &lt;= 0 || number_of_elements &lt; 0) {</span>
+<span class="new">1614     THROW_0(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">1615   }</span>
+<span class="new">1616 </span>
+<span class="new">1617   jlong prepadding_in_words = get_prepadding_helper();</span>
+<span class="new">1618   jlong body_size_in_words = get_instance_size_helper(container_cls, CHECK_0);</span>
+<span class="new">1619   jlong element_size_in_words = element_size_in_bytes &gt;&gt; LogHeapWordSize;</span>
+<span class="new">1620   return (prepadding_in_words + body_size_in_words +</span>
+<span class="new">1621       (number_of_elements * element_size_in_words)) &lt;&lt; LogHeapWordSize;</span>
+<span class="new">1622 UNSAFE_END</span>
+<span class="new">1623 </span>
+<span class="new">1624 UNSAFE_ENTRY(jlong, Unsafe_GetPrePaddingInObjectFootprint(JNIEnv* env,</span>
+<span class="new">1625     jobject unsafe, jlong obj_footprint_in_bytes))</span>
+<span class="new">1626   UnsafeWrapper("Unsafe_GetPrePaddingInObjectFootprint");</span>
+<span class="new">1627   if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">1628     tty-&gt;print_cr("Unsafe_GetPrePaddingInObjectFootprint: "</span>
+<span class="new">1629         "obj_footprint_in_bytes=%ld(0x%lX)", obj_footprint_in_bytes,</span>
+<span class="new">1630         obj_footprint_in_bytes);</span>
+<span class="new">1631   }</span>
+<span class="new">1632 </span>
+<span class="new">1633   return get_prepadding_helper() &lt;&lt; LogHeapWordSize;</span>
+<span class="new">1634 UNSAFE_END</span>
+<span class="new">1635 </span>
+<span class="new">1636 UNSAFE_ENTRY(jobject, Unsafe_AllocateHeapForElementArrayClass(JNIEnv* env,</span>
+<span class="new">1637     jobject unsafe, jclass container_cls, jlongArray element_counts,</span>
+<span class="new">1638     jobjectArray element_classes))</span>
+<span class="new">1639   UnsafeWrapper("Unsafe_AllocateHeapForElementArrayClass");</span>
+<span class="new">1640   if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">1641     ResourceMark rm;</span>
+<span class="new">1642     tty-&gt;print("Unsafe_AllocateHeapForElementArrayClass: container_cls=");</span>
+<span class="new">1643     if (container_cls != NULL) {</span>
+<span class="new">1644       java_lang_Class::print_signature(</span>
+<span class="new">1645           JNIHandles::resolve_non_null(container_cls), tty);</span>
+<span class="new">1646     } else {</span>
+<span class="new">1647       tty-&gt;print("&lt;null&gt;");</span>
+<span class="new">1648     }</span>
+<span class="new">1649     tty-&gt;print_cr(", element_counts=" PTR_FORMAT</span>
+<span class="new">1650         ", element_classes=" PTR_FORMAT,</span>
+<span class="new">1651         p2i((void*) JNIHandles::resolve(element_counts)),</span>
+<span class="new">1652         p2i((void*) JNIHandles::resolve(element_classes)));</span>
+<span class="new">1653   }</span>
+<span class="new">1654   if (container_cls == NULL || element_counts == NULL ||</span>
+<span class="new">1655       element_classes == NULL) {</span>
+<span class="new">1656     THROW_NULL(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">1657   }</span>
+<span class="new">1658 </span>
+<span class="new">1659   typeArrayHandle h_element_counts(THREAD,</span>
+<span class="new">1660       typeArrayOop(JNIHandles::resolve_non_null(element_counts)));</span>
+<span class="new">1661   objArrayHandle h_element_classes(THREAD,</span>
+<span class="new">1662       objArrayOop(JNIHandles::resolve_non_null(element_classes)));</span>
+<span class="new">1663   int dims = h_element_counts-&gt;length();</span>
+<span class="new">1664 </span>
+<span class="new">1665   if (dims == 0 || dims != h_element_classes-&gt;length()) {</span>
+<span class="new">1666     THROW_NULL(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">1667   }</span>
+<span class="new">1668   for (int i = 0; i &lt; dims; i++) {</span>
+<span class="new">1669     if (h_element_counts-&gt;long_at(i) &lt; 0 ||</span>
+<span class="new">1670         h_element_classes-&gt;obj_at(i) == NULL) {</span>
+<span class="new">1671       THROW_NULL(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">1672     }</span>
+<span class="new">1673   }</span>
+<span class="new">1674 </span>
+<span class="new">1675   // Make sure that all the involved klasses are valid for instantiation</span>
+<span class="new">1676   // and initialized</span>
+<span class="new">1677   instanceKlassHandle h_container_klass(THREAD,</span>
+<span class="new">1678       java_lang_Class::as_Klass(JNIHandles::resolve_non_null(container_cls)));</span>
+<span class="new">1679   h_container_klass-&gt;check_valid_for_instantiation(true, CHECK_NULL);</span>
+<span class="new">1680   h_container_klass-&gt;initialize(CHECK_NULL);</span>
+<span class="new">1681   for (int i = 0; i &lt; dims; i++) {</span>
+<span class="new">1682     instanceKlassHandle h_element_klass(THREAD,</span>
+<span class="new">1683         java_lang_Class::as_Klass(h_element_classes-&gt;obj_at(i)));</span>
+<span class="new">1684     h_element_klass-&gt;check_valid_for_instantiation(true, CHECK_NULL);</span>
+<span class="new">1685     h_element_klass-&gt;initialize(CHECK_NULL);</span>
+<span class="new">1686   }</span>
+<span class="new">1687 </span>
+<span class="new">1688   // We need to allocate in the Java heap a memory region for a multi-</span>
+<span class="new">1689   // dimensional structured array which is described by the given specification.</span>
+<span class="new">1690   // The specification consists of two parallel arrays determining counts</span>
+<span class="new">1691   // of the elements (h_element_counts) and their classes (h_element_classes)</span>
+<span class="new">1692   // for all nesting levels, starting from the outermost one. The number of</span>
+<span class="new">1693   // dimensions is determined by the length of these arrays.</span>
+<span class="new">1694   //</span>
+<span class="new">1695   // Here are the steps we need to do:</span>
+<span class="new">1696   // 1. Calculate the total memory footprint of the multi-dimensional</span>
+<span class="new">1697   //    structured array (including containing, contained, and RCO objects</span>
+<span class="new">1698   //    on all nesting levels).</span>
+<span class="new">1699   // 2. Allocate a memory region with the calculated size.</span>
+<span class="new">1700   // 3. Initialize the headers of all the objects that make up the multi-</span>
+<span class="new">1701   //    dimensional structured array (including containing, contained, and RCO</span>
+<span class="new">1702   //    objects on all nesting levels); initialize special fields of all the</span>
+<span class="new">1703   //    containing objects; set up the offset values in all the RCO objects.</span>
+<span class="new">1704   //    It is important to complete all this initialization work before the</span>
+<span class="new">1705   //    return from this method, otherwise the uninitialized contents get</span>
+<span class="new">1706   //    exposed to the Java heap scanners and garbage collectors. An attempt</span>
+<span class="new">1707   //    to scan an uninitialized or partially initialized structured array</span>
+<span class="new">1708   //    would most likely result in a crash. It is also important to note that</span>
+<span class="new">1709   //    by initialization here we don't mean actual creation of involved</span>
+<span class="new">1710   //    Java objects (calling their constructors, etc.), but just doing</span>
+<span class="new">1711   //    a specific set of steps for making the region of memory representing</span>
+<span class="new">1712   //    the multi-dimensional structured array parsable by heap scanners and</span>
+<span class="new">1713   //    GCs.</span>
+<span class="new">1714 </span>
+<span class="new">1715   // Initialize configurations of all nesting levels of the structured array</span>
+<span class="new">1716   UnfoldedStructuredArrayConfiguration configuration;</span>
+<span class="new">1717   configuration.initialize(container_cls, h_element_counts, h_element_classes,</span>
+<span class="new">1718       CHECK_NULL);</span>
+<span class="new">1719 </span>
+<span class="new">1720   // Multi-dimensional cursor able to address elements of the most inner level</span>
+<span class="new">1721   jlong* cursors = NEW_C_HEAP_ARRAY(jlong, dims, mtInternal);</span>
+<span class="new">1722   if (cursors == NULL) {</span>
+<span class="new">1723     THROW_NULL(vmSymbols::java_lang_OutOfMemoryError());</span>
+<span class="new">1724   }</span>
+<span class="new">1725   for (int i = 0; i &lt; dims; i++) {</span>
+<span class="new">1726     cursors[i] = 0;</span>
+<span class="new">1727   }</span>
+<span class="new">1728 </span>
+<span class="new">1729   // Calculate the total memory footprint of the multi-dimensional structured</span>
+<span class="new">1730   // array</span>
+<span class="new">1731   jlong size_in_words = (configuration.body_size(0) +</span>
+<span class="new">1732       (configuration.length(0) * configuration.element_size(0))) &gt;&gt;</span>
+<span class="new">1733       LogHeapWordSize;</span>
+<span class="new">1734 </span>
+<span class="new">1735 #ifdef ASSERT</span>
+<span class="new">1736   if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">1737     tty-&gt;print_cr("  Unsafe_AllocateHeapForElementArrayClass: "</span>
+<span class="new">1738         "size=0x%lX", size_in_words &lt;&lt; LogHeapWordSize);</span>
+<span class="new">1739   }</span>
+<span class="new">1740 #endif // ASSERT</span>
+<span class="new">1741 </span>
+<span class="new">1742   // Allocate a memory region with the calculated size</span>
+<span class="new">1743   oop container_obj =</span>
+<span class="new">1744       h_container_klass-&gt;allocate_instance((int) size_in_words, CHECK_NULL);</span>
+<span class="new">1745   configuration.configure_instance(container_obj, 0);</span>
+<span class="new">1746 </span>
+<span class="new">1747   // Initialize the headers of all the objects that make up the multi-</span>
+<span class="new">1748   // dimensional structured array; initialize special fields of all the</span>
+<span class="new">1749   // containing objects; set up the offset values in all the RCO objects</span>
+<span class="new">1750 </span>
+<span class="new">1751   address last_container_addr = (address) container_obj;</span>
+<span class="new">1752   address derived_obj_addr = ((address) container_obj) +</span>
+<span class="new">1753       configuration.body_size(0) + configuration.padding_size(0);</span>
+<span class="new">1754 </span>
+<span class="new">1755   // This cycle initializes one innermost structured array per iteration. It</span>
+<span class="new">1756   // also correctly handles situations when there are arrays with zero lengths</span>
+<span class="new">1757   // somewhere in the hierarchy. In this case the cycle initializes one</span>
+<span class="new">1758   // outermost structured array with zero length per cycle.</span>
+<span class="new">1759   int cur_dim = 0;</span>
+<span class="new">1760   do {</span>
+<span class="new">1761     // Initialize one outermost structured array with zero length or, if there</span>
+<span class="new">1762     // are no such arrays, one innermost structured array, including all its</span>
+<span class="new">1763     // containers that are not initialized yet</span>
+<span class="new">1764     while (cur_dim &lt; dims - 1) {</span>
+<span class="new">1765       if (configuration.length(cur_dim) == 0) {</span>
+<span class="new">1766         break;</span>
+<span class="new">1767       }</span>
+<span class="new">1768       create_rco_object(derived_obj_addr,</span>
+<span class="new">1769           derived_obj_addr - last_container_addr);</span>
+<span class="new">1770       instanceKlassHandle h_element_klass(THREAD,</span>
+<span class="new">1771           java_lang_Class::as_Klass(configuration.element_class(cur_dim)()));</span>
+<span class="new">1772       oop derived_obj = h_element_klass-&gt;allocate_instance_at(derived_obj_addr,</span>
+<span class="new">1773           true, true, CHECK_NULL);</span>
+<span class="new">1774       configuration.configure_instance(derived_obj, cur_dim + 1);</span>
+<span class="new">1775       last_container_addr = derived_obj_addr;</span>
+<span class="new">1776       derived_obj_addr += configuration.body_size(cur_dim + 1) +</span>
+<span class="new">1777           configuration.padding_size(cur_dim + 1);</span>
+<span class="new">1778       cur_dim++;</span>
+<span class="new">1779     }</span>
+<span class="new">1780 </span>
+<span class="new">1781     // If we got to the innermost structured array, initialize its elements</span>
+<span class="new">1782     if (cur_dim == dims - 1) {</span>
+<span class="new">1783       instanceKlassHandle h_element_klass(THREAD,</span>
+<span class="new">1784           java_lang_Class::as_Klass(configuration.element_class(cur_dim)()));</span>
+<span class="new">1785       for (jlong i = 0; i &lt; configuration.length(cur_dim); i++) {</span>
+<span class="new">1786         create_rco_object(derived_obj_addr,</span>
+<span class="new">1787             derived_obj_addr - last_container_addr);</span>
+<span class="new">1788         h_element_klass-&gt;allocate_instance_at(derived_obj_addr, true, false,</span>
+<span class="new">1789             CHECK_NULL);</span>
+<span class="new">1790         derived_obj_addr += configuration.element_size(cur_dim);</span>
+<span class="new">1791       }</span>
+<span class="new">1792     }</span>
+<span class="new">1793 </span>
+<span class="new">1794     // Move the cursor to the next structured array. The cursor will overflow</span>
+<span class="new">1795     // and reset to the vector of zeros after all the hierarchy is traversed.</span>
+<span class="new">1796     while (cur_dim &gt; 0) {</span>
+<span class="new">1797       cur_dim--;</span>
+<span class="new">1798       cursors[cur_dim]++;</span>
+<span class="new">1799       if (cursors[cur_dim] &lt; configuration.length(cur_dim)) {</span>
+<span class="new">1800         break;</span>
+<span class="new">1801       }</span>
+<span class="new">1802       cursors[cur_dim] = 0;</span>
+<span class="new">1803     }</span>
+<span class="new">1804   } while (cur_dim != 0 || cursors[cur_dim] != 0);</span>
+<span class="new">1805 </span>
+<span class="new">1806   FREE_C_HEAP_ARRAY(jlong, cursors, mtInternal);</span>
+<span class="new">1807 </span>
+<span class="new">1808   return JNIHandles::make_local(env, container_obj);</span>
+<span class="new">1809 UNSAFE_END</span>
+<span class="new">1810 </span>
+<span class="new">1811 UNSAFE_ENTRY(void, Unsafe_ConstructObjectAtOffset(JNIEnv* env, jobject unsafe,</span>
+<span class="new">1812     jobject container, jlong offset, jlong obj_prepadding,</span>
+<span class="new">1813     jboolean is_contained, jboolean is_container, jlong obj_footprint,</span>
+<span class="new">1814     jobject ctor, jobjectArray ctor_args))</span>
+<span class="new">1815   UnsafeWrapper("Unsafe_ConstructObjectAtOffset");</span>
+<span class="new">1816   if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">1817     tty-&gt;print_cr("Unsafe_ConstructObjectAtOffset: "</span>
+<span class="new">1818         "container=" PTR_FORMAT ", offset=0x%lX, "</span>
+<span class="new">1819         "obj_prepadding=0x%lX, %scontained, %scontainer, obj_footprint=0x%lX, "</span>
+<span class="new">1820         "ctor=" PTR_FORMAT ", ctor_args=" PTR_FORMAT,</span>
+<span class="new">1821         p2i((void*) JNIHandles::resolve(container)),</span>
+<span class="new">1822         offset,</span>
+<span class="new">1823         obj_prepadding,</span>
+<span class="new">1824         is_contained ? "" : "not ",</span>
+<span class="new">1825         is_container ? "" : "not ",</span>
+<span class="new">1826         obj_footprint,</span>
+<span class="new">1827         p2i((void*) JNIHandles::resolve(ctor)),</span>
+<span class="new">1828         p2i((void*) JNIHandles::resolve(ctor_args)));</span>
+<span class="new">1829   }</span>
+<span class="new">1830   if (container == NULL || ctor == NULL) {</span>
+<span class="new">1831     THROW(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">1832   }</span>
+<span class="new">1833   if (!is_size_aligned((size_t) offset, HeapWordSize) || offset &lt; 0 ||</span>
+<span class="new">1834       ((is_contained == JNI_FALSE) &amp;&amp; (obj_prepadding != 0)) ||</span>
+<span class="new">1835       ((is_contained != JNI_FALSE) &amp;&amp;</span>
+<span class="new">1836       (obj_prepadding != (get_prepadding_helper() &lt;&lt; LogHeapWordSize)))) {</span>
+<span class="new">1837     THROW(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">1838   }</span>
+<span class="new">1839 </span>
+<span class="new">1840   // Calculate the address at which the object will be created</span>
+<span class="new">1841   oop container_obj = JNIHandles::resolve_non_null(container);</span>
+<span class="new">1842   address derived_obj_addr = ((address) container_obj) + offset;</span>
+<span class="new">1843 </span>
+<span class="new">1844   // Create the object</span>
+<span class="new">1845   oop ctor_mirror = JNIHandles::resolve_non_null(ctor);</span>
+<span class="new">1846 </span>
+<span class="new">1847   objArrayHandle h_ctor_args(THREAD,</span>
+<span class="new">1848       objArrayOop(JNIHandles::resolve(ctor_args)));</span>
+<span class="new">1849 </span>
+<span class="new">1850   oop result = Reflection::invoke_constructor_in_place(derived_obj_addr,</span>
+<span class="new">1851       (is_contained != JNI_FALSE), (is_container != JNI_FALSE),</span>
+<span class="new">1852       ctor_mirror, h_ctor_args, CHECK);</span>
+<span class="new">1853 </span>
+<span class="new">1854   if (JvmtiExport::should_post_vm_object_alloc()) {</span>
+<span class="new">1855     JvmtiExport::post_vm_object_alloc(JavaThread::current(), result);</span>
+<span class="new">1856   }</span>
+<span class="new">1857 UNSAFE_END</span>
+<span class="new">1858 </span>
+<span class="new">1859 UNSAFE_ENTRY(jobject, Unsafe_DeriveContainedObjectAtOffset(JNIEnv* env,</span>
+<span class="new">1860     jobject unsafe, jobject container, jlong offset_in_bytes))</span>
+<span class="new">1861   UnsafeWrapper("Unsafe_DeriveContainedObjectAtOffset");</span>
+<span class="new">1862   if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">1863     tty-&gt;print_cr("Unsafe_DeriveContainedObjectAtOffset: "</span>
+<span class="new">1864         "container=" PTR_FORMAT ", offset_in_bytes=%ld(0x%lX)",</span>
+<span class="new">1865         p2i((void*) JNIHandles::resolve(container)), offset_in_bytes,</span>
+<span class="new">1866         offset_in_bytes);</span>
+<span class="new">1867   }</span>
+<span class="new">1868   if (container == NULL) {</span>
+<span class="new">1869     THROW_NULL(vmSymbols::java_lang_NullPointerException());</span>
+<span class="new">1870   }</span>
+<span class="new">1871   if (!is_size_aligned((size_t) offset_in_bytes, HeapWordSize) ||</span>
+<span class="new">1872       offset_in_bytes &lt; 0) {</span>
+<span class="new">1873     THROW_NULL(vmSymbols::java_lang_IllegalArgumentException());</span>
+<span class="new">1874   }</span>
+<span class="new">1875 </span>
+<span class="new">1876   oop container_obj = JNIHandles::resolve_non_null(container);</span>
+<span class="new">1877   oop derived_obj = (oop) (((address) container_obj) + offset_in_bytes);</span>
+<span class="new">1878 </span>
+<span class="new">1879 #ifdef ASSERT</span>
+<span class="new">1880   if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">1881     if (derived_obj-&gt;is_contained()) {</span>
+<span class="new">1882       jlong stored_offset_in_bytes = derived_obj-&gt;relative_container_offset();</span>
+<span class="new">1883       tty-&gt;print_cr("  Unsafe_DeriveContainedObjectAtOffset: "</span>
+<span class="new">1884           "derived object contained, RCO=%ld(0x%lX)",</span>
+<span class="new">1885           stored_offset_in_bytes, stored_offset_in_bytes);</span>
+<span class="new">1886     } else {</span>
+<span class="new">1887       tty-&gt;print_cr("  Unsafe_DeriveContainedObjectAtOffset: "</span>
+<span class="new">1888           "derived object not contained");</span>
+<span class="new">1889     }</span>
+<span class="new">1890   }</span>
+<span class="new">1891 #endif // ASSERT</span>
+<span class="new">1892 </span>
+<span class="new">1893   return JNIHandles::make_local(env, derived_obj);</span>
+<span class="new">1894 UNSAFE_END</span>
+1895 
+1896 /// JVM_RegisterUnsafeMethods
+1897 
+1898 #define ADR "J"
+1899 
+1900 #define LANG "Ljava/lang/"
+1901 
+1902 #define OBJ LANG"Object;"
+1903 #define CLS LANG"Class;"
+1904 #define CTR LANG"reflect/Constructor;"
+1905 #define FLD LANG"reflect/Field;"
+1906 #define MTH LANG"reflect/Method;"
+1907 #define THR LANG"Throwable;"
+1908 
+1909 #define DC0_Args LANG"String;[BII"
+1910 #define DC_Args  DC0_Args LANG"ClassLoader;" "Ljava/security/ProtectionDomain;"
+1911 
+1912 #define CC (char*)  /*cast a literal from (const char*)*/
+1913 #define FN_PTR(f) CAST_FROM_FN_PTR(void*, &amp;f)
+1914 
+1915 // define deprecated accessors for compabitility with 1.4.0
+1916 #define DECLARE_GETSETOOP_140(Boolean, Z) \
+1917     {CC"get"#Boolean,      CC"("OBJ"I)"#Z,      FN_PTR(Unsafe_Get##Boolean##140)}, \
+1918     {CC"put"#Boolean,      CC"("OBJ"I"#Z")V",   FN_PTR(Unsafe_Set##Boolean##140)}
+1919 
+1920 // Note:  In 1.4.1, getObject and kin take both int and long offsets.
+1921 #define DECLARE_GETSETOOP_141(Boolean, Z) \
+1922     {CC"get"#Boolean,      CC"("OBJ"J)"#Z,      FN_PTR(Unsafe_Get##Boolean)}, \
+1923     {CC"put"#Boolean,      CC"("OBJ"J"#Z")V",   FN_PTR(Unsafe_Set##Boolean)}
+1924 
+1925 // Note:  In 1.5.0, there are volatile versions too
+1926 #define DECLARE_GETSETOOP(Boolean, Z) \
+1927     {CC"get"#Boolean,      CC"("OBJ"J)"#Z,      FN_PTR(Unsafe_Get##Boolean)}, \
+1928     {CC"put"#Boolean,      CC"("OBJ"J"#Z")V",   FN_PTR(Unsafe_Set##Boolean)}, \
+1929     {CC"get"#Boolean"Volatile",      CC"("OBJ"J)"#Z,      FN_PTR(Unsafe_Get##Boolean##Volatile)}, \
+1930     {CC"put"#Boolean"Volatile",      CC"("OBJ"J"#Z")V",   FN_PTR(Unsafe_Set##Boolean##Volatile)}
+1931 
+1932 
+1933 #define DECLARE_GETSETNATIVE(Byte, B) \
+1934     {CC"get"#Byte,         CC"("ADR")"#B,       FN_PTR(Unsafe_GetNative##Byte)}, \
+1935     {CC"put"#Byte,         CC"("ADR#B")V",      FN_PTR(Unsafe_SetNative##Byte)}
+1936 
+1937 
+1938 
+1939 // These are the methods for 1.4.0
+1940 static JNINativeMethod methods_140[] = {
+1941     {CC"getObject",        CC"("OBJ"I)"OBJ"",   FN_PTR(Unsafe_GetObject140)},
+1942     {CC"putObject",        CC"("OBJ"I"OBJ")V",  FN_PTR(Unsafe_SetObject140)},
+1943 
+1944     DECLARE_GETSETOOP_140(Boolean, Z),
+1945     DECLARE_GETSETOOP_140(Byte, B),
+1946     DECLARE_GETSETOOP_140(Short, S),
+1947     DECLARE_GETSETOOP_140(Char, C),
+1948     DECLARE_GETSETOOP_140(Int, I),
+1949     DECLARE_GETSETOOP_140(Long, J),
+1950     DECLARE_GETSETOOP_140(Float, F),
+1951     DECLARE_GETSETOOP_140(Double, D),
+1952 
+1953     DECLARE_GETSETNATIVE(Byte, B),
+1954     DECLARE_GETSETNATIVE(Short, S),
+1955     DECLARE_GETSETNATIVE(Char, C),
+1956     DECLARE_GETSETNATIVE(Int, I),
+1957     DECLARE_GETSETNATIVE(Long, J),
+1958     DECLARE_GETSETNATIVE(Float, F),
+1959     DECLARE_GETSETNATIVE(Double, D),
+1960 
+1961     {CC"getAddress",         CC"("ADR")"ADR,             FN_PTR(Unsafe_GetNativeAddress)},
+1962     {CC"putAddress",         CC"("ADR""ADR")V",          FN_PTR(Unsafe_SetNativeAddress)},
+1963 
+1964     {CC"allocateMemory",     CC"(J)"ADR,                 FN_PTR(Unsafe_AllocateMemory)},
+1965     {CC"reallocateMemory",   CC"("ADR"J)"ADR,            FN_PTR(Unsafe_ReallocateMemory)},
+1966     {CC"freeMemory",         CC"("ADR")V",               FN_PTR(Unsafe_FreeMemory)},
+1967 
+1968     {CC"fieldOffset",        CC"("FLD")I",               FN_PTR(Unsafe_FieldOffset)},
+1969     {CC"staticFieldBase",    CC"("CLS")"OBJ,             FN_PTR(Unsafe_StaticFieldBaseFromClass)},
+1970     {CC"ensureClassInitialized",CC"("CLS")V",            FN_PTR(Unsafe_EnsureClassInitialized)},
+1971     {CC"arrayBaseOffset",    CC"("CLS")I",               FN_PTR(Unsafe_ArrayBaseOffset)},
+1972     {CC"arrayIndexScale",    CC"("CLS")I",               FN_PTR(Unsafe_ArrayIndexScale)},
+1973     {CC"addressSize",        CC"()I",                    FN_PTR(Unsafe_AddressSize)},
+1974     {CC"pageSize",           CC"()I",                    FN_PTR(Unsafe_PageSize)},
+1975 
+1976     {CC"defineClass",        CC"("DC0_Args")"CLS,        FN_PTR(Unsafe_DefineClass0)},
+1977     {CC"defineClass",        CC"("DC_Args")"CLS,         FN_PTR(Unsafe_DefineClass)},
+1978     {CC"allocateInstance",   CC"("CLS")"OBJ,             FN_PTR(Unsafe_AllocateInstance)},
+1979     {CC"monitorEnter",       CC"("OBJ")V",               FN_PTR(Unsafe_MonitorEnter)},
+1980     {CC"monitorExit",        CC"("OBJ")V",               FN_PTR(Unsafe_MonitorExit)},
+1981     {CC"throwException",     CC"("THR")V",               FN_PTR(Unsafe_ThrowException)}
+1982 };
+1983 
+1984 // These are the methods prior to the JSR 166 changes in 1.5.0
+1985 static JNINativeMethod methods_141[] = {
+1986     {CC"getObject",        CC"("OBJ"J)"OBJ"",   FN_PTR(Unsafe_GetObject)},
+1987     {CC"putObject",        CC"("OBJ"J"OBJ")V",  FN_PTR(Unsafe_SetObject)},
+1988 
+1989     DECLARE_GETSETOOP_141(Boolean, Z),
+1990     DECLARE_GETSETOOP_141(Byte, B),
+1991     DECLARE_GETSETOOP_141(Short, S),
+1992     DECLARE_GETSETOOP_141(Char, C),
+1993     DECLARE_GETSETOOP_141(Int, I),
+1994     DECLARE_GETSETOOP_141(Long, J),
+1995     DECLARE_GETSETOOP_141(Float, F),
+1996     DECLARE_GETSETOOP_141(Double, D),
+1997 
+1998     DECLARE_GETSETNATIVE(Byte, B),
+1999     DECLARE_GETSETNATIVE(Short, S),
+2000     DECLARE_GETSETNATIVE(Char, C),
+2001     DECLARE_GETSETNATIVE(Int, I),
+2002     DECLARE_GETSETNATIVE(Long, J),
+2003     DECLARE_GETSETNATIVE(Float, F),
+2004     DECLARE_GETSETNATIVE(Double, D),
+2005 
+2006     {CC"getAddress",         CC"("ADR")"ADR,             FN_PTR(Unsafe_GetNativeAddress)},
+2007     {CC"putAddress",         CC"("ADR""ADR")V",          FN_PTR(Unsafe_SetNativeAddress)},
+2008 
+2009     {CC"allocateMemory",     CC"(J)"ADR,                 FN_PTR(Unsafe_AllocateMemory)},
+2010     {CC"reallocateMemory",   CC"("ADR"J)"ADR,            FN_PTR(Unsafe_ReallocateMemory)},
+2011     {CC"freeMemory",         CC"("ADR")V",               FN_PTR(Unsafe_FreeMemory)},
+2012 
+2013     {CC"objectFieldOffset",  CC"("FLD")J",               FN_PTR(Unsafe_ObjectFieldOffset)},
+2014     {CC"staticFieldOffset",  CC"("FLD")J",               FN_PTR(Unsafe_StaticFieldOffset)},
+2015     {CC"staticFieldBase",    CC"("FLD")"OBJ,             FN_PTR(Unsafe_StaticFieldBaseFromField)},
+2016     {CC"ensureClassInitialized",CC"("CLS")V",            FN_PTR(Unsafe_EnsureClassInitialized)},
+2017     {CC"arrayBaseOffset",    CC"("CLS")I",               FN_PTR(Unsafe_ArrayBaseOffset)},
+2018     {CC"arrayIndexScale",    CC"("CLS")I",               FN_PTR(Unsafe_ArrayIndexScale)},
+2019     {CC"addressSize",        CC"()I",                    FN_PTR(Unsafe_AddressSize)},
+2020     {CC"pageSize",           CC"()I",                    FN_PTR(Unsafe_PageSize)},
+2021 
+2022     {CC"defineClass",        CC"("DC0_Args")"CLS,        FN_PTR(Unsafe_DefineClass0)},
+2023     {CC"defineClass",        CC"("DC_Args")"CLS,         FN_PTR(Unsafe_DefineClass)},
+2024     {CC"allocateInstance",   CC"("CLS")"OBJ,             FN_PTR(Unsafe_AllocateInstance)},
+2025     {CC"monitorEnter",       CC"("OBJ")V",               FN_PTR(Unsafe_MonitorEnter)},
+2026     {CC"monitorExit",        CC"("OBJ")V",               FN_PTR(Unsafe_MonitorExit)},
+2027     {CC"throwException",     CC"("THR")V",               FN_PTR(Unsafe_ThrowException)}
+2028 
+2029 };
+2030 
+2031 // These are the methods prior to the JSR 166 changes in 1.6.0
+2032 static JNINativeMethod methods_15[] = {
+2033     {CC"getObject",        CC"("OBJ"J)"OBJ"",   FN_PTR(Unsafe_GetObject)},
+2034     {CC"putObject",        CC"("OBJ"J"OBJ")V",  FN_PTR(Unsafe_SetObject)},
+2035     {CC"getObjectVolatile",CC"("OBJ"J)"OBJ"",   FN_PTR(Unsafe_GetObjectVolatile)},
+2036     {CC"putObjectVolatile",CC"("OBJ"J"OBJ")V",  FN_PTR(Unsafe_SetObjectVolatile)},
+2037 
+2038 
+2039     DECLARE_GETSETOOP(Boolean, Z),
+2040     DECLARE_GETSETOOP(Byte, B),
+2041     DECLARE_GETSETOOP(Short, S),
+2042     DECLARE_GETSETOOP(Char, C),
+2043     DECLARE_GETSETOOP(Int, I),
+2044     DECLARE_GETSETOOP(Long, J),
+2045     DECLARE_GETSETOOP(Float, F),
+2046     DECLARE_GETSETOOP(Double, D),
+2047 
+2048     DECLARE_GETSETNATIVE(Byte, B),
+2049     DECLARE_GETSETNATIVE(Short, S),
+2050     DECLARE_GETSETNATIVE(Char, C),
+2051     DECLARE_GETSETNATIVE(Int, I),
+2052     DECLARE_GETSETNATIVE(Long, J),
+2053     DECLARE_GETSETNATIVE(Float, F),
+2054     DECLARE_GETSETNATIVE(Double, D),
+2055 
+2056     {CC"getAddress",         CC"("ADR")"ADR,             FN_PTR(Unsafe_GetNativeAddress)},
+2057     {CC"putAddress",         CC"("ADR""ADR")V",          FN_PTR(Unsafe_SetNativeAddress)},
+2058 
+2059     {CC"allocateMemory",     CC"(J)"ADR,                 FN_PTR(Unsafe_AllocateMemory)},
+2060     {CC"reallocateMemory",   CC"("ADR"J)"ADR,            FN_PTR(Unsafe_ReallocateMemory)},
+2061     {CC"freeMemory",         CC"("ADR")V",               FN_PTR(Unsafe_FreeMemory)},
+2062 
+2063     {CC"objectFieldOffset",  CC"("FLD")J",               FN_PTR(Unsafe_ObjectFieldOffset)},
+2064     {CC"staticFieldOffset",  CC"("FLD")J",               FN_PTR(Unsafe_StaticFieldOffset)},
+2065     {CC"staticFieldBase",    CC"("FLD")"OBJ,             FN_PTR(Unsafe_StaticFieldBaseFromField)},
+2066     {CC"ensureClassInitialized",CC"("CLS")V",            FN_PTR(Unsafe_EnsureClassInitialized)},
+2067     {CC"arrayBaseOffset",    CC"("CLS")I",               FN_PTR(Unsafe_ArrayBaseOffset)},
+2068     {CC"arrayIndexScale",    CC"("CLS")I",               FN_PTR(Unsafe_ArrayIndexScale)},
+2069     {CC"addressSize",        CC"()I",                    FN_PTR(Unsafe_AddressSize)},
+2070     {CC"pageSize",           CC"()I",                    FN_PTR(Unsafe_PageSize)},
+2071 
+2072     {CC"defineClass",        CC"("DC0_Args")"CLS,        FN_PTR(Unsafe_DefineClass0)},
+2073     {CC"defineClass",        CC"("DC_Args")"CLS,         FN_PTR(Unsafe_DefineClass)},
+2074     {CC"allocateInstance",   CC"("CLS")"OBJ,             FN_PTR(Unsafe_AllocateInstance)},
+2075     {CC"monitorEnter",       CC"("OBJ")V",               FN_PTR(Unsafe_MonitorEnter)},
+2076     {CC"monitorExit",        CC"("OBJ")V",               FN_PTR(Unsafe_MonitorExit)},
+2077     {CC"throwException",     CC"("THR")V",               FN_PTR(Unsafe_ThrowException)},
+2078     {CC"compareAndSwapObject", CC"("OBJ"J"OBJ""OBJ")Z",  FN_PTR(Unsafe_CompareAndSwapObject)},
+2079     {CC"compareAndSwapInt",  CC"("OBJ"J""I""I"")Z",      FN_PTR(Unsafe_CompareAndSwapInt)},
+2080     {CC"compareAndSwapLong", CC"("OBJ"J""J""J"")Z",      FN_PTR(Unsafe_CompareAndSwapLong)},
+2081     {CC"park",               CC"(ZJ)V",                  FN_PTR(Unsafe_Park)},
+2082     {CC"unpark",             CC"("OBJ")V",               FN_PTR(Unsafe_Unpark)}
+2083 
+2084 };
+2085 
+2086 // These are the methods for 1.6.0 and 1.7.0
+2087 static JNINativeMethod methods_16[] = {
+2088     {CC"getObject",        CC"("OBJ"J)"OBJ"",   FN_PTR(Unsafe_GetObject)},
+2089     {CC"putObject",        CC"("OBJ"J"OBJ")V",  FN_PTR(Unsafe_SetObject)},
+2090     {CC"getObjectVolatile",CC"("OBJ"J)"OBJ"",   FN_PTR(Unsafe_GetObjectVolatile)},
+2091     {CC"putObjectVolatile",CC"("OBJ"J"OBJ")V",  FN_PTR(Unsafe_SetObjectVolatile)},
+2092 
+2093     DECLARE_GETSETOOP(Boolean, Z),
+2094     DECLARE_GETSETOOP(Byte, B),
+2095     DECLARE_GETSETOOP(Short, S),
+2096     DECLARE_GETSETOOP(Char, C),
+2097     DECLARE_GETSETOOP(Int, I),
+2098     DECLARE_GETSETOOP(Long, J),
+2099     DECLARE_GETSETOOP(Float, F),
+2100     DECLARE_GETSETOOP(Double, D),
+2101 
+2102     DECLARE_GETSETNATIVE(Byte, B),
+2103     DECLARE_GETSETNATIVE(Short, S),
+2104     DECLARE_GETSETNATIVE(Char, C),
+2105     DECLARE_GETSETNATIVE(Int, I),
+2106     DECLARE_GETSETNATIVE(Long, J),
+2107     DECLARE_GETSETNATIVE(Float, F),
+2108     DECLARE_GETSETNATIVE(Double, D),
+2109 
+2110     {CC"getAddress",         CC"("ADR")"ADR,             FN_PTR(Unsafe_GetNativeAddress)},
+2111     {CC"putAddress",         CC"("ADR""ADR")V",          FN_PTR(Unsafe_SetNativeAddress)},
+2112 
+2113     {CC"allocateMemory",     CC"(J)"ADR,                 FN_PTR(Unsafe_AllocateMemory)},
+2114     {CC"reallocateMemory",   CC"("ADR"J)"ADR,            FN_PTR(Unsafe_ReallocateMemory)},
+2115     {CC"freeMemory",         CC"("ADR")V",               FN_PTR(Unsafe_FreeMemory)},
+2116 
+2117     {CC"objectFieldOffset",  CC"("FLD")J",               FN_PTR(Unsafe_ObjectFieldOffset)},
+2118     {CC"staticFieldOffset",  CC"("FLD")J",               FN_PTR(Unsafe_StaticFieldOffset)},
+2119     {CC"staticFieldBase",    CC"("FLD")"OBJ,             FN_PTR(Unsafe_StaticFieldBaseFromField)},
+2120     {CC"ensureClassInitialized",CC"("CLS")V",            FN_PTR(Unsafe_EnsureClassInitialized)},
+2121     {CC"arrayBaseOffset",    CC"("CLS")I",               FN_PTR(Unsafe_ArrayBaseOffset)},
+2122     {CC"arrayIndexScale",    CC"("CLS")I",               FN_PTR(Unsafe_ArrayIndexScale)},
+2123     {CC"addressSize",        CC"()I",                    FN_PTR(Unsafe_AddressSize)},
+2124     {CC"pageSize",           CC"()I",                    FN_PTR(Unsafe_PageSize)},
+2125 
+2126     {CC"defineClass",        CC"("DC0_Args")"CLS,        FN_PTR(Unsafe_DefineClass0)},
+2127     {CC"defineClass",        CC"("DC_Args")"CLS,         FN_PTR(Unsafe_DefineClass)},
+2128     {CC"allocateInstance",   CC"("CLS")"OBJ,             FN_PTR(Unsafe_AllocateInstance)},
+2129     {CC"monitorEnter",       CC"("OBJ")V",               FN_PTR(Unsafe_MonitorEnter)},
+2130     {CC"monitorExit",        CC"("OBJ")V",               FN_PTR(Unsafe_MonitorExit)},
+2131     {CC"tryMonitorEnter",    CC"("OBJ")Z",               FN_PTR(Unsafe_TryMonitorEnter)},
+2132     {CC"throwException",     CC"("THR")V",               FN_PTR(Unsafe_ThrowException)},
+2133     {CC"compareAndSwapObject", CC"("OBJ"J"OBJ""OBJ")Z",  FN_PTR(Unsafe_CompareAndSwapObject)},
+2134     {CC"compareAndSwapInt",  CC"("OBJ"J""I""I"")Z",      FN_PTR(Unsafe_CompareAndSwapInt)},
+2135     {CC"compareAndSwapLong", CC"("OBJ"J""J""J"")Z",      FN_PTR(Unsafe_CompareAndSwapLong)},
+2136     {CC"putOrderedObject",   CC"("OBJ"J"OBJ")V",         FN_PTR(Unsafe_SetOrderedObject)},
+2137     {CC"putOrderedInt",      CC"("OBJ"JI)V",             FN_PTR(Unsafe_SetOrderedInt)},
+2138     {CC"putOrderedLong",     CC"("OBJ"JJ)V",             FN_PTR(Unsafe_SetOrderedLong)},
+2139     {CC"park",               CC"(ZJ)V",                  FN_PTR(Unsafe_Park)},
+2140     {CC"unpark",             CC"("OBJ")V",               FN_PTR(Unsafe_Unpark)}
+2141 };
+2142 
+2143 // These are the methods for 1.8.0
+2144 static JNINativeMethod methods_18[] = {
+2145     {CC"getObject",        CC"("OBJ"J)"OBJ"",   FN_PTR(Unsafe_GetObject)},
+2146     {CC"putObject",        CC"("OBJ"J"OBJ")V",  FN_PTR(Unsafe_SetObject)},
+2147     {CC"getObjectVolatile",CC"("OBJ"J)"OBJ"",   FN_PTR(Unsafe_GetObjectVolatile)},
+2148     {CC"putObjectVolatile",CC"("OBJ"J"OBJ")V",  FN_PTR(Unsafe_SetObjectVolatile)},
+2149 
+2150     DECLARE_GETSETOOP(Boolean, Z),
+2151     DECLARE_GETSETOOP(Byte, B),
+2152     DECLARE_GETSETOOP(Short, S),
+2153     DECLARE_GETSETOOP(Char, C),
+2154     DECLARE_GETSETOOP(Int, I),
+2155     DECLARE_GETSETOOP(Long, J),
+2156     DECLARE_GETSETOOP(Float, F),
+2157     DECLARE_GETSETOOP(Double, D),
+2158 
+2159     DECLARE_GETSETNATIVE(Byte, B),
+2160     DECLARE_GETSETNATIVE(Short, S),
+2161     DECLARE_GETSETNATIVE(Char, C),
+2162     DECLARE_GETSETNATIVE(Int, I),
+2163     DECLARE_GETSETNATIVE(Long, J),
+2164     DECLARE_GETSETNATIVE(Float, F),
+2165     DECLARE_GETSETNATIVE(Double, D),
+2166 
+2167     {CC"getAddress",         CC"("ADR")"ADR,             FN_PTR(Unsafe_GetNativeAddress)},
+2168     {CC"putAddress",         CC"("ADR""ADR")V",          FN_PTR(Unsafe_SetNativeAddress)},
+2169 
+2170     {CC"allocateMemory",     CC"(J)"ADR,                 FN_PTR(Unsafe_AllocateMemory)},
+2171     {CC"reallocateMemory",   CC"("ADR"J)"ADR,            FN_PTR(Unsafe_ReallocateMemory)},
+2172     {CC"freeMemory",         CC"("ADR")V",               FN_PTR(Unsafe_FreeMemory)},
+2173 
+2174     {CC"objectFieldOffset",  CC"("FLD")J",               FN_PTR(Unsafe_ObjectFieldOffset)},
+2175     {CC"staticFieldOffset",  CC"("FLD")J",               FN_PTR(Unsafe_StaticFieldOffset)},
+2176     {CC"staticFieldBase",    CC"("FLD")"OBJ,             FN_PTR(Unsafe_StaticFieldBaseFromField)},
+2177     {CC"ensureClassInitialized",CC"("CLS")V",            FN_PTR(Unsafe_EnsureClassInitialized)},
+2178     {CC"arrayBaseOffset",    CC"("CLS")I",               FN_PTR(Unsafe_ArrayBaseOffset)},
+2179     {CC"arrayIndexScale",    CC"("CLS")I",               FN_PTR(Unsafe_ArrayIndexScale)},
+2180     {CC"addressSize",        CC"()I",                    FN_PTR(Unsafe_AddressSize)},
+2181     {CC"pageSize",           CC"()I",                    FN_PTR(Unsafe_PageSize)},
+2182 
+2183     {CC"defineClass",        CC"("DC_Args")"CLS,         FN_PTR(Unsafe_DefineClass)},
+2184     {CC"allocateInstance",   CC"("CLS")"OBJ,             FN_PTR(Unsafe_AllocateInstance)},
+2185     {CC"monitorEnter",       CC"("OBJ")V",               FN_PTR(Unsafe_MonitorEnter)},
+2186     {CC"monitorExit",        CC"("OBJ")V",               FN_PTR(Unsafe_MonitorExit)},
+2187     {CC"tryMonitorEnter",    CC"("OBJ")Z",               FN_PTR(Unsafe_TryMonitorEnter)},
+2188     {CC"throwException",     CC"("THR")V",               FN_PTR(Unsafe_ThrowException)},
+2189     {CC"compareAndSwapObject", CC"("OBJ"J"OBJ""OBJ")Z",  FN_PTR(Unsafe_CompareAndSwapObject)},
+2190     {CC"compareAndSwapInt",  CC"("OBJ"J""I""I"")Z",      FN_PTR(Unsafe_CompareAndSwapInt)},
+2191     {CC"compareAndSwapLong", CC"("OBJ"J""J""J"")Z",      FN_PTR(Unsafe_CompareAndSwapLong)},
+2192     {CC"putOrderedObject",   CC"("OBJ"J"OBJ")V",         FN_PTR(Unsafe_SetOrderedObject)},
+2193     {CC"putOrderedInt",      CC"("OBJ"JI)V",             FN_PTR(Unsafe_SetOrderedInt)},
+2194     {CC"putOrderedLong",     CC"("OBJ"JJ)V",             FN_PTR(Unsafe_SetOrderedLong)},
+2195     {CC"park",               CC"(ZJ)V",                  FN_PTR(Unsafe_Park)},
+2196     {CC"unpark",             CC"("OBJ")V",               FN_PTR(Unsafe_Unpark)}
+2197 };
+2198 
+2199 JNINativeMethod loadavg_method[] = {
+2200     {CC"getLoadAverage",     CC"([DI)I",                 FN_PTR(Unsafe_Loadavg)}
+2201 };
+2202 
+2203 JNINativeMethod prefetch_methods[] = {
+2204     {CC"prefetchRead",       CC"("OBJ"J)V",              FN_PTR(Unsafe_PrefetchRead)},
+2205     {CC"prefetchWrite",      CC"("OBJ"J)V",              FN_PTR(Unsafe_PrefetchWrite)},
+2206     {CC"prefetchReadStatic", CC"("OBJ"J)V",              FN_PTR(Unsafe_PrefetchRead)},
+2207     {CC"prefetchWriteStatic",CC"("OBJ"J)V",              FN_PTR(Unsafe_PrefetchWrite)}
+2208 };
+2209 
+2210 JNINativeMethod memcopy_methods_17[] = {
+2211     {CC"copyMemory",         CC"("OBJ"J"OBJ"JJ)V",       FN_PTR(Unsafe_CopyMemory2)},
+2212     {CC"setMemory",          CC"("OBJ"JJB)V",            FN_PTR(Unsafe_SetMemory2)}
+2213 };
+2214 
+2215 JNINativeMethod memcopy_methods_15[] = {
+2216     {CC"setMemory",          CC"("ADR"JB)V",             FN_PTR(Unsafe_SetMemory)},
+2217     {CC"copyMemory",         CC"("ADR ADR"J)V",          FN_PTR(Unsafe_CopyMemory)}
+2218 };
+2219 
+2220 JNINativeMethod anonk_methods[] = {
+2221     {CC"defineAnonymousClass", CC"("DAC_Args")"CLS,      FN_PTR(Unsafe_DefineAnonymousClass)},
+2222 };
+2223 
+2224 JNINativeMethod lform_methods[] = {
+2225     {CC"shouldBeInitialized",CC"("CLS")Z",               FN_PTR(Unsafe_ShouldBeInitialized)},
+2226 };
+2227 
+2228 JNINativeMethod fence_methods[] = {
+2229     {CC"loadFence",          CC"()V",                    FN_PTR(Unsafe_LoadFence)},
+2230     {CC"storeFence",         CC"()V",                    FN_PTR(Unsafe_StoreFence)},
+2231     {CC"fullFence",          CC"()V",                    FN_PTR(Unsafe_FullFence)},
+2232 };
+2233 
+<a name="10" id="anc10"></a><span class="new">2234 static JNINativeMethod objectlayout_methods[] = {</span>
+<span class="new">2235   { CC "getInstanceSize",                           CC "("CLS")J",                 FN_PTR(Unsafe_GetInstanceSize) },</span>
+<span class="new">2236   { CC "getInstanceFootprintWhenContained",         CC "("CLS")J",                 FN_PTR(Unsafe_GetInstanceFootprintWhenContained) },</span>
+<span class="new">2237   { CC "getContainingObjectFootprint",              CC "("CLS"JJ)J",               FN_PTR(Unsafe_GetContainingObjectFootprint) },</span>
+<span class="new">2238   { CC "getContainingObjectFootprintWhenContained", CC "("CLS"JJ)J",               FN_PTR(Unsafe_GetContainingObjectFootprintWhenContained) },</span>
+<span class="new">2239   { CC "getPrePaddingInObjectFootprint",            CC "(J)J",                     FN_PTR(Unsafe_GetPrePaddingInObjectFootprint) },</span>
+<span class="new">2240   { CC "allocateHeapForElementArrayClass",          CC "("CLS"[J["CLS")"OBJ,       FN_PTR(Unsafe_AllocateHeapForElementArrayClass) },</span>
+<span class="new">2241   { CC "constructObjectAtOffset",                   CC "("OBJ"JJZZJ"CTR"["OBJ")V", FN_PTR(Unsafe_ConstructObjectAtOffset) },</span>
+<span class="new">2242   { CC "deriveContainedObjectAtOffset",             CC "("OBJ"J)"OBJ,              FN_PTR(Unsafe_DeriveContainedObjectAtOffset) }</span>
+<span class="new">2243 };</span>
+<span class="new">2244 </span>
+2245 #undef CC
+2246 #undef FN_PTR
+2247 
+2248 #undef ADR
+2249 #undef LANG
+2250 #undef OBJ
+2251 #undef CLS
+2252 #undef CTR
+2253 #undef FLD
+2254 #undef MTH
+2255 #undef THR
+2256 #undef DC0_Args
+2257 #undef DC_Args
+2258 
+2259 #undef DECLARE_GETSETOOP
+2260 #undef DECLARE_GETSETNATIVE
+2261 
+2262 
+2263 /**
+2264  * Helper method to register native methods.
+2265  */
+2266 static bool register_natives(const char* message, JNIEnv* env, jclass clazz, const JNINativeMethod* methods, jint nMethods) {
+2267   int status = env-&gt;RegisterNatives(clazz, methods, nMethods);
+2268   if (status &lt; 0 || env-&gt;ExceptionOccurred()) {
+2269     if (PrintMiscellaneous &amp;&amp; (Verbose || WizardMode)) {
+2270       tty-&gt;print_cr("Unsafe:  failed registering %s", message);
+2271     }
+2272     env-&gt;ExceptionClear();
+2273     return false;
+2274   } else {
+2275     if (PrintMiscellaneous &amp;&amp; (Verbose || WizardMode)) {
+2276       tty-&gt;print_cr("Unsafe:  successfully registered %s", message);
+2277     }
+2278     return true;
+2279   }
+2280 }
+2281 
+2282 
+2283 // This one function is exported, used by NativeLookup.
+2284 // The Unsafe_xxx functions above are called only from the interpreter.
+2285 // The optimizer looks at names and signatures to recognize
+2286 // individual functions.
+2287 
+2288 JVM_ENTRY(void, JVM_RegisterUnsafeMethods(JNIEnv *env, jclass unsafecls))
+2289   UnsafeWrapper("JVM_RegisterUnsafeMethods");
+2290   {
+2291     ThreadToNativeFromVM ttnfv(thread);
+2292 
+2293     // Unsafe methods
+2294     {
+2295       bool success = false;
+2296       // We need to register the 1.6 methods first because the 1.8 methods would register fine on 1.7 and 1.6
+2297       if (!success) {
+2298         success = register_natives("1.6 methods",   env, unsafecls, methods_16,  sizeof(methods_16)/sizeof(JNINativeMethod));
+2299       }
+2300       if (!success) {
+2301         success = register_natives("1.8 methods",   env, unsafecls, methods_18,  sizeof(methods_18)/sizeof(JNINativeMethod));
+2302       }
+2303       if (!success) {
+2304         success = register_natives("1.5 methods",   env, unsafecls, methods_15,  sizeof(methods_15)/sizeof(JNINativeMethod));
+2305       }
+2306       if (!success) {
+2307         success = register_natives("1.4.1 methods", env, unsafecls, methods_141, sizeof(methods_141)/sizeof(JNINativeMethod));
+2308       }
+2309       if (!success) {
+2310         success = register_natives("1.4.0 methods", env, unsafecls, methods_140, sizeof(methods_140)/sizeof(JNINativeMethod));
+2311       }
+2312       guarantee(success, "register unsafe natives");
+2313     }
+2314 
+2315     // Unsafe.getLoadAverage
+2316     register_natives("1.6 loadavg method", env, unsafecls, loadavg_method, sizeof(loadavg_method)/sizeof(JNINativeMethod));
+2317 
+2318     // Prefetch methods
+2319     register_natives("1.6 prefetch methods", env, unsafecls, prefetch_methods, sizeof(prefetch_methods)/sizeof(JNINativeMethod));
+2320 
+2321     // Memory copy methods
+2322     {
+2323       bool success = false;
+2324       if (!success) {
+2325         success = register_natives("1.7 memory copy methods", env, unsafecls, memcopy_methods_17, sizeof(memcopy_methods_17)/sizeof(JNINativeMethod));
+2326       }
+2327       if (!success) {
+2328         success = register_natives("1.5 memory copy methods", env, unsafecls, memcopy_methods_15, sizeof(memcopy_methods_15)/sizeof(JNINativeMethod));
+2329       }
+2330     }
+2331 
+2332     // Unsafe.defineAnonymousClass
+2333     if (EnableInvokeDynamic) {
+2334       register_natives("1.7 define anonymous class method", env, unsafecls, anonk_methods, sizeof(anonk_methods)/sizeof(JNINativeMethod));
+2335     }
+2336 
+2337     // Unsafe.shouldBeInitialized
+2338     if (EnableInvokeDynamic) {
+2339       register_natives("1.7 LambdaForm support", env, unsafecls, lform_methods, sizeof(lform_methods)/sizeof(JNINativeMethod));
+2340     }
+2341 
+2342     // Fence methods
+2343     register_natives("1.8 fence methods", env, unsafecls, fence_methods, sizeof(fence_methods)/sizeof(JNINativeMethod));
+<a name="11" id="anc11"></a><span class="new">2344 </span>
+<span class="new">2345     // ObjectLayout intrinsics</span>
+<span class="new">2346     register_natives("ObjectLayout intrinsics", env, unsafecls,</span>
+<span class="new">2347       objectlayout_methods,</span>
+<span class="new">2348       sizeof(objectlayout_methods) / sizeof(JNINativeMethod));</span>
+2349   }
+2350 JVM_END
+<a name="12" id="anc12"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="12" type="hidden" /></form></body></html>

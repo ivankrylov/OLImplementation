@@ -1,0 +1,154 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/gc_implementation/shared/markSweep.inline.hpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/shared/markSweep.inline.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -40,15 +40,15 @@</span>
+     // We must enqueue the object before it is marked
+     // as we otherwise can't read the object's age.
+     G1StringDedup::enqueue_from_mark(obj);
+   }
+ #endif
+<span class="removed">-  // some marks may contain information we need to preserve so we store them away</span>
+<span class="removed">-  // and overwrite the mark.  We'll restore it at the end of markSweep.</span>
+<span class="removed">-  markOop mark = obj-&gt;mark();</span>
+<span class="removed">-  obj-&gt;set_mark(markOopDesc::prototype()-&gt;set_marked());</span>
+ 
+<span class="new">+  // Some marks may contain information we need to preserve, so we store them</span>
+<span class="new">+  // away and overwrite the mark. We'll restore it at the end of Mark-Sweep.</span>
+<span class="new">+  markOop mark = obj-&gt;mark();</span>
+<span class="new">+  obj-&gt;convert_to_marked();</span>
+   if (mark-&gt;must_be_preserved(obj)) {
+     preserve_mark(obj, mark);
+   }
+ }
+ 
+</pre><hr /><pre>
+<span class="newmarker">@@ -70,16 +70,33 @@</span>
+   }
+   follow_stack();
+ }
+ 
+ template &lt;class T&gt; inline void MarkSweep::mark_and_push(T* p) {
+<span class="removed">-//  assert(Universe::heap()-&gt;is_in_reserved(p), "should be in object space");</span>
+   T heap_oop = oopDesc::load_heap_oop(p);
+   if (!oopDesc::is_null(heap_oop)) {
+     oop obj = oopDesc::decode_heap_oop_not_null(heap_oop);
+<span class="removed">-    if (!obj-&gt;mark()-&gt;is_marked()) {</span>
+<span class="new">+    markOop mark = obj-&gt;mark();</span>
+<span class="new">+    if (!mark-&gt;is_marked()) {</span>
+<span class="new">+      debug_only(bool is_contained = obj-&gt;is_contained());</span>
+<span class="new">+      debug_only(bool is_container = obj-&gt;is_container());</span>
+       mark_object(obj);
+<span class="new">+      assert(is_contained == obj-&gt;is_contained(),</span>
+<span class="new">+          "contained property not preserved");</span>
+<span class="new">+      assert(is_container == obj-&gt;is_container(),</span>
+<span class="new">+          "container property not preserved");</span>
+<span class="new">+      if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2)</span>
+<span class="new">+      {</span>
+<span class="new">+        ResourceMark rm;</span>
+<span class="new">+        tty-&gt;print_cr(</span>
+<span class="new">+            "MarkSweep::mark_and_push: "</span>
+<span class="new">+            "type=%s, addr=0x%p, %scontained, %scontainer, mark=0x%p=&gt;0x%p",</span>
+<span class="new">+            obj-&gt;klass()-&gt;signature_name(), (void*) obj,</span>
+<span class="new">+            obj-&gt;is_contained() ? "" : "not ",</span>
+<span class="new">+            obj-&gt;is_container() ? "" : "not ",</span>
+<span class="new">+            (void*) mark, (void*) (obj-&gt;mark()));</span>
+<span class="new">+      }</span>
+       _marking_stack.push(obj);
+     }
+   }
+ }
+ 
+</pre></body></html>
+

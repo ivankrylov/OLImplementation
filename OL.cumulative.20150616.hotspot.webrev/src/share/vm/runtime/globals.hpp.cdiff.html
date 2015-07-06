@@ -1,0 +1,238 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Cdiff src/share/vm/runtime/globals.hpp</title>
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/runtime/globals.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+<hr /><span class="oldmarker">*** 716,726 ****</span>
+                                                                              \
+    product(bool, UseSHA512Intrinsics, false,                                 \
+            "Use intrinsics for SHA-384 and SHA-512 crypto hash functions")   \
+                                                                              \
+    product(bool, UseCRC32Intrinsics, false,                                  \
+<span class="changed">!           "use intrinsics for java.util.zip.CRC32")                         \</span>
+                                                                              \
+    develop(bool, TraceCallFixup, false,                                      \
+            "Trace all call fixups")                                          \
+                                                                              \
+    develop(bool, DeoptimizeALot, false,                                      \
+<span class="newmarker">--- 716,735 ----</span>
+                                                                              \
+    product(bool, UseSHA512Intrinsics, false,                                 \
+            "Use intrinsics for SHA-384 and SHA-512 crypto hash functions")   \
+                                                                              \
+    product(bool, UseCRC32Intrinsics, false,                                  \
+<span class="changed">!           "Use intrinsics for java.util.zip.CRC32")                         \</span>
+<span class="changed">!                                                                             \</span>
+<span class="changed">!   product(bool, UseObjectLayoutIntrinsics, false,                           \</span>
+<span class="changed">!           "Use intrinsics enabling optimized ObjectLayout implementation")  \</span>
+<span class="changed">!                                                                             \</span>
+<span class="changed">!   product(bool, TraceObjectLayoutIntrinsics, false,                         \</span>
+<span class="changed">!           "Trace intrinsics specific to ObjectLayout implementation")       \</span>
+<span class="changed">!                                                                             \</span>
+<span class="changed">!   product(intx, ObjectLayoutIntrinsicsTraceLevel, 0,                        \</span>
+<span class="changed">!           "Trace level for ObjectLayout related intrinsics")                \</span>
+                                                                              \
+    develop(bool, TraceCallFixup, false,                                      \
+            "Trace all call fixups")                                          \
+                                                                              \
+    develop(bool, DeoptimizeALot, false,                                      \
+<hr /><span class="oldmarker">*** 1244,1254 ****</span>
+            "2 - oops in super and sub classes are together")                 \
+                                                                              \
+    product(bool, CompactFields, true,                                        \
+            "Allocate nonstatic fields in gaps between previous fields")      \
+                                                                              \
+<span class="changed">!   notproduct(bool, PrintFieldLayout, false,                                 \</span>
+            "Print field layout for each class")                              \
+                                                                              \
+    product(intx, ContendedPaddingWidth, 128,                                 \
+            "How many bytes to pad the fields/classes marked @Contended with")\
+                                                                              \
+<span class="newmarker">--- 1253,1263 ----</span>
+            "2 - oops in super and sub classes are together")                 \
+                                                                              \
+    product(bool, CompactFields, true,                                        \
+            "Allocate nonstatic fields in gaps between previous fields")      \
+                                                                              \
+<span class="changed">!   product(bool, PrintFieldLayout, false,                                    \</span>
+            "Print field layout for each class")                              \
+                                                                              \
+    product(intx, ContendedPaddingWidth, 128,                                 \
+            "How many bytes to pad the fields/classes marked @Contended with")\
+                                                                              \
+<hr /><span class="oldmarker">*** 1256,1266 ****</span>
+            "Enable @Contended annotation support")                           \
+                                                                              \
+    product(bool, RestrictContended, true,                                    \
+            "Restrict @Contended to trusted classes")                         \
+                                                                              \
+<span class="changed">!   product(bool, UseBiasedLocking, true,                                     \</span>
+            "Enable biased locking in JVM")                                   \
+                                                                              \
+    product(intx, BiasedLockingStartupDelay, 4000,                            \
+            "Number of milliseconds to wait before enabling biased locking")  \
+                                                                              \
+<span class="newmarker">--- 1265,1275 ----</span>
+            "Enable @Contended annotation support")                           \
+                                                                              \
+    product(bool, RestrictContended, true,                                    \
+            "Restrict @Contended to trusted classes")                         \
+                                                                              \
+<span class="changed">!   product(bool, UseBiasedLocking, false,                                     \</span>
+            "Enable biased locking in JVM")                                   \
+                                                                              \
+    product(intx, BiasedLockingStartupDelay, 4000,                            \
+            "Number of milliseconds to wait before enabling biased locking")  \
+                                                                              \
+<hr /><span class="oldmarker">*** 1492,1502 ****</span>
+                                                                              \
+    product(uintx, GCLockerEdenExpansionPercent, 5,                           \
+            "How much the GC can expand the eden by while the GC locker "     \
+            "is active (as a percentage)")                                    \
+                                                                              \
+<span class="changed">!   diagnostic(uintx, GCLockerRetryAllocationCount, 2,                        \</span>
+            "Number of times to retry allocations when "                      \
+            "blocked by the GC locker")                                       \
+                                                                              \
+    develop(bool, UseCMSAdaptiveFreeLists, true,                              \
+            "Use adaptive free lists in the CMS generation")                  \
+<span class="newmarker">--- 1501,1511 ----</span>
+                                                                              \
+    product(uintx, GCLockerEdenExpansionPercent, 5,                           \
+            "How much the GC can expand the eden by while the GC locker "     \
+            "is active (as a percentage)")                                    \
+                                                                              \
+<span class="changed">!   diagnostic(intx, GCLockerRetryAllocationCount, 2,                         \</span>
+            "Number of times to retry allocations when "                      \
+            "blocked by the GC locker")                                       \
+                                                                              \
+    develop(bool, UseCMSAdaptiveFreeLists, true,                              \
+            "Use adaptive free lists in the CMS generation")                  \
+<hr /><span class="oldmarker">*** 2046,2055 ****</span>
+<span class="newmarker">--- 2055,2067 ----</span>
+                                                                              \
+    product(bool, TLABStats, true,                                            \
+            "Provide more detailed and expensive TLAB statistics "            \
+            "(with PrintTLAB)")                                               \
+                                                                              \
+<span class="new">+   EMBEDDED_ONLY(product(bool, LowMemoryProtection, true,                    \</span>
+<span class="new">+           "Enable LowMemoryProtection"))                                    \</span>
+<span class="new">+                                                                             \</span>
+    product_pd(bool, NeverActAsServerClassMachine,                            \
+            "Never act like a server-class machine")                          \
+                                                                              \
+    product(bool, AlwaysActAsServerClassMachine, false,                       \
+            "Always act like a server-class machine")                         \
+<hr /><span class="oldmarker">*** 3231,3244 ****</span>
+            "GC invoke count where +VerifyBefore/AfterGC kicks in")           \
+                                                                              \
+    diagnostic(intx, VerifyGCLevel,     0,                                    \
+            "Generation level at which to start +VerifyBefore/AfterGC")       \
+                                                                              \
+<span class="changed">!   product(uintx, MaxTenuringThreshold,    15,                               \</span>
+            "Maximum value for tenuring threshold")                           \
+                                                                              \
+<span class="changed">!   product(uintx, InitialTenuringThreshold,    7,                            \</span>
+            "Initial value for tenuring threshold")                           \
+                                                                              \
+    product(uintx, TargetSurvivorRatio,    50,                                \
+            "Desired percentage of survivor space used after scavenge")       \
+                                                                              \
+<span class="newmarker">--- 3243,3256 ----</span>
+            "GC invoke count where +VerifyBefore/AfterGC kicks in")           \
+                                                                              \
+    diagnostic(intx, VerifyGCLevel,     0,                                    \
+            "Generation level at which to start +VerifyBefore/AfterGC")       \
+                                                                              \
+<span class="changed">!   product(uintx, MaxTenuringThreshold, 3,                                   \</span>
+            "Maximum value for tenuring threshold")                           \
+                                                                              \
+<span class="changed">!   product(uintx, InitialTenuringThreshold, 3,                               \</span>
+            "Initial value for tenuring threshold")                           \
+                                                                              \
+    product(uintx, TargetSurvivorRatio,    50,                                \
+            "Desired percentage of survivor space used after scavenge")       \
+                                                                              \
+</pre></body></html>
+

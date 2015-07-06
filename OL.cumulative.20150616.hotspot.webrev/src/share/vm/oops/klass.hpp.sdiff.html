@@ -1,0 +1,273 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/oops </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/oops/klass.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 489   virtual int oop_size(oop obj) const = 0;
+ 490 
+ 491   // Size of klass in word size.
+ 492   virtual int size() const = 0;
+ 493 #if INCLUDE_SERVICES
+ 494   virtual void collect_statistics(KlassSizeStats *sz) const;
+ 495 #endif
+ 496 
+ 497   // Returns the Java name for a class (Resource allocated)
+ 498   // For arrays, this returns the name of the element with a leading '['.
+ 499   // For classes, this returns the name with the package separators
+ 500   //     turned into '.'s.
+ 501   const char* external_name() const;
+ 502   // Returns the name for a class (Resource allocated) as the class
+ 503   // would appear in a signature.
+ 504   // For arrays, this returns the name of the element with a leading '['.
+ 505   // For classes, this returns the name with a leading 'L' and a trailing ';'
+ 506   //     and the package separators as '/'.
+ 507   virtual const char* signature_name() const;
+ 508 
+<span class="changed"> 509   // garbage collection support</span>
+
+ 510   virtual void oop_follow_contents(oop obj) = 0;
+ 511   virtual int  oop_adjust_pointers(oop obj) = 0;
+ 512 
+<span class="changed"> 513   // Parallel Scavenge and Parallel Old</span>
+ 514   PARALLEL_GC_DECLS_PV
+ 515 
+ 516   // type testing operations
+ 517  protected:
+ 518   virtual bool oop_is_instance_slow()       const { return false; }
+ 519   virtual bool oop_is_array_slow()          const { return false; }
+ 520   virtual bool oop_is_objArray_slow()       const { return false; }
+ 521   virtual bool oop_is_typeArray_slow()      const { return false; }
+ 522  public:
+ 523   virtual bool oop_is_instanceClassLoader() const { return false; }
+ 524   virtual bool oop_is_instanceMirror()      const { return false; }
+ 525   virtual bool oop_is_instanceRef()         const { return false; }
+ 526 
+ 527   // Fast non-virtual versions
+ 528   #ifndef ASSERT
+ 529   #define assert_same_query(xval, xcheck) xval
+ 530   #else
+ 531  private:
+ 532   static bool assert_same_query(bool xval, bool xslow) {
+ 533     assert(xval == xslow, "slow and fast queries agree");
+ 534     return xval;
+ 535   }
+ 536  public:
+ 537   #endif
+<span class="changed"> 538   inline  bool oop_is_instance()            const { return assert_same_query(</span>
+<span class="changed"> 539                                                     layout_helper_is_instance(layout_helper()),</span>
+<span class="changed"> 540                                                     oop_is_instance_slow()); }</span>
+<span class="changed"> 541   inline  bool oop_is_array()               const { return assert_same_query(</span>
+<span class="changed"> 542                                                     layout_helper_is_array(layout_helper()),</span>
+<span class="changed"> 543                                                     oop_is_array_slow()); }</span>
+<span class="changed"> 544   inline  bool oop_is_objArray()            const { return assert_same_query(</span>
+<span class="changed"> 545                                                     layout_helper_is_objArray(layout_helper()),</span>
+<span class="changed"> 546                                                     oop_is_objArray_slow()); }</span>
+<span class="changed"> 547   inline  bool oop_is_typeArray()           const { return assert_same_query(</span>
+<span class="changed"> 548                                                     layout_helper_is_typeArray(layout_helper()),</span>
+<span class="changed"> 549                                                     oop_is_typeArray_slow()); }</span>
+
+
+
+
+
+ 550   #undef assert_same_query
+ 551 
+ 552   // Access flags
+ 553   AccessFlags access_flags() const         { return _access_flags;  }
+ 554   void set_access_flags(AccessFlags flags) { _access_flags = flags; }
+ 555 
+ 556   bool is_public() const                { return _access_flags.is_public(); }
+ 557   bool is_final() const                 { return _access_flags.is_final(); }
+ 558   bool is_interface() const             { return _access_flags.is_interface(); }
+ 559   bool is_abstract() const              { return _access_flags.is_abstract(); }
+ 560   bool is_super() const                 { return _access_flags.is_super(); }
+ 561   bool is_synthetic() const             { return _access_flags.is_synthetic(); }
+ 562   void set_is_synthetic()               { _access_flags.set_is_synthetic(); }
+ 563   bool has_finalizer() const            { return _access_flags.has_finalizer(); }
+ 564   bool has_final_method() const         { return _access_flags.has_final_method(); }
+ 565   void set_has_finalizer()              { _access_flags.set_has_finalizer(); }
+ 566   void set_has_final_method()           { _access_flags.set_has_final_method(); }
+ 567   bool is_cloneable() const             { return _access_flags.is_cloneable(); }
+ 568   void set_is_cloneable()               { _access_flags.set_is_cloneable(); }
+ 569   bool has_vanilla_constructor() const  { return _access_flags.has_vanilla_constructor(); }
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 489   virtual int oop_size(oop obj) const = 0;
+ 490 
+ 491   // Size of klass in word size.
+ 492   virtual int size() const = 0;
+ 493 #if INCLUDE_SERVICES
+ 494   virtual void collect_statistics(KlassSizeStats *sz) const;
+ 495 #endif
+ 496 
+ 497   // Returns the Java name for a class (Resource allocated)
+ 498   // For arrays, this returns the name of the element with a leading '['.
+ 499   // For classes, this returns the name with the package separators
+ 500   //     turned into '.'s.
+ 501   const char* external_name() const;
+ 502   // Returns the name for a class (Resource allocated) as the class
+ 503   // would appear in a signature.
+ 504   // For arrays, this returns the name of the element with a leading '['.
+ 505   // For classes, this returns the name with a leading 'L' and a trailing ';'
+ 506   //     and the package separators as '/'.
+ 507   virtual const char* signature_name() const;
+ 508 
+<span class="changed"> 509   // Garbage collection support</span>
+<span class="changed"> 510   // Mark-Sweep GCs</span>
+ 511   virtual void oop_follow_contents(oop obj) = 0;
+ 512   virtual int oop_adjust_pointers(oop obj) = 0;
+ 513 
+<span class="changed"> 514   // Parallel Scavenge and Parallel Old GCs</span>
+ 515   PARALLEL_GC_DECLS_PV
+ 516 
+ 517   // type testing operations
+ 518  protected:
+ 519   virtual bool oop_is_instance_slow()       const { return false; }
+ 520   virtual bool oop_is_array_slow()          const { return false; }
+ 521   virtual bool oop_is_objArray_slow()       const { return false; }
+ 522   virtual bool oop_is_typeArray_slow()      const { return false; }
+ 523  public:
+ 524   virtual bool oop_is_instanceClassLoader() const { return false; }
+ 525   virtual bool oop_is_instanceMirror()      const { return false; }
+ 526   virtual bool oop_is_instanceRef()         const { return false; }
+ 527 
+ 528   // Fast non-virtual versions
+ 529   #ifndef ASSERT
+ 530   #define assert_same_query(xval, xcheck) xval
+ 531   #else
+ 532  private:
+ 533   static bool assert_same_query(bool xval, bool xslow) {
+ 534     assert(xval == xslow, "slow and fast queries agree");
+ 535     return xval;
+ 536   }
+ 537  public:
+ 538   #endif
+<span class="changed"> 539   inline bool oop_is_instance() const {</span>
+<span class="changed"> 540     return assert_same_query(layout_helper_is_instance(layout_helper()),</span>
+<span class="changed"> 541         oop_is_instance_slow());</span>
+<span class="changed"> 542   }</span>
+<span class="changed"> 543   bool oop_is_container() const;</span>
+<span class="changed"> 544   inline bool oop_is_array() const {</span>
+<span class="changed"> 545     return assert_same_query(layout_helper_is_array(layout_helper()),</span>
+<span class="changed"> 546         oop_is_array_slow());</span>
+<span class="changed"> 547   }</span>
+<span class="changed"> 548   inline bool oop_is_objArray() const {</span>
+<span class="changed"> 549     return assert_same_query(layout_helper_is_objArray(layout_helper()),</span>
+<span class="changed"> 550         oop_is_objArray_slow());</span>
+<span class="changed"> 551   }</span>
+<span class="changed"> 552   inline bool oop_is_typeArray() const {</span>
+<span class="changed"> 553     return assert_same_query(layout_helper_is_typeArray(layout_helper()),</span>
+<span class="changed"> 554         oop_is_typeArray_slow());</span>
+<span class="changed"> 555   }</span>
+ 556   #undef assert_same_query
+ 557 
+ 558   // Access flags
+ 559   AccessFlags access_flags() const         { return _access_flags;  }
+ 560   void set_access_flags(AccessFlags flags) { _access_flags = flags; }
+ 561 
+ 562   bool is_public() const                { return _access_flags.is_public(); }
+ 563   bool is_final() const                 { return _access_flags.is_final(); }
+ 564   bool is_interface() const             { return _access_flags.is_interface(); }
+ 565   bool is_abstract() const              { return _access_flags.is_abstract(); }
+ 566   bool is_super() const                 { return _access_flags.is_super(); }
+ 567   bool is_synthetic() const             { return _access_flags.is_synthetic(); }
+ 568   void set_is_synthetic()               { _access_flags.set_is_synthetic(); }
+ 569   bool has_finalizer() const            { return _access_flags.has_finalizer(); }
+ 570   bool has_final_method() const         { return _access_flags.has_final_method(); }
+ 571   void set_has_finalizer()              { _access_flags.set_has_finalizer(); }
+ 572   void set_has_final_method()           { _access_flags.set_has_final_method(); }
+ 573   bool is_cloneable() const             { return _access_flags.is_cloneable(); }
+ 574   void set_is_cloneable()               { _access_flags.set_is_cloneable(); }
+ 575   bool has_vanilla_constructor() const  { return _access_flags.has_vanilla_constructor(); }
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

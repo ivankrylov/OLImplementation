@@ -1,0 +1,315 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -70,10 +70,64 @@</span>
+   assert(_destination_decorator != NULL, "Sanity");
+ 
+   return _destination_decorator;
+ }
+ 
+<span class="new">+void PSMarkSweepDecorator::forward_container(address src, address dst, uint nesting_level) {</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+    tty-&gt;print_cr("PSMarkSweepDecorator::forward_container: src=0x%p, dst=0x%p, nesting_level=%u",</span>
+<span class="new">+        (void*) src, (void*) dst, nesting_level);</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  assert(((oop) src)-&gt;is_container(), "src not container");</span>
+<span class="new">+</span>
+<span class="new">+  jint body_size = org_ObjectLayout_AbstractStructuredArray::bodySize((oop) src);</span>
+<span class="new">+  jlong length = org_ObjectLayout_AbstractStructuredArray::length((oop) src);</span>
+<span class="new">+  jlong padding_size = org_ObjectLayout_AbstractStructuredArray::paddingSize((oop) src);</span>
+<span class="new">+  jlong element_size = org_ObjectLayout_AbstractStructuredArray::elementSize((oop) src);</span>
+<span class="new">+</span>
+<span class="new">+  markOop mark_before = ((oop) src)-&gt;mark();</span>
+<span class="new">+  ((oop) src)-&gt;forward_to((oop) dst);</span>
+<span class="new">+  if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+    tty-&gt;print_cr("  Forwarding container 0x%p to 0x%p, nesting_level=%u, mark before=0x%p, mark after=0x%p",</span>
+<span class="new">+        (void*) src, (void*) dst, nesting_level, mark_before, ((oop) src)-&gt;mark());</span>
+<span class="new">+  }</span>
+<span class="new">+  assert(((oop) src)-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");</span>
+<span class="new">+  src += body_size;</span>
+<span class="new">+  dst += body_size;</span>
+<span class="new">+</span>
+<span class="new">+  for (jlong i = 0; i &lt; length; i++) {</span>
+<span class="new">+    oop prepadding_obj = (oop) src;</span>
+<span class="new">+    assert(!prepadding_obj-&gt;is_contained(), "sanity check");</span>
+<span class="new">+    assert(!prepadding_obj-&gt;is_container(), "sanity check");</span>
+<span class="new">+    markOop mark_before = prepadding_obj-&gt;mark();</span>
+<span class="new">+    prepadding_obj-&gt;forward_to((oop) dst);</span>
+<span class="new">+    if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+      tty-&gt;print_cr("  Forwarding prepadding 0x%p to 0x%p, nesting_level=%u, mark before=0x%p, mark after=0x%p",</span>
+<span class="new">+          (void*) src, (void*) dst, nesting_level, mark_before, prepadding_obj-&gt;mark());</span>
+<span class="new">+    }</span>
+<span class="new">+    assert(prepadding_obj-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");</span>
+<span class="new">+</span>
+<span class="new">+    oop element_obj = (oop) (src + padding_size);</span>
+<span class="new">+    assert(element_obj-&gt;is_contained(), "sanity check");</span>
+<span class="new">+    if (element_obj-&gt;is_container()) {</span>
+<span class="new">+      forward_container(src + padding_size, dst + padding_size, nesting_level + 1);</span>
+<span class="new">+    } else {</span>
+<span class="new">+      markOop mark_before = element_obj-&gt;mark();</span>
+<span class="new">+      element_obj-&gt;forward_to((oop) (dst + padding_size));</span>
+<span class="new">+      if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+        tty-&gt;print_cr("  Forwarding element 0x%p to 0x%p, nesting_level=%u, mark before=0x%p, mark after=0x%p",</span>
+<span class="new">+            (void*) (src + padding_size), (void*) (dst + padding_size), nesting_level,mark_before, element_obj-&gt;mark());</span>
+<span class="new">+      }</span>
+<span class="new">+      assert(element_obj-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+<span class="new">+    src += element_size;</span>
+<span class="new">+    dst += element_size;</span>
+<span class="new">+  }</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+ // FIX ME FIX ME FIX ME FIX ME!!!!!!!!!
+ // The object forwarding code is duplicated. Factor this out!!!!!
+ //
+ // This method "precompacts" objects inside its space to dest. It places forwarding
+ // pointers into markOops for use by adjust_pointers. If "dest" should overflow, we
+</pre><hr /><pre>
+<span class="newmarker">@@ -123,10 +177,25 @@</span>
+     if (oop(q)-&gt;is_gc_marked()) {
+       /* prefetch beyond q */
+       Prefetch::write(q, interval);
+       size_t size = oop(q)-&gt;size();
+ 
+<span class="new">+      if (oop(q)-&gt;is_contained()) {</span>
+<span class="new">+        if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+          tty-&gt;print_cr("PSMarkSweepDecorator::precompact: 0x%p belongs to dead container, mark is 0x%p",</span>
+<span class="new">+              (void*) q, ((oop) q)-&gt;mark());</span>
+<span class="new">+        }</span>
+<span class="new">+        oop(q)-&gt;clear_contained();</span>
+<span class="new">+      }</span>
+<span class="new">+      if (oop(q)-&gt;is_container()) {</span>
+<span class="new">+        size = org_ObjectLayout_AbstractStructuredArray::footprint_with_contained_objects((oop) q) &gt;&gt; LogHeapWordSize;</span>
+<span class="new">+        if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+          tty-&gt;print_cr("PSMarkSweepDecorator::precompact: 0x%p is container of size %ld, mark is 0x%p",</span>
+<span class="new">+              (void*) q, size &lt;&lt; LogHeapWordSize, ((oop) q)-&gt;mark());</span>
+<span class="new">+        }</span>
+<span class="new">+      }</span>
+<span class="new">+</span>
+       size_t compaction_max_size = pointer_delta(compact_end, compact_top);
+ 
+       // This should only happen if a space in the young gen overflows the
+       // old gen. If that should happen, we null out the start_array, because
+       // the young spaces are not covered by one.
+</pre><hr /><pre>
+<span class="newmarker">@@ -147,19 +216,32 @@</span>
+         compaction_max_size =
+           pointer_delta(compact_end, compact_top);
+       }
+ 
+       // store the forwarding pointer into the mark word
+<span class="removed">-      if (q != compact_top) {</span>
+<span class="new">+//      if (q != compact_top) {</span>
+<span class="new">+        if (oop(q)-&gt;is_container()) {</span>
+<span class="new">+          forward_container((address) q, (address) compact_top, 0);</span>
+<span class="new">+        } else {</span>
+<span class="new">+          markOop mark_before = ((oop) q)-&gt;mark();</span>
+         oop(q)-&gt;forward_to(oop(compact_top));
+         assert(oop(q)-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");
+<span class="removed">-      } else {</span>
+<span class="new">+          if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+            tty-&gt;print_cr("Forwarding (1) object 0x%p to 0x%p, mark before=0x%p, mark after=0x%p",</span>
+<span class="new">+                (void*) q, (void*) compact_top,mark_before,  ((oop) q)-&gt;mark());</span>
+<span class="new">+          }</span>
+<span class="new">+        }</span>
+<span class="new">+/*      } else {</span>
+         // if the object isn't moving we can just set the mark to the default
+         // mark and handle it specially later on.
+<span class="new">+//        if (oop(q)-&gt;is_container()) {</span>
+<span class="new">+//          init_marks_in_container(oop(q));</span>
+<span class="new">+//        } else {</span>
+         oop(q)-&gt;init_mark();
+         assert(oop(q)-&gt;forwardee() == NULL, "should be forwarded to NULL");
+<span class="removed">-      }</span>
+<span class="new">+//        }</span>
+<span class="new">+      }*/</span>
+ 
+       // Update object start array
+       if (start_array) {
+         start_array-&gt;allocate_block(compact_top);
+       }
+</pre><hr /><pre>
+<span class="newmarker">@@ -207,19 +289,28 @@</span>
+             compaction_max_size =
+               pointer_delta(compact_end, compact_top);
+           }
+ 
+           // store the forwarding pointer into the mark word
+<span class="removed">-          if (q != compact_top) {</span>
+<span class="new">+//          if (q != compact_top) {</span>
+<span class="new">+            if (oop(q)-&gt;is_container()) {</span>
+<span class="new">+              forward_container((address) q, (address) compact_top, 0);</span>
+<span class="new">+            } else {</span>
+<span class="new">+              markOop mark_before = ((oop) q)-&gt;mark();</span>
+             oop(q)-&gt;forward_to(oop(compact_top));
+             assert(oop(q)-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");
+<span class="removed">-          } else {</span>
+<span class="new">+              if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+                tty-&gt;print_cr("Forwarding (2) object 0x%p to 0x%p, mark before=0x%p, mark after=0x%p",</span>
+<span class="new">+                    (void*) q, (void*) compact_top,  mark_before, ((oop) q)-&gt;mark());</span>
+<span class="new">+              }</span>
+<span class="new">+            }</span>
+<span class="new">+/*          } else {</span>
+             // if the object isn't moving we can just set the mark to the default
+             // mark and handle it specially later on.
+             oop(q)-&gt;init_mark();
+             assert(oop(q)-&gt;forwardee() == NULL, "should be forwarded to NULL");
+<span class="removed">-          }</span>
+<span class="new">+          }*/</span>
+ 
+           // Update object start array
+           if (start_array) {
+             start_array-&gt;allocate_block(compact_top);
+           }
+</pre><hr /><pre>
+<span class="newmarker">@@ -301,10 +392,14 @@</span>
+     // use is_gc_marked for the traversal.
+     HeapWord* end = _first_dead;
+ 
+     while (q &lt; end) {
+       // point all the oops to the new location
+<span class="new">+      if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+        tty-&gt;print_cr("PSMarkSweepDecorator::adjust_pointers: Special case 0x%p 0x%p",</span>
+<span class="new">+            (void*) q, ((oop) q)-&gt;mark());</span>
+<span class="new">+      }</span>
+       size_t size = oop(q)-&gt;adjust_pointers();
+       q += size;
+     }
+ 
+     if (_first_dead == t) {
+</pre><hr /><pre>
+<span class="newmarker">@@ -322,10 +417,14 @@</span>
+     // prefetch beyond q
+     Prefetch::write(q, interval);
+     if (oop(q)-&gt;is_gc_marked()) {
+       // q is alive
+       // point all the oops to the new location
+<span class="new">+      if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+        tty-&gt;print_cr("PSMarkSweepDecorator::adjust_pointers: Normal case 0x%p 0x%p",</span>
+<span class="new">+            (void*) q, ((oop) q)-&gt;mark());</span>
+<span class="new">+      }</span>
+       size_t size = oop(q)-&gt;adjust_pointers();
+       debug_only(prev_q = q);
+       q += size;
+     } else {
+       // q is not a live object, so its mark should point at the next
+</pre><hr /><pre>
+<span class="newmarker">@@ -390,15 +489,20 @@</span>
+ 
+       // prefetch beyond compaction_top
+       Prefetch::write(compaction_top, copy_interval);
+ 
+       // copy object and reinit its mark
+<span class="removed">-      assert(q != compaction_top, "everything in this pass should be moving");</span>
+<span class="new">+      if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">+        tty-&gt;print_cr("PSMarkSweepDecorator::compact: Copying 0x%p with mark 0x%p",</span>
+<span class="new">+            (void*) q,((oop) q)-&gt;mark());</span>
+<span class="new">+      }</span>
+<span class="new">+//      assert(q != compaction_top, "everything in this pass should be moving");</span>
+       Copy::aligned_conjoint_words(q, compaction_top, size);
+<span class="removed">-      oop(compaction_top)-&gt;init_mark();</span>
+       assert(oop(compaction_top)-&gt;klass() != NULL, "should have a class");
+ 
+<span class="new">+      ((oop) compaction_top)-&gt;convert_to_unmarked();</span>
+<span class="new">+</span>
+       debug_only(prev_q = q);
+       q += size;
+     }
+   }
+ 
+</pre></body></html>
+

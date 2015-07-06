@@ -1,0 +1,189 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/classfile </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/classfile/systemDictionary.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 178   do_klass(sun_misc_Launcher_klass,                     sun_misc_Launcher,                         Pre                 ) \
+ 179   do_klass(sun_misc_Launcher_AppClassLoader_klass,      sun_misc_Launcher_AppClassLoader,          Pre                 ) \
+ 180   do_klass(sun_misc_Launcher_ExtClassLoader_klass,      sun_misc_Launcher_ExtClassLoader,          Pre                 ) \
+ 181   do_klass(CodeSource_klass,                            java_security_CodeSource,                  Pre                 ) \
+ 182                                                                                                                          \
+ 183   /* It's NULL in non-1.4 JDKs. */                                                                                       \
+ 184   do_klass(StackTraceElement_klass,                     java_lang_StackTraceElement,               Opt                 ) \
+ 185   /* Universe::is_gte_jdk14x_version() is not set up by this point. */                                                   \
+ 186   /* It's okay if this turns out to be NULL in non-1.4 JDKs. */                                                          \
+ 187   do_klass(nio_Buffer_klass,                            java_nio_Buffer,                           Opt                 ) \
+ 188                                                                                                                          \
+ 189   /* Preload boxing klasses */                                                                                           \
+ 190   do_klass(Boolean_klass,                               java_lang_Boolean,                         Pre                 ) \
+ 191   do_klass(Character_klass,                             java_lang_Character,                       Pre                 ) \
+ 192   do_klass(Float_klass,                                 java_lang_Float,                           Pre                 ) \
+ 193   do_klass(Double_klass,                                java_lang_Double,                          Pre                 ) \
+ 194   do_klass(Byte_klass,                                  java_lang_Byte,                            Pre                 ) \
+ 195   do_klass(Short_klass,                                 java_lang_Short,                           Pre                 ) \
+ 196   do_klass(Integer_klass,                               java_lang_Integer,                         Pre                 ) \
+ 197   do_klass(Long_klass,                                  java_lang_Long,                            Pre                 ) \
+<span class="changed"> 198   /*end*/</span>
+<span class="changed"> 199 </span>
+
+
+
+ 200 
+ 201 class SystemDictionary : AllStatic {
+ 202   friend class VMStructs;
+ 203   friend class SystemDictionaryHandles;
+ 204 
+ 205  public:
+ 206   enum WKID {
+ 207     NO_WKID = 0,
+ 208 
+ 209     #define WK_KLASS_ENUM(name, symbol, ignore_o) WK_KLASS_ENUM_NAME(name), WK_KLASS_ENUM_NAME(symbol) = WK_KLASS_ENUM_NAME(name),
+ 210     WK_KLASSES_DO(WK_KLASS_ENUM)
+ 211     #undef WK_KLASS_ENUM
+ 212 
+ 213     WKID_LIMIT,
+ 214 
+ 215     FIRST_WKID = NO_WKID + 1
+ 216   };
+ 217 
+ 218   enum InitOption {
+ 219     Pre,                        // preloaded; error if not present
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 178   do_klass(sun_misc_Launcher_klass,                     sun_misc_Launcher,                         Pre                 ) \
+ 179   do_klass(sun_misc_Launcher_AppClassLoader_klass,      sun_misc_Launcher_AppClassLoader,          Pre                 ) \
+ 180   do_klass(sun_misc_Launcher_ExtClassLoader_klass,      sun_misc_Launcher_ExtClassLoader,          Pre                 ) \
+ 181   do_klass(CodeSource_klass,                            java_security_CodeSource,                  Pre                 ) \
+ 182                                                                                                                          \
+ 183   /* It's NULL in non-1.4 JDKs. */                                                                                       \
+ 184   do_klass(StackTraceElement_klass,                     java_lang_StackTraceElement,               Opt                 ) \
+ 185   /* Universe::is_gte_jdk14x_version() is not set up by this point. */                                                   \
+ 186   /* It's okay if this turns out to be NULL in non-1.4 JDKs. */                                                          \
+ 187   do_klass(nio_Buffer_klass,                            java_nio_Buffer,                           Opt                 ) \
+ 188                                                                                                                          \
+ 189   /* Preload boxing klasses */                                                                                           \
+ 190   do_klass(Boolean_klass,                               java_lang_Boolean,                         Pre                 ) \
+ 191   do_klass(Character_klass,                             java_lang_Character,                       Pre                 ) \
+ 192   do_klass(Float_klass,                                 java_lang_Float,                           Pre                 ) \
+ 193   do_klass(Double_klass,                                java_lang_Double,                          Pre                 ) \
+ 194   do_klass(Byte_klass,                                  java_lang_Byte,                            Pre                 ) \
+ 195   do_klass(Short_klass,                                 java_lang_Short,                           Pre                 ) \
+ 196   do_klass(Integer_klass,                               java_lang_Integer,                         Pre                 ) \
+ 197   do_klass(Long_klass,                                  java_lang_Long,                            Pre                 ) \
+<span class="changed"> 198                                                                                                                          \</span>
+<span class="changed"> 199   /* ObjectLayout support */                                                                                             \</span>
+<span class="changed"> 200   do_klass(AbstractStructuredArray_klass,               org_ObjectLayout_AbstractStructuredArray,  Opt                 ) \</span>
+<span class="changed"> 201                                                                                                                          \</span>
+<span class="changed"> 202   /* End */</span>
+ 203 
+ 204 class SystemDictionary : AllStatic {
+ 205   friend class VMStructs;
+ 206   friend class SystemDictionaryHandles;
+ 207 
+ 208  public:
+ 209   enum WKID {
+ 210     NO_WKID = 0,
+ 211 
+ 212     #define WK_KLASS_ENUM(name, symbol, ignore_o) WK_KLASS_ENUM_NAME(name), WK_KLASS_ENUM_NAME(symbol) = WK_KLASS_ENUM_NAME(name),
+ 213     WK_KLASSES_DO(WK_KLASS_ENUM)
+ 214     #undef WK_KLASS_ENUM
+ 215 
+ 216     WKID_LIMIT,
+ 217 
+ 218     FIRST_WKID = NO_WKID + 1
+ 219   };
+ 220 
+ 221   enum InitOption {
+ 222     Pre,                        // preloaded; error if not present
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

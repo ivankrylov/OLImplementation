@@ -1,0 +1,465 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>New src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.inline.hpp</title>
+<body id="SUNWwebrev">
+<pre>
+   1 /*
+   2  * Copyright (c) 2002, 2014, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #ifndef SHARE_VM_GC_IMPLEMENTATION_PARALLELSCAVENGE_PSPROMOTIONMANAGER_INLINE_HPP
+  26 #define SHARE_VM_GC_IMPLEMENTATION_PARALLELSCAVENGE_PSPROMOTIONMANAGER_INLINE_HPP
+  27 
+  28 #include "gc_implementation/parallelScavenge/psOldGen.hpp"
+  29 #include "gc_implementation/parallelScavenge/psPromotionManager.hpp"
+  30 #include "gc_implementation/parallelScavenge/psPromotionLAB.inline.hpp"
+  31 #include "gc_implementation/parallelScavenge/psScavenge.hpp"
+  32 #include "oops/oop.psgc.inline.hpp"
+  33 
+  34 inline PSPromotionManager* PSPromotionManager::manager_array(int index) {
+  35   assert(_manager_array != NULL, "access of NULL manager_array");
+  36   assert(index &gt;= 0 &amp;&amp; index &lt;= (int)ParallelGCThreads, "out of range manager_array access");
+  37   return &amp;_manager_array[index];
+  38 }
+  39 
+  40 template &lt;class T&gt;
+  41 inline void PSPromotionManager::claim_or_forward_depth(T* p) {
+  42   assert(PSScavenge::should_scavenge(p, true), "revisiting object?");
+  43   assert(Universe::heap()-&gt;kind() == CollectedHeap::ParallelScavengeHeap,
+  44       "Sanity");
+  45   assert(Universe::heap()-&gt;is_in(p), "pointer outside heap");
+  46 
+  47   if (p != NULL) {
+  48     oop o = oopDesc::load_decode_heap_oop_not_null(p);
+  49     if (o-&gt;is_forwarded()) {
+  50       o = o-&gt;forwardee();
+  51       if (PSScavenge::is_obj_in_young(o)) {
+  52         PSScavenge::card_table()-&gt;inline_write_ref_field_gc(p, o);
+  53       }
+  54       oopDesc::encode_store_heap_oop_not_null(p, o);
+  55     } else {
+  56       push_depth(p);
+  57     }
+  58   }
+  59 }
+  60 
+  61 // This method is pretty bulky. It would be nice to split it up into smaller
+  62 // submethods, but we need to be careful not to hurt performance.
+  63 template&lt;bool promote_immediately&gt;
+  64 oop PSPromotionManager::copy_to_survivor_space(oop o) {
+  65   assert(PSScavenge::should_scavenge(&amp;o), "sanity");
+  66 
+  67   // This method is not called if o is known to be already forwarded. The
+  68   // corresponding check is done by the caller just before this call.
+  69 
+  70   oop new_obj = NULL;
+  71   oop original_obj = o;
+  72 
+  73   // Evacuating a live contained object triggers immediate evacuation of
+  74   // its outermost container. At this point, if the outermost container is not
+  75   // marked yet, we cannot definitely say whether it is alive or not. We always
+  76   // treat is as alive one. This also means that "the object is contained"
+  77   // property never changes during Scavenge.
+  78   bool need_container_copying = o-&gt;is_contained();
+  79   jlong offset_from_outermost_container = 0;
+  80   if (need_container_copying) {
+  81     o = o-&gt;outermost_container();
+  82     offset_from_outermost_container =
+  83         (jlong) (((address) original_obj) - ((address) o));
+  84   }
+  85 
+  86   // NOTE! We must be very careful with any methods that access the mark in o.
+  87   // There may be multiple threads racing on it, and it may be forwarded
+  88   // at any time. Do not use oopDesc methods for accessing the mark!
+  89   markOop test_mark = o-&gt;mark();
+  90 
+  91   // Check whether the object is already forwarded
+  92   if (!test_mark-&gt;is_marked()) {
+  93     bool new_obj_is_tenured = false;
+  94     size_t new_obj_size = o-&gt;size();
+  95 
+  96     if (oopDesc::is_container(test_mark, o-&gt;klass())) {
+  97       new_obj_size = org_ObjectLayout_AbstractStructuredArray::
+  98           footprint_with_contained_objects(o) &gt;&gt; LogHeapWordSize;
+  99     }
+ 100 
+ 101     if (!promote_immediately) {
+ 102       // Find the object's age in MT safe way
+ 103       uint age = test_mark-&gt;has_displaced_mark_helper() ?
+ 104           test_mark-&gt;displaced_mark_helper()-&gt;age() : test_mark-&gt;age();
+ 105 
+ 106       // Try to allocate the object in To space (unless it is too old)
+ 107       if (age &lt; PSScavenge::tenuring_threshold()) {
+ 108         new_obj = (oop) _young_lab.allocate(new_obj_size);
+ 109         if (new_obj == NULL) {
+ 110           new_obj = allocate_in_young_gen_slow(new_obj_size);
+ 111         }
+ 112       }
+ 113     }
+ 114 
+ 115     // Otherwise try to allocate the object in the old generation
+ 116     if (new_obj == NULL) {
+ 117 #ifndef PRODUCT
+ 118       if (Universe::heap()-&gt;promotion_should_fail()) {
+ 119         new_obj = oop_promotion_failed(o, test_mark);
+ 120 
+ 121         if (need_container_copying) {
+ 122           new_obj =
+ 123               (oop) (((address) new_obj) + offset_from_outermost_container);
+ 124         }
+ 125 
+ 126         return new_obj;
+ 127       }
+ 128 #endif // PRODUCT
+ 129 
+ 130       new_obj_is_tenured = true;
+ 131       // TODO: Update object start array
+ 132       new_obj = (oop) _old_lab.allocate(new_obj_size);
+ 133       if (new_obj == NULL) {
+ 134         new_obj = allocate_in_old_gen_slow(new_obj_size);
+ 135 
+ 136         // This is the promotion failed test, and code handling.
+ 137         // The code belongs here for two reasons. It is slightly
+ 138         // different than the code below, and cannot share the
+ 139         // CAS testing code. Keeping the code here also minimizes
+ 140         // the impact on the common case fast path code.
+ 141 
+ 142         if (new_obj == NULL) {
+ 143           new_obj = oop_promotion_failed(o, test_mark);
+ 144 
+ 145           if (need_container_copying) {
+ 146             new_obj =
+ 147                 (oop) (((address) new_obj) + offset_from_outermost_container);
+ 148           }
+ 149 
+ 150           return new_obj;
+ 151         }
+ 152       }
+ 153     }
+ 154 
+ 155     assert(new_obj != NULL, "allocation should have succeeded");
+ 156 
+ 157     // Copy the object
+ 158     Copy::aligned_disjoint_words((HeapWord*) o, (HeapWord*) new_obj,
+ 159         new_obj_size);
+ 160 
+ 161     // Now we have to CAS in the header.
+ 162     if (o-&gt;cas_forward_to(new_obj, test_mark)) {
+ 163       // We won any races, we "own" this object.
+ 164       assert(new_obj == o-&gt;forwardee(), "sanity");
+ 165 
+ 166       // Now that we're dealing with a markOop that cannot change, it is okay
+ 167       // to use the non MT safe oopDesc methods.
+ 168 
+ 169       // Increment age if the object is still in the young generation
+ 170       if (!new_obj_is_tenured) {
+ 171         assert(young_space()-&gt;contains(new_obj),
+ 172             "object must belong to To space");
+ 173         new_obj-&gt;incr_age();
+ 174       }
+ 175 
+ 176 #ifndef PRODUCT
+ 177       if (TraceScavenge) {
+ 178         ResourceMark rm;
+ 179         gclog_or_tty-&gt;print_cr("{%s %s 0x%p -&gt; 0x%p (%d)}",
+ 180             PSScavenge::should_scavenge(&amp;new_obj) ? "copying" : "tenuring",
+ 181             new_obj-&gt;klass()-&gt;internal_name(),
+ 182             (void*) o, (void*) new_obj, new_obj-&gt;size());
+ 183       }
+ 184 #endif // PRODUCT
+ 185 
+ 186       if (new_obj-&gt;is_container()) {
+ 187         // The thread that "owns" a container also "owns" all its contained
+ 188         // objects. We need to forward all of them to their new locations.
+ 189         // Let's consider the memory layout of some container, for example,
+ 190         // a structured array.
+ 191         // +---------+-------+-------+-------+-------+-----+-------+-------+
+ 192         // |Container| RCO_0 | Obj_0 | RCO_1 | Obj_1 | ... |RCO_n-1|Obj_n-1|
+ 193         // +---------+-------+-------+-------+-------+-----+-------+-------+
+ 194         // Every cell is a single Java object, except for Obj_0 ... Obj_n-1,
+ 195         // which may be single Java objects or nested containers having
+ 196         // (recursively) the same memory layout. In any case, new_obj_size
+ 197         // stores the full size of new_obj container, including (recursively)
+ 198         // all its contents. new_obj-&gt;size() returns just the container's own
+ 199         // size (that is the size of the first cell only). To forward all
+ 200         // the contents of new_obj container, we simply need to iterate through
+ 201         // all Java objects between ((HeapWord*) o) + new_obj-&gt;size() and
+ 202         // ((HeapWord*) o) + new_obj_size and forward every object to the
+ 203         // corresponding new location. This approach correctly works for
+ 204         // the case of nested containers too and corresponds to depth-first
+ 205         // traversal of the tree representing container hierarchy for new_obj.
+ 206         // For installing forwarding pointers we can use the non MT safe
+ 207         // oopDesc::forward_to(), since no other thread can interfere with us.
+ 208 
+ 209         size_t size = new_obj-&gt;size();
+ 210         HeapWord* src = ((HeapWord*) o) + size;
+ 211         HeapWord* dst = ((HeapWord*) new_obj) + size;
+ 212         HeapWord* src_end = ((HeapWord*) o) + new_obj_size;
+ 213         while (src &lt; src_end) {
+ 214           ((oop) src)-&gt;forward_to((oop) dst);
+ 215 
+ 216           // Increment age if the object is still in the young generation
+ 217           if (!new_obj_is_tenured) {
+ 218             assert(young_space()-&gt;contains((oop) dst),
+ 219                 "object must belong to To space");
+ 220             ((oop) dst)-&gt;incr_age();
+ 221           }
+ 222 
+ 223 #ifndef PRODUCT
+ 224           if (TraceScavenge) {
+ 225             ResourceMark rm;
+ 226             oop obj = (oop) dst;
+ 227             gclog_or_tty-&gt;print_cr("{%s %s 0x%p -&gt; 0x%p (%d)}",
+ 228                 PSScavenge::should_scavenge(&amp;obj) ? "copying" : "tenuring",
+ 229                 obj-&gt;klass()-&gt;internal_name(),
+ 230                 (void*) src, (void*) dst, obj-&gt;size());
+ 231           }
+ 232 #endif // PRODUCT
+ 233 
+ 234           size = ((oop) dst)-&gt;size();
+ 235           src += size;
+ 236           dst += size;
+ 237         }
+ 238         assert(src == src_end, "sanity");
+ 239       }
+ 240 
+ 241       // Firstly, we do the size comparison with new_obj_size, which we
+ 242       // already have. Hopefully, only a few objects are larger than
+ 243       // _min_array_size_for_chunking, and most of them will be arrays.
+ 244       // So, the is_objArray() test would be very infrequent.
+ 245       if (new_obj_size &gt; _min_array_size_for_chunking &amp;&amp;
+ 246           new_obj-&gt;is_objArray() &amp;&amp; PSChunkLargeArrays) {
+ 247         // We'll chunk it.
+ 248         oop* const masked_o = mask_chunked_array_oop(o);
+ 249         push_depth(masked_o);
+ 250         TASKQUEUE_STATS_ONLY(++_arrays_chunked; ++_masked_pushes);
+ 251       } else {
+ 252         // We'll just push its contents.
+ 253         new_obj-&gt;push_contents(this);
+ 254       }
+ 255     } else {
+ 256       // We lost, someone else "owns" this object.
+ 257       guarantee(o-&gt;is_forwarded(), "object must be forwarded if CAS failed");
+ 258 
+ 259       // Here we try to deallocate the space. If it was directly allocated,
+ 260       // we cannot deallocate it, so we have to test. If the deallocation
+ 261       // fails, we fill the space with a filler object.
+ 262       if (new_obj_is_tenured) {
+ 263         // TODO: Update object start array
+ 264         if (!_old_lab.unallocate_object((HeapWord*) new_obj, new_obj_size)) {
+ 265           CollectedHeap::fill_with_object((HeapWord*) new_obj, new_obj_size);
+ 266         }
+ 267       } else {
+ 268         if (!_young_lab.unallocate_object((HeapWord*) new_obj, new_obj_size)) {
+ 269           CollectedHeap::fill_with_object((HeapWord*) new_obj, new_obj_size);
+ 270         }
+ 271       }
+ 272 
+ 273       // Don't update this before the unallocation!
+ 274       new_obj = o-&gt;forwardee();
+ 275     }
+ 276   } else {
+ 277     assert(o-&gt;is_forwarded(), "sanity");
+ 278     new_obj = o-&gt;forwardee();
+ 279   }
+ 280 
+ 281   if (need_container_copying) {
+ 282     // The outermost container of the original object is guaranteed to be
+ 283     // forwarded at this point, either by this thread or by another GC worker.
+ 284     // The original object itself may be not forwarded yet (if another GC worker
+ 285     // is still processing the contained objects of the outermost container),
+ 286     // but we do exactly know its new location. Here we just calculate and
+ 287     // return it; it is guaranteed to be valid when Scavenge ends.
+ 288     new_obj = (oop) (((address) new_obj) + offset_from_outermost_container);
+ 289   }
+ 290 
+ 291   return new_obj;
+ 292 }
+ 293 
+ 294 inline oop PSPromotionManager::allocate_in_young_gen_slow(size_t size) {
+ 295   oop obj = NULL;
+ 296 
+ 297   if (!_young_gen_is_full) {
+ 298     // Do we allocate directly, or flush and fill?
+ 299     if (size &gt; (YoungPLABSize / 2)) {
+ 300       // Allocate this object directly
+ 301       obj = (oop) young_space()-&gt;cas_allocate(size);
+ 302     } else {
+ 303       // Flush and fill
+ 304       _young_lab.flush();
+ 305 
+ 306       HeapWord* lab_base = young_space()-&gt;cas_allocate(YoungPLABSize);
+ 307       if (lab_base != NULL) {
+ 308         _young_lab.initialize(MemRegion(lab_base, YoungPLABSize));
+ 309 
+ 310         // Try allocation in the young generation LAB again
+ 311         obj = (oop) _young_lab.allocate(size);
+ 312       } else {
+ 313         _young_gen_is_full = true;
+ 314       }
+ 315     }
+ 316   }
+ 317 
+ 318   return obj;
+ 319 }
+ 320 
+ 321 inline oop PSPromotionManager::allocate_in_old_gen_slow(size_t size) {
+ 322   oop obj = NULL;
+ 323 
+ 324   if (!_old_gen_is_full) {
+ 325     // Do we allocate directly, or flush and fill?
+ 326     if (size &gt; (OldPLABSize / 2)) {
+ 327       // Allocate this object directly
+ 328       // TODO: Update object start array
+ 329       obj = (oop) old_gen()-&gt;cas_allocate(size);
+ 330     } else {
+ 331       // Flush and fill
+ 332       _old_lab.flush();
+ 333 
+ 334       HeapWord* lab_base = old_gen()-&gt;cas_allocate(OldPLABSize);
+ 335       if (lab_base != NULL) {
+ 336 #ifdef ASSERT
+ 337         // Delay initialization of the promotion LAB (PLAB)
+ 338         // This exposes uninitialized PLABs to card table processing.
+ 339         if (GCWorkerDelayMillis &gt; 0) {
+ 340           os::sleep(Thread::current(), GCWorkerDelayMillis, false);
+ 341         }
+ 342 #endif // ASSERT
+ 343         _old_lab.initialize(MemRegion(lab_base, OldPLABSize));
+ 344 
+ 345         // Try allocation in the old generation LAB again
+ 346         // TODO: Update object start array
+ 347         obj = (oop) _old_lab.allocate(size);
+ 348       }
+ 349     }
+ 350   }
+ 351 
+ 352   if (obj == NULL) {
+ 353     _old_gen_is_full = true;
+ 354   }
+ 355 
+ 356   return obj;
+ 357 }
+ 358 
+ 359 inline void PSPromotionManager::process_popped_location_depth(StarTask p) {
+ 360   if (is_oop_masked(p)) {
+ 361     assert(PSChunkLargeArrays, "invariant");
+ 362     oop const old = unmask_chunked_array_oop(p);
+ 363     process_array_chunk(old);
+ 364   } else {
+ 365     if (p.is_narrow()) {
+ 366       assert(UseCompressedOops, "Error");
+ 367       PSScavenge::copy_and_push_safe_barrier&lt;narrowOop, /*promote_immediately=*/false&gt;(this, p);
+ 368     } else {
+ 369       PSScavenge::copy_and_push_safe_barrier&lt;oop, /*promote_immediately=*/false&gt;(this, p);
+ 370     }
+ 371   }
+ 372 }
+ 373 
+ 374 #if TASKQUEUE_STATS
+ 375 void PSPromotionManager::record_steal(StarTask&amp; p) {
+ 376   if (is_oop_masked(p)) {
+ 377     ++_masked_steals;
+ 378   }
+ 379 }
+ 380 #endif // TASKQUEUE_STATS
+ 381 
+ 382 #endif // SHARE_VM_GC_IMPLEMENTATION_PARALLELSCAVENGE_PSPROMOTIONMANAGER_INLINE_HPP
+</pre></body></html>

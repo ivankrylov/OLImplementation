@@ -1,0 +1,494 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 // The giant table of Node classes.
+  26 // One entry per class, sorted by class name.
+  27 
+  28 macro(AbsD)
+  29 macro(AbsF)
+  30 macro(AbsI)
+  31 macro(AddD)
+  32 macro(AddF)
+  33 macro(AddI)
+  34 macro(AddL)
+  35 macro(AddP)
+  36 macro(Allocate)
+  37 macro(AllocateArray)
+  38 macro(AndI)
+  39 macro(AndL)
+  40 macro(AryEq)
+  41 macro(AtanD)
+  42 macro(Binary)
+  43 macro(Bool)
+  44 macro(BoxLock)
+  45 macro(ReverseBytesI)
+  46 macro(ReverseBytesL)
+  47 macro(ReverseBytesUS)
+  48 macro(ReverseBytesS)
+  49 macro(CProj)
+  50 macro(CallDynamicJava)
+  51 macro(CallJava)
+  52 macro(CallLeaf)
+  53 macro(CallLeafNoFP)
+  54 macro(CallRuntime)
+  55 macro(CallStaticJava)
+<a name="1" id="anc1"></a><span class="new">  56 macro(CastDerived)</span>
+  57 macro(CastII)
+  58 macro(CastX2P)
+  59 macro(CastP2X)
+  60 macro(CastPP)
+  61 macro(Catch)
+  62 macro(CatchProj)
+  63 macro(CheckCastPP)
+  64 macro(ClearArray)
+  65 macro(ConstraintCast)
+  66 macro(CMoveD)
+  67 macro(CMoveF)
+  68 macro(CMoveI)
+  69 macro(CMoveL)
+  70 macro(CMoveP)
+  71 macro(CMoveN)
+  72 macro(CmpN)
+  73 macro(CmpD)
+  74 macro(CmpD3)
+  75 macro(CmpF)
+  76 macro(CmpF3)
+  77 macro(CmpI)
+  78 macro(CmpL)
+  79 macro(CmpL3)
+  80 macro(CmpLTMask)
+  81 macro(CmpP)
+  82 macro(CmpU)
+  83 macro(CompareAndSwapI)
+  84 macro(CompareAndSwapL)
+  85 macro(CompareAndSwapP)
+  86 macro(CompareAndSwapN)
+  87 macro(GetAndAddI)
+  88 macro(GetAndAddL)
+  89 macro(GetAndSetI)
+  90 macro(GetAndSetL)
+  91 macro(GetAndSetP)
+  92 macro(GetAndSetN)
+  93 macro(Con)
+  94 macro(ConN)
+  95 macro(ConNKlass)
+  96 macro(ConD)
+  97 macro(ConF)
+  98 macro(ConI)
+  99 macro(ConL)
+ 100 macro(ConP)
+ 101 macro(Conv2B)
+ 102 macro(ConvD2F)
+ 103 macro(ConvD2I)
+ 104 macro(ConvD2L)
+ 105 macro(ConvF2D)
+ 106 macro(ConvF2I)
+ 107 macro(ConvF2L)
+ 108 macro(ConvI2D)
+ 109 macro(ConvI2F)
+ 110 macro(ConvI2L)
+ 111 macro(ConvL2D)
+ 112 macro(ConvL2F)
+ 113 macro(ConvL2I)
+ 114 macro(CosD)
+ 115 macro(CountedLoop)
+ 116 macro(CountedLoopEnd)
+ 117 macro(CountLeadingZerosI)
+ 118 macro(CountLeadingZerosL)
+ 119 macro(CountTrailingZerosI)
+ 120 macro(CountTrailingZerosL)
+ 121 macro(CreateEx)
+ 122 macro(DecodeN)
+ 123 macro(DecodeNKlass)
+ 124 macro(DivD)
+ 125 macro(DivF)
+ 126 macro(DivI)
+ 127 macro(DivL)
+ 128 macro(DivMod)
+ 129 macro(DivModI)
+ 130 macro(DivModL)
+ 131 macro(EncodeISOArray)
+ 132 macro(EncodeP)
+ 133 macro(EncodePKlass)
+ 134 macro(ExpD)
+ 135 macro(FastLock)
+ 136 macro(FastUnlock)
+ 137 macro(Goto)
+ 138 macro(Halt)
+ 139 macro(If)
+ 140 macro(IfFalse)
+ 141 macro(IfTrue)
+ 142 macro(Initialize)
+ 143 macro(JProj)
+ 144 macro(Jump)
+ 145 macro(JumpProj)
+ 146 macro(LShiftI)
+ 147 macro(LShiftL)
+ 148 macro(LoadB)
+ 149 macro(LoadUB)
+ 150 macro(LoadUS)
+ 151 macro(LoadD)
+ 152 macro(LoadD_unaligned)
+ 153 macro(LoadF)
+ 154 macro(LoadI)
+ 155 macro(LoadKlass)
+ 156 macro(LoadNKlass)
+ 157 macro(LoadL)
+ 158 macro(LoadL_unaligned)
+ 159 macro(LoadPLocked)
+ 160 macro(LoadP)
+ 161 macro(LoadN)
+ 162 macro(LoadRange)
+ 163 macro(LoadS)
+ 164 macro(Lock)
+ 165 macro(LogD)
+ 166 macro(Log10D)
+ 167 macro(Loop)
+ 168 macro(LoopLimit)
+ 169 macro(Mach)
+ 170 macro(MachProj)
+ 171 macro(MaxI)
+ 172 macro(MemBarAcquire)
+ 173 macro(LoadFence)
+ 174 macro(MemBarAcquireLock)
+ 175 macro(MemBarCPUOrder)
+ 176 macro(MemBarRelease)
+ 177 macro(StoreFence)
+ 178 macro(MemBarReleaseLock)
+ 179 macro(MemBarVolatile)
+ 180 macro(MemBarStoreStore)
+ 181 macro(MergeMem)
+ 182 macro(MinI)
+ 183 macro(ModD)
+ 184 macro(ModF)
+ 185 macro(ModI)
+ 186 macro(ModL)
+ 187 macro(MoveI2F)
+ 188 macro(MoveF2I)
+ 189 macro(MoveL2D)
+ 190 macro(MoveD2L)
+ 191 macro(MulD)
+ 192 macro(MulF)
+ 193 macro(MulHiL)
+ 194 macro(MulI)
+ 195 macro(MulL)
+ 196 macro(Multi)
+ 197 macro(NegD)
+ 198 macro(NegF)
+ 199 macro(NeverBranch)
+ 200 macro(Opaque1)
+ 201 macro(Opaque2)
+ 202 macro(Opaque3)
+<a name="2" id="anc2"></a>
+ 203 macro(OrI)
+ 204 macro(OrL)
+ 205 macro(OverflowAddI)
+ 206 macro(OverflowSubI)
+ 207 macro(OverflowMulI)
+ 208 macro(OverflowAddL)
+ 209 macro(OverflowSubL)
+ 210 macro(OverflowMulL)
+ 211 macro(PCTable)
+ 212 macro(Parm)
+ 213 macro(PartialSubtypeCheck)
+ 214 macro(Phi)
+ 215 macro(PopCountI)
+ 216 macro(PopCountL)
+ 217 macro(PowD)
+ 218 macro(PrefetchAllocation)
+ 219 macro(PrefetchRead)
+ 220 macro(PrefetchWrite)
+ 221 macro(Proj)
+ 222 macro(RShiftI)
+ 223 macro(RShiftL)
+ 224 macro(Region)
+ 225 macro(Rethrow)
+ 226 macro(Return)
+ 227 macro(Root)
+ 228 macro(RoundDouble)
+ 229 macro(RoundFloat)
+ 230 macro(SafePoint)
+ 231 macro(SafePointScalarObject)
+ 232 macro(SCMemProj)
+ 233 macro(SinD)
+ 234 macro(SqrtD)
+ 235 macro(Start)
+ 236 macro(StartOSR)
+ 237 macro(StoreB)
+ 238 macro(StoreC)
+ 239 macro(StoreCM)
+ 240 macro(StorePConditional)
+ 241 macro(StoreIConditional)
+ 242 macro(StoreLConditional)
+ 243 macro(StoreD)
+ 244 macro(StoreF)
+ 245 macro(StoreI)
+ 246 macro(StoreL)
+ 247 macro(StoreP)
+ 248 macro(StoreN)
+ 249 macro(StoreNKlass)
+ 250 macro(StrComp)
+ 251 macro(StrEquals)
+ 252 macro(StrIndexOf)
+ 253 macro(SubD)
+ 254 macro(SubF)
+ 255 macro(SubI)
+ 256 macro(SubL)
+ 257 macro(TailCall)
+ 258 macro(TailJump)
+ 259 macro(TanD)
+ 260 macro(ThreadLocal)
+ 261 macro(Unlock)
+ 262 macro(URShiftI)
+ 263 macro(URShiftL)
+ 264 macro(XorI)
+ 265 macro(XorL)
+ 266 macro(Vector)
+ 267 macro(AddVB)
+ 268 macro(AddVS)
+ 269 macro(AddVI)
+ 270 macro(AddVL)
+ 271 macro(AddVF)
+ 272 macro(AddVD)
+ 273 macro(SubVB)
+ 274 macro(SubVS)
+ 275 macro(SubVI)
+ 276 macro(SubVL)
+ 277 macro(SubVF)
+ 278 macro(SubVD)
+ 279 macro(MulVS)
+ 280 macro(MulVI)
+ 281 macro(MulVF)
+ 282 macro(MulVD)
+ 283 macro(DivVF)
+ 284 macro(DivVD)
+ 285 macro(LShiftCntV)
+ 286 macro(RShiftCntV)
+ 287 macro(LShiftVB)
+ 288 macro(LShiftVS)
+ 289 macro(LShiftVI)
+ 290 macro(LShiftVL)
+ 291 macro(RShiftVB)
+ 292 macro(RShiftVS)
+ 293 macro(RShiftVI)
+ 294 macro(RShiftVL)
+ 295 macro(URShiftVB)
+ 296 macro(URShiftVS)
+ 297 macro(URShiftVI)
+ 298 macro(URShiftVL)
+ 299 macro(AndV)
+ 300 macro(OrV)
+ 301 macro(XorV)
+ 302 macro(LoadVector)
+ 303 macro(StoreVector)
+ 304 macro(Pack)
+ 305 macro(PackB)
+ 306 macro(PackS)
+ 307 macro(PackI)
+ 308 macro(PackL)
+ 309 macro(PackF)
+ 310 macro(PackD)
+ 311 macro(Pack2L)
+ 312 macro(Pack2D)
+ 313 macro(ReplicateB)
+ 314 macro(ReplicateS)
+ 315 macro(ReplicateI)
+ 316 macro(ReplicateL)
+ 317 macro(ReplicateF)
+ 318 macro(ReplicateD)
+ 319 macro(Extract)
+ 320 macro(ExtractB)
+ 321 macro(ExtractUB)
+ 322 macro(ExtractC)
+ 323 macro(ExtractS)
+ 324 macro(ExtractI)
+ 325 macro(ExtractL)
+ 326 macro(ExtractF)
+ 327 macro(ExtractD)
+<a name="3" id="anc3"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="3" type="hidden" /></form></body></html>

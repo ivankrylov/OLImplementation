@@ -1,0 +1,32 @@
+--- old/src/share/vm/gc_implementation/shared/markSweep.cpp	2015-06-16 10:25:43.638453812 -0700
++++ new/src/share/vm/gc_implementation/shared/markSweep.cpp	2015-06-16 10:25:43.566455536 -0700
+@@ -124,22 +124,22 @@
+ 
+ void MarkSweep::restore_marks() {
+   assert(_preserved_oop_stack.size() == _preserved_mark_stack.size(),
+-         "inconsistent preserved oop stacks");
++      "inconsistent preserved oop stacks");
+   if (PrintGC && Verbose) {
+     gclog_or_tty->print_cr("Restoring %d marks",
+-                           _preserved_count + _preserved_oop_stack.size());
++        _preserved_count + _preserved_oop_stack.size());
+   }
+ 
+-  // restore the marks we saved earlier
++  // Restore the marks we saved earlier
+   for (size_t i = 0; i < _preserved_count; i++) {
+     _preserved_marks[i].restore();
+   }
+ 
+-  // deal with the overflow
++  // Deal with the overflow
+   while (!_preserved_oop_stack.is_empty()) {
+-    oop obj       = _preserved_oop_stack.pop();
+-    markOop mark  = _preserved_mark_stack.pop();
+-    obj->set_mark(mark);
++    oop obj = _preserved_oop_stack.pop();
++    markOop mark = _preserved_mark_stack.pop();
++    obj->restore_mark(mark);
+   }
+ }
+ 

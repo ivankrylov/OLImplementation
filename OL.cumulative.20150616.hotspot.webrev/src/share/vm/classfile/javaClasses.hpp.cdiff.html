@@ -1,0 +1,301 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Cdiff src/share/vm/classfile/javaClasses.hpp</title>
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/classfile/javaClasses.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+<hr /><span class="oldmarker">*** 1,7 ****</span>
+  /*
+<span class="changed">!  * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.</span>
+   * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   *
+   * This code is free software; you can redistribute it and/or modify it
+   * under the terms of the GNU General Public License version 2 only, as
+   * published by the Free Software Foundation.
+<span class="newmarker">--- 1,7 ----</span>
+  /*
+<span class="changed">!  * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.</span>
+   * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   *
+   * This code is free software; you can redistribute it and/or modify it
+   * under the terms of the GNU General Public License version 2 only, as
+   * published by the Free Software Foundation.
+<hr /><span class="oldmarker">*** 482,505 ****</span>
+    // Trace constants
+    enum {
+      trace_methods_offset = 0,
+      trace_bcis_offset    = 1,
+      trace_mirrors_offset = 2,
+<span class="changed">!     trace_cprefs_offset  = 3,</span>
+<span class="changed">!     trace_next_offset    = 4,</span>
+<span class="changed">!     trace_size           = 5,</span>
+      trace_chunk_size     = 32
+    };
+  
+    static int backtrace_offset;
+    static int detailMessage_offset;
+    static int cause_offset;
+    static int stackTrace_offset;
+    static int static_unassigned_stacktrace_offset;
+  
+    // Printing
+<span class="changed">!   static char* print_stack_element_to_buffer(Handle mirror, int method, int version, int bci, int cpref);</span>
+    // StackTrace (programmatic access, new since 1.4)
+    static void clear_stacktrace(oop throwable);
+    // No stack trace available
+    static const char* no_stack_trace_message();
+    // Stacktrace (post JDK 1.7.0 to allow immutability protocol to be followed)
+<span class="newmarker">--- 482,504 ----</span>
+    // Trace constants
+    enum {
+      trace_methods_offset = 0,
+      trace_bcis_offset    = 1,
+      trace_mirrors_offset = 2,
+<span class="changed">!     trace_next_offset    = 3,</span>
+<span class="changed">!     trace_size           = 4,</span>
+      trace_chunk_size     = 32
+    };
+  
+    static int backtrace_offset;
+    static int detailMessage_offset;
+    static int cause_offset;
+    static int stackTrace_offset;
+    static int static_unassigned_stacktrace_offset;
+  
+    // Printing
+<span class="changed">!   static char* print_stack_element_to_buffer(Handle mirror, int method, int version, int bci);</span>
+    // StackTrace (programmatic access, new since 1.4)
+    static void clear_stacktrace(oop throwable);
+    // No stack trace available
+    static const char* no_stack_trace_message();
+    // Stacktrace (post JDK 1.7.0 to allow immutability protocol to be followed)
+<hr /><span class="oldmarker">*** 516,526 ****</span>
+    // Message
+    static oop message(oop throwable);
+    static oop message(Handle throwable);
+    static void set_message(oop throwable, oop value);
+    static void print_stack_element(outputStream *st, Handle mirror, int method,
+<span class="changed">!                                   int version, int bci, int cpref);</span>
+    static void print_stack_element(outputStream *st, methodHandle method, int bci);
+    static void print_stack_usage(Handle stream);
+  
+    // Allocate space for backtrace (created but stack trace not filled in)
+    static void allocate_backtrace(Handle throwable, TRAPS);
+<span class="newmarker">--- 515,525 ----</span>
+    // Message
+    static oop message(oop throwable);
+    static oop message(Handle throwable);
+    static void set_message(oop throwable, oop value);
+    static void print_stack_element(outputStream *st, Handle mirror, int method,
+<span class="changed">!                                   int version, int bci);</span>
+    static void print_stack_element(outputStream *st, methodHandle method, int bci);
+    static void print_stack_usage(Handle stream);
+  
+    // Allocate space for backtrace (created but stack trace not filled in)
+    static void allocate_backtrace(Handle throwable, TRAPS);
+<hr /><span class="oldmarker">*** 1094,1103 ****</span>
+<span class="newmarker">--- 1093,1106 ----</span>
+    static int            flags(oop mname);
+    static void       set_flags(oop mname, int flags);
+  
+    static Metadata*      vmtarget(oop mname);
+    static void       set_vmtarget(oop mname, Metadata* target);
+<span class="new">+ #if INCLUDE_JVMTI</span>
+<span class="new">+   static void       adjust_vmtarget(oop mname, Method* old_method, Method* new_method,</span>
+<span class="new">+                                     bool* trace_name_printed);</span>
+<span class="new">+ #endif // INCLUDE_JVMTI</span>
+  
+    static intptr_t       vmindex(oop mname);
+    static void       set_vmindex(oop mname, intptr_t index);
+  
+    // Testers
+<hr /><span class="oldmarker">*** 1321,1331 ****</span>
+    static void set_methodName(oop element, oop value);
+    static void set_fileName(oop element, oop value);
+    static void set_lineNumber(oop element, int value);
+  
+    // Create an instance of StackTraceElement
+<span class="changed">!   static oop create(Handle mirror, int method, int version, int bci, int cpref, TRAPS);</span>
+    static oop create(methodHandle method, int bci, TRAPS);
+  
+    // Debugging
+    friend class JavaClasses;
+  };
+<span class="newmarker">--- 1324,1334 ----</span>
+    static void set_methodName(oop element, oop value);
+    static void set_fileName(oop element, oop value);
+    static void set_lineNumber(oop element, int value);
+  
+    // Create an instance of StackTraceElement
+<span class="changed">!   static oop create(Handle mirror, int method, int version, int bci, TRAPS);</span>
+    static oop create(methodHandle method, int bci, TRAPS);
+  
+    // Debugging
+    friend class JavaClasses;
+  };
+<hr /><span class="oldmarker">*** 1376,1385 ****</span>
+<span class="newmarker">--- 1379,1460 ----</span>
+   public:
+    static void initialize(TRAPS);
+    static oop  get_owner_threadObj(oop obj);
+  };
+  
+<span class="new">+ </span>
+<span class="new">+ // Interface to org.ObjectLayout.AbstractStructuredArray objects</span>
+<span class="new">+ </span>
+<span class="new">+ class org_ObjectLayout_AbstractStructuredArray : AllStatic {</span>
+<span class="new">+   friend class JavaClasses;</span>
+<span class="new">+ </span>
+<span class="new">+  private:</span>
+<span class="new">+   static int _bodySize_offset;</span>
+<span class="new">+   static int _length_offset;</span>
+<span class="new">+   static int _elementSize_offset;</span>
+<span class="new">+   static int _paddingSize_offset;</span>
+<span class="new">+   static int _elementClass_offset;</span>
+<span class="new">+ </span>
+<span class="new">+   static void compute_offsets();</span>
+<span class="new">+ </span>
+<span class="new">+  public:</span>
+<span class="new">+   static int bodySize_offset() {</span>
+<span class="new">+     return _bodySize_offset;</span>
+<span class="new">+   }</span>
+<span class="new">+   static int length_offset() {</span>
+<span class="new">+     return _length_offset;</span>
+<span class="new">+   }</span>
+<span class="new">+   static int elementSize_offset() {</span>
+<span class="new">+     return _elementSize_offset;</span>
+<span class="new">+   }</span>
+<span class="new">+   static int paddingSize_offset() {</span>
+<span class="new">+     return _paddingSize_offset;</span>
+<span class="new">+   }</span>
+<span class="new">+   static int elementClass_offset() {</span>
+<span class="new">+     return _elementClass_offset;</span>
+<span class="new">+   }</span>
+<span class="new">+ </span>
+<span class="new">+   static jint bodySize(oop asa) {</span>
+<span class="new">+     return asa-&gt;int_field(_bodySize_offset);</span>
+<span class="new">+   }</span>
+<span class="new">+   static void set_bodySize(oop asa, jint value) {</span>
+<span class="new">+     return asa-&gt;int_field_put(_bodySize_offset, value);</span>
+<span class="new">+   }</span>
+<span class="new">+ </span>
+<span class="new">+   static jlong length(oop asa) {</span>
+<span class="new">+     return asa-&gt;long_field(_length_offset);</span>
+<span class="new">+   }</span>
+<span class="new">+   static void set_length(oop asa, jlong value) {</span>
+<span class="new">+     return asa-&gt;long_field_put(_length_offset, value);</span>
+<span class="new">+   }</span>
+<span class="new">+ </span>
+<span class="new">+   static jlong elementSize(oop asa) {</span>
+<span class="new">+     return asa-&gt;long_field(_elementSize_offset);</span>
+<span class="new">+   }</span>
+<span class="new">+   static void set_elementSize(oop asa, jlong value) {</span>
+<span class="new">+     return asa-&gt;long_field_put(_elementSize_offset, value);</span>
+<span class="new">+   }</span>
+<span class="new">+ </span>
+<span class="new">+   static jlong paddingSize(oop asa) {</span>
+<span class="new">+     return asa-&gt;long_field(_paddingSize_offset);</span>
+<span class="new">+   }</span>
+<span class="new">+   static void set_paddingSize(oop asa, jlong value) {</span>
+<span class="new">+     return asa-&gt;long_field_put(_paddingSize_offset, value);</span>
+<span class="new">+   }</span>
+<span class="new">+ </span>
+<span class="new">+   static oop elementClass(oop asa) {</span>
+<span class="new">+     return asa-&gt;obj_field(_elementClass_offset);</span>
+<span class="new">+   }</span>
+<span class="new">+   static void set_elementClass(oop asa, oop value) {</span>
+<span class="new">+     return asa-&gt;obj_field_put(_elementClass_offset, value);</span>
+<span class="new">+   }</span>
+<span class="new">+ </span>
+<span class="new">+   static jlong footprint_with_contained_objects(oop asa) {</span>
+<span class="new">+     return bodySize(asa) + length(asa) * elementSize(asa);</span>
+<span class="new">+   }</span>
+<span class="new">+ };</span>
+<span class="new">+ </span>
+  // Use to declare fields that need to be injected into Java classes
+  // for the JVM to use.  The name_index and signature_index are
+  // declared in vmSymbols.  The may_be_java flag is used to declare
+  // fields that might already exist in Java but should be injected if
+  // they don't.  Otherwise the field is unconditionally injected and
+</pre></body></html>
+

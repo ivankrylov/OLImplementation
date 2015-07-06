@@ -1,0 +1,275 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/runtime/arguments.cpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/runtime/arguments.cpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -1252,11 +1252,11 @@</span>
+ 
+   size_t max_heap = align_size_down(MaxHeapSize,
+                                     CardTableRS::ct_max_alignment_constraint());
+ 
+   // Now make adjustments for CMS
+<span class="removed">-  intx   tenuring_default = (intx)6;</span>
+<span class="new">+  uintx tenuring_default = (uintx) 3;</span>
+   size_t young_gen_per_worker = CMSYoungGenPerWorker;
+ 
+   // Preferred young gen size for "short" pauses:
+   // upper bound depends on # of threads and NewRatio.
+   const uintx parallel_gc_threads =
+</pre><hr /><pre>
+<span class="newmarker">@@ -1570,11 +1570,11 @@</span>
+   }
+ }
+ 
+ void Arguments::select_gc() {
+   if (!gc_selected()) {
+<span class="removed">-    select_gc_ergonomically();</span>
+<span class="new">+    ArgumentsExt::select_gc_ergonomically();</span>
+   }
+ }
+ 
+ void Arguments::set_ergonomics_flags() {
+   select_gc();
+</pre><hr /><pre>
+<span class="newmarker">@@ -1609,11 +1609,11 @@</span>
+ 
+ void Arguments::set_parallel_gc_flags() {
+   assert(UseParallelGC || UseParallelOldGC, "Error");
+   // Enable ParallelOld unless it was explicitly disabled (cmd line or rc file).
+   if (FLAG_IS_DEFAULT(UseParallelOldGC)) {
+<span class="removed">-    FLAG_SET_DEFAULT(UseParallelOldGC, true);</span>
+<span class="new">+    FLAG_SET_DEFAULT(UseParallelOldGC, false);</span>
+   }
+   FLAG_SET_DEFAULT(UseParallelGC, true);
+ 
+   // If no heap maximum was requested explicitly, use some reasonable fraction
+   // of the physical memory, up to a maximum of 1GB.
+</pre><hr /><pre>
+<span class="newmarker">@@ -1712,10 +1712,21 @@</span>
+           UseParallelGC || UseParallelOldGC));
+ }
+ #endif // ASSERT
+ #endif // INCLUDE_ALL_GCS
+ 
+<span class="new">+void Arguments::set_object_layout_flags() {</span>
+<span class="new">+    if (UseObjectLayoutIntrinsics) {</span>
+<span class="new">+      FLAG_SET_DEFAULT(UseParallelGC,true);</span>
+<span class="new">+      FLAG_SET_DEFAULT(UseParallelOldGC,false);</span>
+<span class="new">+      FLAG_SET_DEFAULT(UseCompressedOops, false);</span>
+<span class="new">+      FLAG_SET_DEFAULT(UseBiasedLocking, false);</span>
+<span class="new">+    }</span>
+<span class="new">+}</span>
+<span class="new">+</span>
+<span class="new">+</span>
+<span class="new">+</span>
+ void Arguments::set_gc_specific_flags() {
+ #if INCLUDE_ALL_GCS
+   // Set per-collector flags
+   if (UseParallelGC || UseParallelOldGC) {
+     set_parallel_gc_flags();
+</pre><hr /><pre>
+<span class="newmarker">@@ -2065,11 +2076,11 @@</span>
+   _max_heap_free_ratio = max_heap_free_ratio;
+   return true;
+ }
+ 
+ // Check consistency of GC selection
+<span class="removed">-bool Arguments::check_gc_consistency() {</span>
+<span class="new">+bool Arguments::check_gc_consistency_user() {</span>
+   check_gclog_consistency();
+   bool status = true;
+   // Ensure that the user has not selected conflicting sets
+   // of collectors. [Note: this check is merely a user convenience;
+   // collectors over-ride each other so that only a non-conflicting
+</pre><hr /><pre>
+<span class="newmarker">@@ -2231,11 +2242,11 @@</span>
+   if (GCTimeLimit == 100) {
+     // Turn off gc-overhead-limit-exceeded checks
+     FLAG_SET_DEFAULT(UseGCOverheadLimit, false);
+   }
+ 
+<span class="removed">-  status = status &amp;&amp; check_gc_consistency();</span>
+<span class="new">+  status = status &amp;&amp; check_gc_consistency_user();</span>
+   status = status &amp;&amp; check_stack_pages();
+ 
+   if (CMSIncrementalMode) {
+     if (!UseConcMarkSweepGC) {
+       jio_fprintf(defaultStream::error_stream(),
+</pre><hr /><pre>
+<span class="newmarker">@@ -2406,16 +2417,20 @@</span>
+   status = status &amp;&amp; verify_min_value(TLABRefillWasteFraction, 1, "TLABRefillWasteFraction");
+ 
+   status = status &amp;&amp; verify_percentage(YoungGenerationSizeSupplement, "YoungGenerationSizeSupplement");
+   status = status &amp;&amp; verify_percentage(TenuredGenerationSizeSupplement, "TenuredGenerationSizeSupplement");
+ 
+<span class="removed">-  // the "age" field in the oop header is 4 bits; do not want to pull in markOop.hpp</span>
+<span class="removed">-  // just for that, so hardcode here.</span>
+<span class="removed">-  status = status &amp;&amp; verify_interval(MaxTenuringThreshold, 0, 15, "MaxTenuringThreshold");</span>
+<span class="removed">-  status = status &amp;&amp; verify_interval(InitialTenuringThreshold, 0, MaxTenuringThreshold, "MaxTenuringThreshold");</span>
+<span class="removed">-  status = status &amp;&amp; verify_percentage(TargetSurvivorRatio, "TargetSurvivorRatio");</span>
+<span class="removed">-  status = status &amp;&amp; verify_percentage(MarkSweepDeadRatio, "MarkSweepDeadRatio");</span>
+<span class="new">+  // The age field in the object header has 2 bits. We do not want to pull in</span>
+<span class="new">+  // markOop.hpp just for that, so hardcode here.</span>
+<span class="new">+  status = status &amp;&amp; verify_interval(MaxTenuringThreshold,</span>
+<span class="new">+      0, 3, "MaxTenuringThreshold");</span>
+<span class="new">+  status = status &amp;&amp; verify_interval(InitialTenuringThreshold,</span>
+<span class="new">+      0, MaxTenuringThreshold, "InitialTenuringThreshold");</span>
+<span class="new">+  status = status &amp;&amp; verify_percentage(TargetSurvivorRatio,</span>
+<span class="new">+      "TargetSurvivorRatio");</span>
+<span class="new">+  status = status &amp;&amp; verify_percentage(MarkSweepDeadRatio,</span>
+<span class="new">+      "MarkSweepDeadRatio");</span>
+ 
+   status = status &amp;&amp; verify_min_value(MarkSweepAlwaysCompactCount, 1, "MarkSweepAlwaysCompactCount");
+ #ifdef COMPILER1
+   status = status &amp;&amp; verify_min_value(ValueMapInitialSize, 1, "ValueMapInitialSize");
+ #endif
+</pre><hr /><pre>
+<span class="newmarker">@@ -3835,12 +3850,12 @@</span>
+     }
+     if (match_option(option, "-XX:+PrintFlagsInitial", &amp;tail)) {
+       CommandLineFlags::printFlags(tty, false);
+       vm_exit(0);
+     }
+<span class="removed">-    if (match_option(option, "-XX:NativeMemoryTracking", &amp;tail)) {</span>
+ #if INCLUDE_NMT
+<span class="new">+    if (match_option(option, "-XX:NativeMemoryTracking", &amp;tail)) {</span>
+       // The launcher did not setup nmt environment variable properly.
+       if (!MemTracker::check_launcher_nmt_support(tail)) {
+         warning("Native Memory Tracking did not setup properly, using wrong launcher?");
+       }
+ 
+</pre><hr /><pre>
+<span class="newmarker">@@ -3851,16 +3866,12 @@</span>
+           MemTracker::init();
+         }
+       } else {
+         vm_exit_during_initialization("Syntax error, expecting -XX:NativeMemoryTracking=[off|summary|detail]", NULL);
+       }
+<span class="removed">-#else</span>
+<span class="removed">-      jio_fprintf(defaultStream::error_stream(),</span>
+<span class="removed">-        "Native Memory Tracking is not supported in this VM\n");</span>
+<span class="removed">-      return JNI_ERR;</span>
+<span class="removed">-#endif</span>
+     }
+<span class="new">+#endif</span>
+ 
+ 
+ #ifndef PRODUCT
+     if (match_option(option, "-XX:+PrintFlagsWithComments", &amp;tail)) {
+       CommandLineFlags::printFlags(tty, true);
+</pre><hr /><pre>
+<span class="newmarker">@@ -4002,17 +4013,21 @@</span>
+   return JNI_OK;
+ }
+ 
+ jint Arguments::apply_ergo() {
+ 
+<span class="new">+  // We need to set all object layout flags</span>
+<span class="new">+  // before ergonomics possibly enables CompressedOops</span>
+<span class="new">+  set_object_layout_flags();</span>
+<span class="new">+  </span>
+   // Set flags based on ergonomics.
+   set_ergonomics_flags();
+ 
+   set_shared_spaces_flags();
+ 
+   // Check the GC selections again.
+<span class="removed">-  if (!check_gc_consistency()) {</span>
+<span class="new">+  if (!ArgumentsExt::check_gc_consistency_ergo()) {</span>
+     return JNI_EINVAL;
+   }
+ 
+   if (TieredCompilation) {
+     set_tiered_flags();
+</pre></body></html>
+

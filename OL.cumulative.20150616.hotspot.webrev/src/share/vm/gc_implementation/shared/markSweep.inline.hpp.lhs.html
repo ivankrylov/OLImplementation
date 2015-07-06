@@ -1,0 +1,302 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #ifndef SHARE_VM_GC_IMPLEMENTATION_SHARED_MARKSWEEP_INLINE_HPP
+  26 #define SHARE_VM_GC_IMPLEMENTATION_SHARED_MARKSWEEP_INLINE_HPP
+  27 
+  28 #include "gc_implementation/shared/markSweep.hpp"
+  29 #include "gc_interface/collectedHeap.hpp"
+  30 #include "utilities/stack.inline.hpp"
+  31 #include "utilities/macros.hpp"
+  32 #if INCLUDE_ALL_GCS
+  33 #include "gc_implementation/g1/g1StringDedup.hpp"
+  34 #include "gc_implementation/parallelScavenge/psParallelCompact.hpp"
+  35 #endif // INCLUDE_ALL_GCS
+  36 
+  37 inline void MarkSweep::mark_object(oop obj) {
+  38 #if INCLUDE_ALL_GCS
+  39   if (G1StringDedup::is_enabled()) {
+  40     // We must enqueue the object before it is marked
+  41     // as we otherwise can't read the object's age.
+  42     G1StringDedup::enqueue_from_mark(obj);
+  43   }
+  44 #endif
+<a name="1" id="anc1"></a><span class="removed">  45   // some marks may contain information we need to preserve so we store them away</span>
+<span class="removed">  46   // and overwrite the mark.  We'll restore it at the end of markSweep.</span>
+<span class="removed">  47   markOop mark = obj-&gt;mark();</span>
+<span class="removed">  48   obj-&gt;set_mark(markOopDesc::prototype()-&gt;set_marked());</span>
+  49 
+<a name="2" id="anc2"></a>
+
+
+
+  50   if (mark-&gt;must_be_preserved(obj)) {
+  51     preserve_mark(obj, mark);
+  52   }
+  53 }
+  54 
+  55 inline void MarkSweep::follow_klass(Klass* klass) {
+  56   oop op = klass-&gt;klass_holder();
+  57   MarkSweep::mark_and_push(&amp;op);
+  58 }
+  59 
+  60 template &lt;class T&gt; inline void MarkSweep::follow_root(T* p) {
+  61   assert(!Universe::heap()-&gt;is_in_reserved(p),
+  62          "roots shouldn't be things within the heap");
+  63   T heap_oop = oopDesc::load_heap_oop(p);
+  64   if (!oopDesc::is_null(heap_oop)) {
+  65     oop obj = oopDesc::decode_heap_oop_not_null(heap_oop);
+  66     if (!obj-&gt;mark()-&gt;is_marked()) {
+  67       mark_object(obj);
+  68       obj-&gt;follow_contents();
+  69     }
+  70   }
+  71   follow_stack();
+  72 }
+  73 
+  74 template &lt;class T&gt; inline void MarkSweep::mark_and_push(T* p) {
+<a name="3" id="anc3"></a><span class="removed">  75 //  assert(Universe::heap()-&gt;is_in_reserved(p), "should be in object space");</span>
+  76   T heap_oop = oopDesc::load_heap_oop(p);
+  77   if (!oopDesc::is_null(heap_oop)) {
+  78     oop obj = oopDesc::decode_heap_oop_not_null(heap_oop);
+<a name="4" id="anc4"></a><span class="changed">  79     if (!obj-&gt;mark()-&gt;is_marked()) {</span>
+
+
+
+  80       mark_object(obj);
+<a name="5" id="anc5"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  81       _marking_stack.push(obj);
+  82     }
+  83   }
+  84 }
+  85 
+  86 void MarkSweep::push_objarray(oop obj, size_t index) {
+  87   ObjArrayTask task(obj, index);
+  88   assert(task.is_valid(), "bad ObjArrayTask");
+  89   _objarray_stack.push(task);
+  90 }
+  91 
+  92 template &lt;class T&gt; inline void MarkSweep::adjust_pointer(T* p) {
+  93   T heap_oop = oopDesc::load_heap_oop(p);
+  94   if (!oopDesc::is_null(heap_oop)) {
+  95     oop obj     = oopDesc::decode_heap_oop_not_null(heap_oop);
+  96     oop new_obj = oop(obj-&gt;mark()-&gt;decode_pointer());
+  97     assert(new_obj != NULL ||                         // is forwarding ptr?
+  98            obj-&gt;mark() == markOopDesc::prototype() || // not gc marked?
+  99            (UseBiasedLocking &amp;&amp; obj-&gt;mark()-&gt;has_bias_pattern()),
+ 100                                                       // not gc marked?
+ 101            "should be forwarded");
+ 102     if (new_obj != NULL) {
+ 103       assert(Universe::heap()-&gt;is_in_reserved(new_obj),
+ 104              "should be in object space");
+ 105       oopDesc::encode_store_heap_oop_not_null(p, new_obj);
+ 106     }
+ 107   }
+ 108 }
+ 109 
+ 110 template &lt;class T&gt; inline void MarkSweep::KeepAliveClosure::do_oop_work(T* p) {
+ 111   mark_and_push(p);
+ 112 }
+ 113 
+ 114 #endif // SHARE_VM_GC_IMPLEMENTATION_SHARED_MARKSWEEP_INLINE_HPP
+<a name="6" id="anc6"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="6" type="hidden" /></form></body></html>

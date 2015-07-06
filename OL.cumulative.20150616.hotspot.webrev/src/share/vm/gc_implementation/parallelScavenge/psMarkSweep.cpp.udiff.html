@@ -1,0 +1,182 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -165,16 +165,23 @@</span>
+   bool young_gen_empty;
+ 
+   {
+     HandleMark hm;
+ 
+<span class="new">+    gclog_or_tty-&gt;date_stamp(PrintGC &amp;&amp; PrintGCDateStamps);</span>
+     TraceCPUTime tcpu(PrintGCDetails, true, gclog_or_tty);
+     GCTraceTime t1(GCCauseString("Full GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer-&gt;gc_id());
+     TraceCollectorStats tcs(counters());
+     TraceMemoryManagerStats tms(true /* Full GC */,gc_cause);
+ 
+<span class="removed">-    if (TraceGen1Time) accumulated_time()-&gt;start();</span>
+<span class="new">+    if (TraceGen1Time) {</span>
+<span class="new">+      accumulated_time()-&gt;start();</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+<span class="new">+    if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="new">+      tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Starting full GC...");</span>
+<span class="new">+    }</span>
+ 
+     // Let the size policy know we're starting
+     size_policy-&gt;major_collection_begin();
+ 
+     CodeCache::gc_prologue();
+</pre><hr /><pre>
+<span class="newmarker">@@ -198,20 +205,36 @@</span>
+     ref_processor()-&gt;enable_discovery(true /*verify_disabled*/, true /*verify_no_refs*/);
+     ref_processor()-&gt;setup_policy(clear_all_softrefs);
+ 
+     mark_sweep_phase1(clear_all_softrefs);
+ 
+<span class="new">+    if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="new">+      tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Finished phase 1...");</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+     mark_sweep_phase2();
+ 
+<span class="removed">-    // Don't add any more derived pointers during phase3</span>
+<span class="removed">-    COMPILER2_PRESENT(assert(DerivedPointerTable::is_active(), "Sanity"));</span>
+<span class="new">+    if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="new">+      tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Finished phase 2...");</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+<span class="new">+    // Don't add any more derived pointers during phase 3</span>
+<span class="new">+    COMPILER2_PRESENT(assert(DerivedPointerTable::is_active(), "sanity check"));</span>
+     COMPILER2_PRESENT(DerivedPointerTable::set_active(false));
+ 
+     mark_sweep_phase3();
+ 
+<span class="new">+    if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="new">+      tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Finished phase 3...");</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+     mark_sweep_phase4();
+ 
+<span class="new">+    if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="new">+      tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Finished phase 4...");</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+     restore_marks();
+ 
+     deallocate_stacks();
+ 
+     if (ZapUnusedHeapArea) {
+</pre><hr /><pre>
+<span class="newmarker">@@ -343,11 +366,17 @@</span>
+     heap-&gt;resize_all_tlabs();
+ 
+     // We collected the heap, recalculate the metaspace capacity
+     MetaspaceGC::compute_new_size();
+ 
+<span class="removed">-    if (TraceGen1Time) accumulated_time()-&gt;stop();</span>
+<span class="new">+    if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="new">+      tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Finished full GC");</span>
+<span class="new">+    }</span>
+<span class="new">+</span>
+<span class="new">+    if (TraceGen1Time) {</span>
+<span class="new">+      accumulated_time()-&gt;stop();</span>
+<span class="new">+    }</span>
+ 
+     if (PrintGC) {
+       if (PrintGCDetails) {
+         // Don't print a GC timestamp here.  This is after the GC so
+         // would be confusing.
+</pre></body></html>
+

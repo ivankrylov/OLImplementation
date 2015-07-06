@@ -1,0 +1,70 @@
+--- old/src/share/vm/runtime/globals.hpp	2015-06-16 10:25:49.478312852 -0700
++++ new/src/share/vm/runtime/globals.hpp	2015-06-16 10:25:49.406314603 -0700
+@@ -718,7 +718,16 @@
+           "Use intrinsics for SHA-384 and SHA-512 crypto hash functions")   \
+                                                                             \
+   product(bool, UseCRC32Intrinsics, false,                                  \
+-          "use intrinsics for java.util.zip.CRC32")                         \
++          "Use intrinsics for java.util.zip.CRC32")                         \
++                                                                            \
++  product(bool, UseObjectLayoutIntrinsics, false,                           \
++          "Use intrinsics enabling optimized ObjectLayout implementation")  \
++                                                                            \
++  product(bool, TraceObjectLayoutIntrinsics, false,                         \
++          "Trace intrinsics specific to ObjectLayout implementation")       \
++                                                                            \
++  product(intx, ObjectLayoutIntrinsicsTraceLevel, 0,                        \
++          "Trace level for ObjectLayout related intrinsics")                \
+                                                                             \
+   develop(bool, TraceCallFixup, false,                                      \
+           "Trace all call fixups")                                          \
+@@ -1246,7 +1255,7 @@
+   product(bool, CompactFields, true,                                        \
+           "Allocate nonstatic fields in gaps between previous fields")      \
+                                                                             \
+-  notproduct(bool, PrintFieldLayout, false,                                 \
++  product(bool, PrintFieldLayout, false,                                    \
+           "Print field layout for each class")                              \
+                                                                             \
+   product(intx, ContendedPaddingWidth, 128,                                 \
+@@ -1258,7 +1267,7 @@
+   product(bool, RestrictContended, true,                                    \
+           "Restrict @Contended to trusted classes")                         \
+                                                                             \
+-  product(bool, UseBiasedLocking, true,                                     \
++  product(bool, UseBiasedLocking, false,                                     \
+           "Enable biased locking in JVM")                                   \
+                                                                             \
+   product(intx, BiasedLockingStartupDelay, 4000,                            \
+@@ -1494,7 +1503,7 @@
+           "How much the GC can expand the eden by while the GC locker "     \
+           "is active (as a percentage)")                                    \
+                                                                             \
+-  diagnostic(uintx, GCLockerRetryAllocationCount, 2,                        \
++  diagnostic(intx, GCLockerRetryAllocationCount, 2,                         \
+           "Number of times to retry allocations when "                      \
+           "blocked by the GC locker")                                       \
+                                                                             \
+@@ -2048,6 +2057,9 @@
+           "Provide more detailed and expensive TLAB statistics "            \
+           "(with PrintTLAB)")                                               \
+                                                                             \
++  EMBEDDED_ONLY(product(bool, LowMemoryProtection, true,                    \
++          "Enable LowMemoryProtection"))                                    \
++                                                                            \
+   product_pd(bool, NeverActAsServerClassMachine,                            \
+           "Never act like a server-class machine")                          \
+                                                                             \
+@@ -3233,10 +3245,10 @@
+   diagnostic(intx, VerifyGCLevel,     0,                                    \
+           "Generation level at which to start +VerifyBefore/AfterGC")       \
+                                                                             \
+-  product(uintx, MaxTenuringThreshold,    15,                               \
++  product(uintx, MaxTenuringThreshold, 3,                                   \
+           "Maximum value for tenuring threshold")                           \
+                                                                             \
+-  product(uintx, InitialTenuringThreshold,    7,                            \
++  product(uintx, InitialTenuringThreshold, 3,                               \
+           "Initial value for tenuring threshold")                           \
+                                                                             \
+   product(uintx, TargetSurvivorRatio,    50,                                \

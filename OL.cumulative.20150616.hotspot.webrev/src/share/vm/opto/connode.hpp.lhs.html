@@ -1,0 +1,985 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #ifndef SHARE_VM_OPTO_CONNODE_HPP
+  26 #define SHARE_VM_OPTO_CONNODE_HPP
+  27 
+  28 #include "opto/node.hpp"
+  29 #include "opto/opcodes.hpp"
+  30 #include "opto/type.hpp"
+  31 
+  32 class PhaseTransform;
+  33 class MachNode;
+  34 
+  35 //------------------------------ConNode----------------------------------------
+  36 // Simple constants
+  37 class ConNode : public TypeNode {
+  38 public:
+  39   ConNode( const Type *t ) : TypeNode(t-&gt;remove_speculative(),1) {
+  40     init_req(0, (Node*)Compile::current()-&gt;root());
+  41     init_flags(Flag_is_Con);
+  42   }
+  43   virtual int  Opcode() const;
+  44   virtual uint hash() const;
+  45   virtual const RegMask &amp;out_RegMask() const { return RegMask::Empty; }
+  46   virtual const RegMask &amp;in_RegMask(uint) const { return RegMask::Empty; }
+  47 
+  48   // Polymorphic factory method:
+  49   static ConNode* make( Compile* C, const Type *t );
+  50 };
+  51 
+  52 //------------------------------ConINode---------------------------------------
+  53 // Simple integer constants
+  54 class ConINode : public ConNode {
+  55 public:
+  56   ConINode( const TypeInt *t ) : ConNode(t) {}
+  57   virtual int Opcode() const;
+  58 
+  59   // Factory method:
+  60   static ConINode* make( Compile* C, int con ) {
+  61     return new (C) ConINode( TypeInt::make(con) );
+  62   }
+  63 
+  64 };
+  65 
+  66 //------------------------------ConPNode---------------------------------------
+  67 // Simple pointer constants
+  68 class ConPNode : public ConNode {
+  69 public:
+  70   ConPNode( const TypePtr *t ) : ConNode(t) {}
+  71   virtual int Opcode() const;
+  72 
+  73   // Factory methods:
+  74   static ConPNode* make( Compile *C ,address con ) {
+  75     if (con == NULL)
+  76       return new (C) ConPNode( TypePtr::NULL_PTR ) ;
+  77     else
+  78       return new (C) ConPNode( TypeRawPtr::make(con) );
+  79   }
+  80 };
+  81 
+  82 
+  83 //------------------------------ConNNode--------------------------------------
+  84 // Simple narrow oop constants
+  85 class ConNNode : public ConNode {
+  86 public:
+  87   ConNNode( const TypeNarrowOop *t ) : ConNode(t) {}
+  88   virtual int Opcode() const;
+  89 };
+  90 
+  91 //------------------------------ConNKlassNode---------------------------------
+  92 // Simple narrow klass constants
+  93 class ConNKlassNode : public ConNode {
+  94 public:
+  95   ConNKlassNode( const TypeNarrowKlass *t ) : ConNode(t) {}
+  96   virtual int Opcode() const;
+  97 };
+  98 
+  99 
+ 100 //------------------------------ConLNode---------------------------------------
+ 101 // Simple long constants
+ 102 class ConLNode : public ConNode {
+ 103 public:
+ 104   ConLNode( const TypeLong *t ) : ConNode(t) {}
+ 105   virtual int Opcode() const;
+ 106 
+ 107   // Factory method:
+ 108   static ConLNode* make( Compile *C ,jlong con ) {
+ 109     return new (C) ConLNode( TypeLong::make(con) );
+ 110   }
+ 111 
+ 112 };
+ 113 
+ 114 //------------------------------ConFNode---------------------------------------
+ 115 // Simple float constants
+ 116 class ConFNode : public ConNode {
+ 117 public:
+ 118   ConFNode( const TypeF *t ) : ConNode(t) {}
+ 119   virtual int Opcode() const;
+ 120 
+ 121   // Factory method:
+ 122   static ConFNode* make( Compile *C, float con  ) {
+ 123     return new (C) ConFNode( TypeF::make(con) );
+ 124   }
+ 125 
+ 126 };
+ 127 
+ 128 //------------------------------ConDNode---------------------------------------
+ 129 // Simple double constants
+ 130 class ConDNode : public ConNode {
+ 131 public:
+ 132   ConDNode( const TypeD *t ) : ConNode(t) {}
+ 133   virtual int Opcode() const;
+ 134 
+ 135   // Factory method:
+ 136   static ConDNode* make( Compile *C, double con ) {
+ 137     return new (C) ConDNode( TypeD::make(con) );
+ 138   }
+ 139 
+ 140 };
+ 141 
+ 142 //------------------------------BinaryNode-------------------------------------
+ 143 // Place holder for the 2 conditional inputs to a CMove.  CMove needs 4
+ 144 // inputs: the Bool (for the lt/gt/eq/ne bits), the flags (result of some
+ 145 // compare), and the 2 values to select between.  The Matcher requires a
+ 146 // binary tree so we break it down like this:
+ 147 //     (CMove (Binary bol cmp) (Binary src1 src2))
+ 148 class BinaryNode : public Node {
+ 149 public:
+ 150   BinaryNode( Node *n1, Node *n2 ) : Node(0,n1,n2) { }
+ 151   virtual int Opcode() const;
+ 152   virtual uint ideal_reg() const { return 0; }
+ 153 };
+ 154 
+ 155 //------------------------------CMoveNode--------------------------------------
+ 156 // Conditional move
+ 157 class CMoveNode : public TypeNode {
+ 158 public:
+ 159   enum { Control,               // When is it safe to do this cmove?
+ 160          Condition,             // Condition controlling the cmove
+ 161          IfFalse,               // Value if condition is false
+ 162          IfTrue };              // Value if condition is true
+ 163   CMoveNode( Node *bol, Node *left, Node *right, const Type *t ) : TypeNode(t,4)
+ 164   {
+ 165     init_class_id(Class_CMove);
+ 166     // all inputs are nullified in Node::Node(int)
+ 167     // init_req(Control,NULL);
+ 168     init_req(Condition,bol);
+ 169     init_req(IfFalse,left);
+ 170     init_req(IfTrue,right);
+ 171   }
+ 172   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 173   virtual const Type *Value( PhaseTransform *phase ) const;
+ 174   virtual Node *Identity( PhaseTransform *phase );
+ 175   static CMoveNode *make( Compile *C, Node *c, Node *bol, Node *left, Node *right, const Type *t );
+ 176   // Helper function to spot cmove graph shapes
+ 177   static Node *is_cmove_id( PhaseTransform *phase, Node *cmp, Node *t, Node *f, BoolNode *b );
+ 178 };
+ 179 
+ 180 //------------------------------CMoveDNode-------------------------------------
+ 181 class CMoveDNode : public CMoveNode {
+ 182 public:
+ 183   CMoveDNode( Node *bol, Node *left, Node *right, const Type* t) : CMoveNode(bol,left,right,t){}
+ 184   virtual int Opcode() const;
+ 185   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 186 };
+ 187 
+ 188 //------------------------------CMoveFNode-------------------------------------
+ 189 class CMoveFNode : public CMoveNode {
+ 190 public:
+ 191   CMoveFNode( Node *bol, Node *left, Node *right, const Type* t ) : CMoveNode(bol,left,right,t) {}
+ 192   virtual int Opcode() const;
+ 193   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 194 };
+ 195 
+ 196 //------------------------------CMoveINode-------------------------------------
+ 197 class CMoveINode : public CMoveNode {
+ 198 public:
+ 199   CMoveINode( Node *bol, Node *left, Node *right, const TypeInt *ti ) : CMoveNode(bol,left,right,ti){}
+ 200   virtual int Opcode() const;
+ 201   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 202 };
+ 203 
+ 204 //------------------------------CMoveLNode-------------------------------------
+ 205 class CMoveLNode : public CMoveNode {
+ 206 public:
+ 207   CMoveLNode(Node *bol, Node *left, Node *right, const TypeLong *tl ) : CMoveNode(bol,left,right,tl){}
+ 208   virtual int Opcode() const;
+ 209 };
+ 210 
+ 211 //------------------------------CMovePNode-------------------------------------
+ 212 class CMovePNode : public CMoveNode {
+ 213 public:
+ 214   CMovePNode( Node *c, Node *bol, Node *left, Node *right, const TypePtr* t ) : CMoveNode(bol,left,right,t) { init_req(Control,c); }
+ 215   virtual int Opcode() const;
+ 216 };
+ 217 
+ 218 //------------------------------CMoveNNode-------------------------------------
+ 219 class CMoveNNode : public CMoveNode {
+ 220 public:
+ 221   CMoveNNode( Node *c, Node *bol, Node *left, Node *right, const Type* t ) : CMoveNode(bol,left,right,t) { init_req(Control,c); }
+ 222   virtual int Opcode() const;
+ 223 };
+ 224 
+ 225 //------------------------------ConstraintCastNode-----------------------------
+ 226 // cast to a different range
+ 227 class ConstraintCastNode: public TypeNode {
+ 228 public:
+ 229   ConstraintCastNode (Node *n, const Type *t ): TypeNode(t,2) {
+ 230     init_class_id(Class_ConstraintCast);
+ 231     init_req(1, n);
+ 232   }
+ 233   virtual Node *Identity( PhaseTransform *phase );
+ 234   virtual const Type *Value( PhaseTransform *phase ) const;
+ 235   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 236   virtual int Opcode() const;
+ 237   virtual uint ideal_reg() const = 0;
+ 238   virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+ 239 };
+ 240 
+ 241 //------------------------------CastIINode-------------------------------------
+ 242 // cast integer to integer (different range)
+ 243 class CastIINode: public ConstraintCastNode {
+ 244   private:
+ 245   // Can this node be removed post CCP or does it carry a required dependency?
+ 246   const bool _carry_dependency;
+ 247 
+ 248   protected:
+ 249   virtual uint cmp( const Node &amp;n ) const;
+ 250   virtual uint size_of() const;
+ 251 
+ 252 public:
+ 253   CastIINode(Node *n, const Type *t, bool carry_dependency = false)
+ 254     : ConstraintCastNode(n,t), _carry_dependency(carry_dependency) {}
+ 255   virtual int Opcode() const;
+ 256   virtual uint ideal_reg() const { return Op_RegI; }
+ 257   virtual Node *Identity( PhaseTransform *phase );
+ 258   virtual const Type *Value( PhaseTransform *phase ) const;
+ 259   virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+ 260 #ifndef PRODUCT
+ 261   virtual void dump_spec(outputStream *st) const;
+ 262 #endif
+ 263 };
+ 264 
+ 265 //------------------------------CastPPNode-------------------------------------
+ 266 // cast pointer to pointer (different type)
+ 267 class CastPPNode: public ConstraintCastNode {
+ 268 public:
+<a name="1" id="anc1"></a><span class="changed"> 269   CastPPNode (Node *n, const Type *t ): ConstraintCastNode(n, t) {}</span>
+ 270   virtual int Opcode() const;
+ 271   virtual uint ideal_reg() const { return Op_RegP; }
+ 272   virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+ 273 };
+ 274 
+<a name="2" id="anc2"></a>
+
+
+
+
+
+
+
+
+
+
+ 275 //------------------------------CheckCastPPNode--------------------------------
+ 276 // for _checkcast, cast pointer to pointer (different type), without JOIN,
+ 277 class CheckCastPPNode: public TypeNode {
+ 278 public:
+ 279   CheckCastPPNode( Node *c, Node *n, const Type *t ) : TypeNode(t,2) {
+ 280     init_class_id(Class_CheckCastPP);
+ 281     init_req(0, c);
+ 282     init_req(1, n);
+ 283   }
+ 284 
+ 285   virtual Node *Identity( PhaseTransform *phase );
+ 286   virtual const Type *Value( PhaseTransform *phase ) const;
+ 287   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 288   virtual int   Opcode() const;
+ 289   virtual uint  ideal_reg() const { return Op_RegP; }
+ 290   // No longer remove CheckCast after CCP as it gives me a place to hang
+ 291   // the proper address type - which is required to compute anti-deps.
+ 292   //virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+ 293 };
+ 294 
+ 295 
+ 296 //------------------------------EncodeNarrowPtr--------------------------------
+ 297 class EncodeNarrowPtrNode : public TypeNode {
+ 298  protected:
+ 299   EncodeNarrowPtrNode(Node* value, const Type* type):
+ 300     TypeNode(type, 2) {
+ 301     init_class_id(Class_EncodeNarrowPtr);
+ 302     init_req(0, NULL);
+ 303     init_req(1, value);
+ 304   }
+ 305  public:
+ 306   virtual uint  ideal_reg() const { return Op_RegN; }
+ 307   virtual Node *Ideal_DU_postCCP( PhaseCCP *ccp );
+ 308 };
+ 309 
+ 310 //------------------------------EncodeP--------------------------------
+ 311 // Encodes an oop pointers into its compressed form
+ 312 // Takes an extra argument which is the real heap base as a long which
+ 313 // may be useful for code generation in the backend.
+ 314 class EncodePNode : public EncodeNarrowPtrNode {
+ 315  public:
+ 316   EncodePNode(Node* value, const Type* type):
+ 317     EncodeNarrowPtrNode(value, type) {
+ 318     init_class_id(Class_EncodeP);
+ 319   }
+ 320   virtual int Opcode() const;
+ 321   virtual Node *Identity( PhaseTransform *phase );
+ 322   virtual const Type *Value( PhaseTransform *phase ) const;
+ 323 };
+ 324 
+ 325 //------------------------------EncodePKlass--------------------------------
+ 326 // Encodes a klass pointer into its compressed form
+ 327 // Takes an extra argument which is the real heap base as a long which
+ 328 // may be useful for code generation in the backend.
+ 329 class EncodePKlassNode : public EncodeNarrowPtrNode {
+ 330  public:
+ 331   EncodePKlassNode(Node* value, const Type* type):
+ 332     EncodeNarrowPtrNode(value, type) {
+ 333     init_class_id(Class_EncodePKlass);
+ 334   }
+ 335   virtual int Opcode() const;
+ 336   virtual Node *Identity( PhaseTransform *phase );
+ 337   virtual const Type *Value( PhaseTransform *phase ) const;
+ 338 };
+ 339 
+ 340 //------------------------------DecodeNarrowPtr--------------------------------
+ 341 class DecodeNarrowPtrNode : public TypeNode {
+ 342  protected:
+ 343   DecodeNarrowPtrNode(Node* value, const Type* type):
+ 344     TypeNode(type, 2) {
+ 345     init_class_id(Class_DecodeNarrowPtr);
+ 346     init_req(0, NULL);
+ 347     init_req(1, value);
+ 348   }
+ 349  public:
+ 350   virtual uint  ideal_reg() const { return Op_RegP; }
+ 351 };
+ 352 
+ 353 //------------------------------DecodeN--------------------------------
+ 354 // Converts a narrow oop into a real oop ptr.
+ 355 // Takes an extra argument which is the real heap base as a long which
+ 356 // may be useful for code generation in the backend.
+ 357 class DecodeNNode : public DecodeNarrowPtrNode {
+ 358  public:
+ 359   DecodeNNode(Node* value, const Type* type):
+ 360     DecodeNarrowPtrNode(value, type) {
+ 361     init_class_id(Class_DecodeN);
+ 362   }
+ 363   virtual int Opcode() const;
+ 364   virtual const Type *Value( PhaseTransform *phase ) const;
+ 365   virtual Node *Identity( PhaseTransform *phase );
+ 366 };
+ 367 
+ 368 //------------------------------DecodeNKlass--------------------------------
+ 369 // Converts a narrow klass pointer into a real klass ptr.
+ 370 // Takes an extra argument which is the real heap base as a long which
+ 371 // may be useful for code generation in the backend.
+ 372 class DecodeNKlassNode : public DecodeNarrowPtrNode {
+ 373  public:
+ 374   DecodeNKlassNode(Node* value, const Type* type):
+ 375     DecodeNarrowPtrNode(value, type) {
+ 376     init_class_id(Class_DecodeNKlass);
+ 377   }
+ 378   virtual int Opcode() const;
+ 379   virtual const Type *Value( PhaseTransform *phase ) const;
+ 380   virtual Node *Identity( PhaseTransform *phase );
+ 381 };
+ 382 
+ 383 //------------------------------Conv2BNode-------------------------------------
+ 384 // Convert int/pointer to a Boolean.  Map zero to zero, all else to 1.
+ 385 class Conv2BNode : public Node {
+ 386 public:
+ 387   Conv2BNode( Node *i ) : Node(0,i) {}
+ 388   virtual int Opcode() const;
+ 389   virtual const Type *bottom_type() const { return TypeInt::BOOL; }
+ 390   virtual Node *Identity( PhaseTransform *phase );
+ 391   virtual const Type *Value( PhaseTransform *phase ) const;
+ 392   virtual uint  ideal_reg() const { return Op_RegI; }
+ 393 };
+ 394 
+ 395 // The conversions operations are all Alpha sorted.  Please keep it that way!
+ 396 //------------------------------ConvD2FNode------------------------------------
+ 397 // Convert double to float
+ 398 class ConvD2FNode : public Node {
+ 399 public:
+ 400   ConvD2FNode( Node *in1 ) : Node(0,in1) {}
+ 401   virtual int Opcode() const;
+ 402   virtual const Type *bottom_type() const { return Type::FLOAT; }
+ 403   virtual const Type *Value( PhaseTransform *phase ) const;
+ 404   virtual Node *Identity( PhaseTransform *phase );
+ 405   virtual uint  ideal_reg() const { return Op_RegF; }
+ 406 };
+ 407 
+ 408 //------------------------------ConvD2INode------------------------------------
+ 409 // Convert Double to Integer
+ 410 class ConvD2INode : public Node {
+ 411 public:
+ 412   ConvD2INode( Node *in1 ) : Node(0,in1) {}
+ 413   virtual int Opcode() const;
+ 414   virtual const Type *bottom_type() const { return TypeInt::INT; }
+ 415   virtual const Type *Value( PhaseTransform *phase ) const;
+ 416   virtual Node *Identity( PhaseTransform *phase );
+ 417   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 418   virtual uint  ideal_reg() const { return Op_RegI; }
+ 419 };
+ 420 
+ 421 //------------------------------ConvD2LNode------------------------------------
+ 422 // Convert Double to Long
+ 423 class ConvD2LNode : public Node {
+ 424 public:
+ 425   ConvD2LNode( Node *dbl ) : Node(0,dbl) {}
+ 426   virtual int Opcode() const;
+ 427   virtual const Type *bottom_type() const { return TypeLong::LONG; }
+ 428   virtual const Type *Value( PhaseTransform *phase ) const;
+ 429   virtual Node *Identity( PhaseTransform *phase );
+ 430   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 431   virtual uint ideal_reg() const { return Op_RegL; }
+ 432 };
+ 433 
+ 434 //------------------------------ConvF2DNode------------------------------------
+ 435 // Convert Float to a Double.
+ 436 class ConvF2DNode : public Node {
+ 437 public:
+ 438   ConvF2DNode( Node *in1 ) : Node(0,in1) {}
+ 439   virtual int Opcode() const;
+ 440   virtual const Type *bottom_type() const { return Type::DOUBLE; }
+ 441   virtual const Type *Value( PhaseTransform *phase ) const;
+ 442   virtual uint  ideal_reg() const { return Op_RegD; }
+ 443 };
+ 444 
+ 445 //------------------------------ConvF2INode------------------------------------
+ 446 // Convert float to integer
+ 447 class ConvF2INode : public Node {
+ 448 public:
+ 449   ConvF2INode( Node *in1 ) : Node(0,in1) {}
+ 450   virtual int Opcode() const;
+ 451   virtual const Type *bottom_type() const { return TypeInt::INT; }
+ 452   virtual const Type *Value( PhaseTransform *phase ) const;
+ 453   virtual Node *Identity( PhaseTransform *phase );
+ 454   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 455   virtual uint  ideal_reg() const { return Op_RegI; }
+ 456 };
+ 457 
+ 458 //------------------------------ConvF2LNode------------------------------------
+ 459 // Convert float to long
+ 460 class ConvF2LNode : public Node {
+ 461 public:
+ 462   ConvF2LNode( Node *in1 ) : Node(0,in1) {}
+ 463   virtual int Opcode() const;
+ 464   virtual const Type *bottom_type() const { return TypeLong::LONG; }
+ 465   virtual const Type *Value( PhaseTransform *phase ) const;
+ 466   virtual Node *Identity( PhaseTransform *phase );
+ 467   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 468   virtual uint  ideal_reg() const { return Op_RegL; }
+ 469 };
+ 470 
+ 471 //------------------------------ConvI2DNode------------------------------------
+ 472 // Convert Integer to Double
+ 473 class ConvI2DNode : public Node {
+ 474 public:
+ 475   ConvI2DNode( Node *in1 ) : Node(0,in1) {}
+ 476   virtual int Opcode() const;
+ 477   virtual const Type *bottom_type() const { return Type::DOUBLE; }
+ 478   virtual const Type *Value( PhaseTransform *phase ) const;
+ 479   virtual uint  ideal_reg() const { return Op_RegD; }
+ 480 };
+ 481 
+ 482 //------------------------------ConvI2FNode------------------------------------
+ 483 // Convert Integer to Float
+ 484 class ConvI2FNode : public Node {
+ 485 public:
+ 486   ConvI2FNode( Node *in1 ) : Node(0,in1) {}
+ 487   virtual int Opcode() const;
+ 488   virtual const Type *bottom_type() const { return Type::FLOAT; }
+ 489   virtual const Type *Value( PhaseTransform *phase ) const;
+ 490   virtual Node *Identity( PhaseTransform *phase );
+ 491   virtual uint  ideal_reg() const { return Op_RegF; }
+ 492 };
+ 493 
+ 494 //------------------------------ConvI2LNode------------------------------------
+ 495 // Convert integer to long
+ 496 class ConvI2LNode : public TypeNode {
+ 497 public:
+ 498   ConvI2LNode(Node *in1, const TypeLong* t = TypeLong::INT)
+ 499     : TypeNode(t, 2)
+ 500   { init_req(1, in1); }
+ 501   virtual int Opcode() const;
+ 502   virtual const Type *Value( PhaseTransform *phase ) const;
+ 503   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 504   virtual uint  ideal_reg() const { return Op_RegL; }
+ 505 };
+ 506 
+ 507 //------------------------------ConvL2DNode------------------------------------
+ 508 // Convert Long to Double
+ 509 class ConvL2DNode : public Node {
+ 510 public:
+ 511   ConvL2DNode( Node *in1 ) : Node(0,in1) {}
+ 512   virtual int Opcode() const;
+ 513   virtual const Type *bottom_type() const { return Type::DOUBLE; }
+ 514   virtual const Type *Value( PhaseTransform *phase ) const;
+ 515   virtual uint ideal_reg() const { return Op_RegD; }
+ 516 };
+ 517 
+ 518 //------------------------------ConvL2FNode------------------------------------
+ 519 // Convert Long to Float
+ 520 class ConvL2FNode : public Node {
+ 521 public:
+ 522   ConvL2FNode( Node *in1 ) : Node(0,in1) {}
+ 523   virtual int Opcode() const;
+ 524   virtual const Type *bottom_type() const { return Type::FLOAT; }
+ 525   virtual const Type *Value( PhaseTransform *phase ) const;
+ 526   virtual uint  ideal_reg() const { return Op_RegF; }
+ 527 };
+ 528 
+ 529 //------------------------------ConvL2INode------------------------------------
+ 530 // Convert long to integer
+ 531 class ConvL2INode : public Node {
+ 532 public:
+ 533   ConvL2INode( Node *in1 ) : Node(0,in1) {}
+ 534   virtual int Opcode() const;
+ 535   virtual const Type *bottom_type() const { return TypeInt::INT; }
+ 536   virtual Node *Identity( PhaseTransform *phase );
+ 537   virtual const Type *Value( PhaseTransform *phase ) const;
+ 538   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 539   virtual uint  ideal_reg() const { return Op_RegI; }
+ 540 };
+ 541 
+ 542 //------------------------------CastX2PNode-------------------------------------
+ 543 // convert a machine-pointer-sized integer to a raw pointer
+ 544 class CastX2PNode : public Node {
+ 545 public:
+ 546   CastX2PNode( Node *n ) : Node(NULL, n) {}
+ 547   virtual int Opcode() const;
+ 548   virtual const Type *Value( PhaseTransform *phase ) const;
+ 549   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 550   virtual Node *Identity( PhaseTransform *phase );
+ 551   virtual uint ideal_reg() const { return Op_RegP; }
+ 552   virtual const Type *bottom_type() const { return TypeRawPtr::BOTTOM; }
+ 553 };
+ 554 
+ 555 //------------------------------CastP2XNode-------------------------------------
+ 556 // Used in both 32-bit and 64-bit land.
+ 557 // Used for card-marks and unsafe pointer math.
+ 558 class CastP2XNode : public Node {
+ 559 public:
+ 560   CastP2XNode( Node *ctrl, Node *n ) : Node(ctrl, n) {}
+ 561   virtual int Opcode() const;
+ 562   virtual const Type *Value( PhaseTransform *phase ) const;
+ 563   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 564   virtual Node *Identity( PhaseTransform *phase );
+ 565   virtual uint ideal_reg() const { return Op_RegX; }
+ 566   virtual const Type *bottom_type() const { return TypeX_X; }
+ 567   // Return false to keep node from moving away from an associated card mark.
+ 568   virtual bool depends_only_on_test() const { return false; }
+ 569 };
+ 570 
+ 571 //------------------------------ThreadLocalNode--------------------------------
+ 572 // Ideal Node which returns the base of ThreadLocalStorage.
+ 573 class ThreadLocalNode : public Node {
+ 574 public:
+ 575   ThreadLocalNode( ) : Node((Node*)Compile::current()-&gt;root()) {}
+ 576   virtual int Opcode() const;
+ 577   virtual const Type *bottom_type() const { return TypeRawPtr::BOTTOM;}
+ 578   virtual uint ideal_reg() const { return Op_RegP; }
+ 579 };
+ 580 
+ 581 //------------------------------LoadReturnPCNode-------------------------------
+ 582 class LoadReturnPCNode: public Node {
+ 583 public:
+ 584   LoadReturnPCNode(Node *c) : Node(c) { }
+ 585   virtual int Opcode() const;
+ 586   virtual uint ideal_reg() const { return Op_RegP; }
+ 587 };
+ 588 
+ 589 
+ 590 //-----------------------------RoundFloatNode----------------------------------
+ 591 class RoundFloatNode: public Node {
+ 592 public:
+ 593   RoundFloatNode(Node* c, Node *in1): Node(c, in1) {}
+ 594   virtual int   Opcode() const;
+ 595   virtual const Type *bottom_type() const { return Type::FLOAT; }
+ 596   virtual uint  ideal_reg() const { return Op_RegF; }
+ 597   virtual Node *Identity( PhaseTransform *phase );
+ 598   virtual const Type *Value( PhaseTransform *phase ) const;
+ 599 };
+ 600 
+ 601 
+ 602 //-----------------------------RoundDoubleNode---------------------------------
+ 603 class RoundDoubleNode: public Node {
+ 604 public:
+ 605   RoundDoubleNode(Node* c, Node *in1): Node(c, in1) {}
+ 606   virtual int   Opcode() const;
+ 607   virtual const Type *bottom_type() const { return Type::DOUBLE; }
+ 608   virtual uint  ideal_reg() const { return Op_RegD; }
+ 609   virtual Node *Identity( PhaseTransform *phase );
+ 610   virtual const Type *Value( PhaseTransform *phase ) const;
+ 611 };
+ 612 
+ 613 //------------------------------Opaque1Node------------------------------------
+ 614 // A node to prevent unwanted optimizations.  Allows constant folding.
+ 615 // Stops value-numbering, Ideal calls or Identity functions.
+ 616 class Opaque1Node : public Node {
+ 617   virtual uint hash() const ;                  // { return NO_HASH; }
+ 618   virtual uint cmp( const Node &amp;n ) const;
+ 619 public:
+ 620   Opaque1Node( Compile* C, Node *n ) : Node(0,n) {
+ 621     // Put it on the Macro nodes list to removed during macro nodes expansion.
+ 622     init_flags(Flag_is_macro);
+ 623     C-&gt;add_macro_node(this);
+ 624   }
+ 625   // Special version for the pre-loop to hold the original loop limit
+ 626   // which is consumed by range check elimination.
+ 627   Opaque1Node( Compile* C, Node *n, Node* orig_limit ) : Node(0,n,orig_limit) {
+ 628     // Put it on the Macro nodes list to removed during macro nodes expansion.
+ 629     init_flags(Flag_is_macro);
+ 630     C-&gt;add_macro_node(this);
+ 631   }
+ 632   Node* original_loop_limit() { return req()==3 ? in(2) : NULL; }
+ 633   virtual int Opcode() const;
+ 634   virtual const Type *bottom_type() const { return TypeInt::INT; }
+ 635   virtual Node *Identity( PhaseTransform *phase );
+ 636 };
+ 637 
+ 638 //------------------------------Opaque2Node------------------------------------
+ 639 // A node to prevent unwanted optimizations.  Allows constant folding.  Stops
+ 640 // value-numbering, most Ideal calls or Identity functions.  This Node is
+ 641 // specifically designed to prevent the pre-increment value of a loop trip
+ 642 // counter from being live out of the bottom of the loop (hence causing the
+ 643 // pre- and post-increment values both being live and thus requiring an extra
+ 644 // temp register and an extra move).  If we "accidentally" optimize through
+ 645 // this kind of a Node, we'll get slightly pessimal, but correct, code.  Thus
+ 646 // it's OK to be slightly sloppy on optimizations here.
+ 647 class Opaque2Node : public Node {
+ 648   virtual uint hash() const ;                  // { return NO_HASH; }
+ 649   virtual uint cmp( const Node &amp;n ) const;
+ 650 public:
+ 651   Opaque2Node( Compile* C, Node *n ) : Node(0,n) {
+ 652     // Put it on the Macro nodes list to removed during macro nodes expansion.
+ 653     init_flags(Flag_is_macro);
+ 654     C-&gt;add_macro_node(this);
+ 655   }
+ 656   virtual int Opcode() const;
+ 657   virtual const Type *bottom_type() const { return TypeInt::INT; }
+ 658 };
+ 659 
+ 660 //------------------------------Opaque3Node------------------------------------
+ 661 // A node to prevent unwanted optimizations. Will be optimized only during
+ 662 // macro nodes expansion.
+ 663 class Opaque3Node : public Opaque2Node {
+ 664   int _opt; // what optimization it was used for
+ 665 public:
+ 666   enum { RTM_OPT };
+ 667   Opaque3Node(Compile* C, Node *n, int opt) : Opaque2Node(C, n), _opt(opt) {}
+ 668   virtual int Opcode() const;
+ 669   bool rtm_opt() const { return (_opt == RTM_OPT); }
+ 670 };
+ 671 
+<a name="3" id="anc3"></a><span class="removed"> 672 //------------------------------ProfileBooleanNode-------------------------------</span>
+<span class="removed"> 673 // A node represents value profile for a boolean during parsing.</span>
+<span class="removed"> 674 // Once parsing is over, the node goes away (during IGVN).</span>
+<span class="removed"> 675 // It is used to override branch frequencies from MDO (see has_injected_profile in parse2.cpp).</span>
+<span class="removed"> 676 class ProfileBooleanNode : public Node {</span>
+<span class="removed"> 677   uint _false_cnt;</span>
+<span class="removed"> 678   uint _true_cnt;</span>
+<span class="removed"> 679   bool _consumed;</span>
+<span class="removed"> 680   bool _delay_removal;</span>
+<span class="removed"> 681   virtual uint hash() const ;                  // { return NO_HASH; }</span>
+<span class="removed"> 682   virtual uint cmp( const Node &amp;n ) const;</span>
+<span class="removed"> 683   public:</span>
+<span class="removed"> 684   ProfileBooleanNode(Node *n, uint false_cnt, uint true_cnt) : Node(0, n),</span>
+<span class="removed"> 685           _false_cnt(false_cnt), _true_cnt(true_cnt), _delay_removal(true), _consumed(false) {}</span>
+<span class="removed"> 686 </span>
+<span class="removed"> 687   uint false_count() const { return _false_cnt; }</span>
+<span class="removed"> 688   uint  true_count() const { return  _true_cnt; }</span>
+<span class="removed"> 689 </span>
+<span class="removed"> 690   void consume() { _consumed = true;  }</span>
+<span class="removed"> 691 </span>
+<span class="removed"> 692   virtual int Opcode() const;</span>
+<span class="removed"> 693   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);</span>
+<span class="removed"> 694   virtual Node *Identity(PhaseTransform *phase);</span>
+<span class="removed"> 695   virtual const Type *bottom_type() const { return TypeInt::BOOL; }</span>
+<span class="removed"> 696 };</span>
+ 697 
+ 698 //----------------------PartialSubtypeCheckNode--------------------------------
+ 699 // The 2nd slow-half of a subtype check.  Scan the subklass's 2ndary superklass
+ 700 // array for an instance of the superklass.  Set a hidden internal cache on a
+ 701 // hit (cache is checked with exposed code in gen_subtype_check()).  Return
+ 702 // not zero for a miss or zero for a hit.
+ 703 class PartialSubtypeCheckNode : public Node {
+ 704 public:
+ 705   PartialSubtypeCheckNode(Node* c, Node* sub, Node* super) : Node(c,sub,super) {}
+ 706   virtual int Opcode() const;
+ 707   virtual const Type *bottom_type() const { return TypeRawPtr::BOTTOM; }
+ 708   virtual uint ideal_reg() const { return Op_RegP; }
+ 709 };
+ 710 
+ 711 //
+ 712 class MoveI2FNode : public Node {
+ 713  public:
+ 714   MoveI2FNode( Node *value ) : Node(0,value) {}
+ 715   virtual int Opcode() const;
+ 716   virtual const Type *bottom_type() const { return Type::FLOAT; }
+ 717   virtual uint ideal_reg() const { return Op_RegF; }
+ 718   virtual const Type* Value( PhaseTransform *phase ) const;
+ 719 };
+ 720 
+ 721 class MoveL2DNode : public Node {
+ 722  public:
+ 723   MoveL2DNode( Node *value ) : Node(0,value) {}
+ 724   virtual int Opcode() const;
+ 725   virtual const Type *bottom_type() const { return Type::DOUBLE; }
+ 726   virtual uint ideal_reg() const { return Op_RegD; }
+ 727   virtual const Type* Value( PhaseTransform *phase ) const;
+ 728 };
+ 729 
+ 730 class MoveF2INode : public Node {
+ 731  public:
+ 732   MoveF2INode( Node *value ) : Node(0,value) {}
+ 733   virtual int Opcode() const;
+ 734   virtual const Type *bottom_type() const { return TypeInt::INT; }
+ 735   virtual uint ideal_reg() const { return Op_RegI; }
+ 736   virtual const Type* Value( PhaseTransform *phase ) const;
+ 737 };
+ 738 
+ 739 class MoveD2LNode : public Node {
+ 740  public:
+ 741   MoveD2LNode( Node *value ) : Node(0,value) {}
+ 742   virtual int Opcode() const;
+ 743   virtual const Type *bottom_type() const { return TypeLong::LONG; }
+ 744   virtual uint ideal_reg() const { return Op_RegL; }
+ 745   virtual const Type* Value( PhaseTransform *phase ) const;
+ 746 };
+ 747 
+ 748 //---------- CountBitsNode -----------------------------------------------------
+ 749 class CountBitsNode : public Node {
+ 750 public:
+ 751   CountBitsNode(Node* in1) : Node(0, in1) {}
+ 752   const Type* bottom_type() const { return TypeInt::INT; }
+ 753   virtual uint ideal_reg() const { return Op_RegI; }
+ 754 };
+ 755 
+ 756 //---------- CountLeadingZerosINode --------------------------------------------
+ 757 // Count leading zeros (0-bit count starting from MSB) of an integer.
+ 758 class CountLeadingZerosINode : public CountBitsNode {
+ 759 public:
+ 760   CountLeadingZerosINode(Node* in1) : CountBitsNode(in1) {}
+ 761   virtual int Opcode() const;
+ 762   virtual const Type* Value(PhaseTransform* phase) const;
+ 763 };
+ 764 
+ 765 //---------- CountLeadingZerosLNode --------------------------------------------
+ 766 // Count leading zeros (0-bit count starting from MSB) of a long.
+ 767 class CountLeadingZerosLNode : public CountBitsNode {
+ 768 public:
+ 769   CountLeadingZerosLNode(Node* in1) : CountBitsNode(in1) {}
+ 770   virtual int Opcode() const;
+ 771   virtual const Type* Value(PhaseTransform* phase) const;
+ 772 };
+ 773 
+ 774 //---------- CountTrailingZerosINode -------------------------------------------
+ 775 // Count trailing zeros (0-bit count starting from LSB) of an integer.
+ 776 class CountTrailingZerosINode : public CountBitsNode {
+ 777 public:
+ 778   CountTrailingZerosINode(Node* in1) : CountBitsNode(in1) {}
+ 779   virtual int Opcode() const;
+ 780   virtual const Type* Value(PhaseTransform* phase) const;
+ 781 };
+ 782 
+ 783 //---------- CountTrailingZerosLNode -------------------------------------------
+ 784 // Count trailing zeros (0-bit count starting from LSB) of a long.
+ 785 class CountTrailingZerosLNode : public CountBitsNode {
+ 786 public:
+ 787   CountTrailingZerosLNode(Node* in1) : CountBitsNode(in1) {}
+ 788   virtual int Opcode() const;
+ 789   virtual const Type* Value(PhaseTransform* phase) const;
+ 790 };
+ 791 
+ 792 //---------- PopCountINode -----------------------------------------------------
+ 793 // Population count (bit count) of an integer.
+ 794 class PopCountINode : public CountBitsNode {
+ 795 public:
+ 796   PopCountINode(Node* in1) : CountBitsNode(in1) {}
+ 797   virtual int Opcode() const;
+ 798 };
+ 799 
+ 800 //---------- PopCountLNode -----------------------------------------------------
+ 801 // Population count (bit count) of a long.
+ 802 class PopCountLNode : public CountBitsNode {
+ 803 public:
+ 804   PopCountLNode(Node* in1) : CountBitsNode(in1) {}
+ 805   virtual int Opcode() const;
+ 806 };
+ 807 
+ 808 #endif // SHARE_VM_OPTO_CONNODE_HPP
+<a name="4" id="anc4"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="4" type="hidden" /></form></body></html>

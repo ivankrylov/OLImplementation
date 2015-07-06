@@ -1,0 +1,72 @@
+--- old/src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp	2015-06-16 10:25:43.358460516 -0700
++++ new/src/share/vm/gc_implementation/parallelScavenge/psScavenge.cpp	2015-06-16 10:25:43.286462240 -0700
+@@ -126,9 +126,10 @@
+ };
+ 
+ class PSPromotionFailedClosure : public ObjectClosure {
++ public:
+   virtual void do_object(oop obj) {
+     if (obj->is_forwarded()) {
+-      obj->init_mark();
++      obj->convert_to_unmarked();
+     }
+   }
+ };
+@@ -231,7 +232,7 @@
+ 
+   const bool scavenge_done = PSScavenge::invoke_no_policy();
+   const bool need_full_gc = !scavenge_done ||
+-    policy->should_full_GC(heap->old_gen()->free_in_bytes());
++      policy->should_full_GC(heap->old_gen()->free_in_bytes());
+   bool full_gc_done = false;
+ 
+   if (UsePerfData) {
+@@ -329,12 +330,19 @@
+     ResourceMark rm;
+     HandleMark hm;
+ 
++    gclog_or_tty->date_stamp(PrintGC && PrintGCDateStamps);
+     TraceCPUTime tcpu(PrintGCDetails, true, gclog_or_tty);
+     GCTraceTime t1(GCCauseString("GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer.gc_id());
+     TraceCollectorStats tcs(counters());
+     TraceMemoryManagerStats tms(false /* not full GC */,gc_cause);
+ 
+-    if (TraceGen0Time) accumulated_time()->start();
++    if (TraceGen0Time) {
++      accumulated_time()->start();
++    }
++
++    if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 1) {
++      tty->print_cr("PSScavenge::invoke_no_policy: Starting minor GC...");
++    }
+ 
+     // Let the size policy know we're starting
+     size_policy->minor_collection_begin();
+@@ -436,7 +444,11 @@
+ 
+     scavenge_midpoint.update();
+ 
+-    // Process reference objects discovered during scavenge
++    if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 1) {
++      tty->print_cr("PSScavenge::invoke_no_policy: Midpoint of minor GC...");
++    }
++
++    // Process discovered reference objects
+     {
+       GCTraceTime tm("References", false, false, &_gc_timer, _gc_tracer.gc_id());
+ 
+@@ -656,7 +668,13 @@
+       CardTableExtension::verify_all_young_refs_imprecise();
+     }
+ 
+-    if (TraceGen0Time) accumulated_time()->stop();
++    if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 1) {
++      tty->print_cr("PSScavenge::invoke_no_policy: Finished minor GC");
++    }
++
++    if (TraceGen0Time) {
++      accumulated_time()->stop();
++    }
+ 
+     if (PrintGC) {
+       if (PrintGCDetails) {

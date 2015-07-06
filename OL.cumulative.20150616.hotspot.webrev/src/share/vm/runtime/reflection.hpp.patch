@@ -1,0 +1,26 @@
+--- old/src/share/vm/runtime/reflection.hpp	2015-06-16 10:25:50.046299036 -0700
++++ new/src/share/vm/runtime/reflection.hpp	2015-06-16 10:25:49.974300789 -0700
+@@ -138,11 +138,18 @@
+   static BasicType basic_type_mirror_to_basic_type(oop basic_type_mirror, TRAPS);
+ 
+ public:
+-  // Method invokation through java.lang.reflect.Method
+-  static oop      invoke_method(oop method_mirror, Handle receiver, objArrayHandle args, TRAPS);
+-  // Method invokation through java.lang.reflect.Constructor
+-  static oop      invoke_constructor(oop method_mirror, objArrayHandle args, TRAPS);
+-
++  // Method invocation through java.lang.reflect.Method
++  static oop invoke_method(oop method_mirror, Handle receiver,
++      objArrayHandle method_args, TRAPS);
++  // Allocation of a new object, its initialization, and invocation of its
++  // constructor through java.lang.reflect.Constructor
++  static oop invoke_constructor(oop ctor_mirror, objArrayHandle ctor_args,
++      TRAPS);
++  // Initialization of an already allocated object and invocation of its
++  // constructor through java.lang.reflect.Constructor
++  static oop invoke_constructor_in_place(address obj_addr,
++      bool is_contained, bool is_container, oop ctor_mirror,
++      objArrayHandle ctor_args, TRAPS);
+ };
+ 
+ #endif // SHARE_VM_RUNTIME_REFLECTION_HPP

@@ -1,0 +1,203 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/classfile </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/classfile/classFileParser.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+3652 
+3653   int instance_size             = align_object_size(instance_end / wordSize);
+3654 
+3655   assert(instance_size == align_object_size(align_size_up(
+3656          (instanceOopDesc::base_offset_in_bytes() + nonstatic_field_size*heapOopSize),
+3657           wordSize) / wordSize), "consistent layout helper value");
+3658 
+3659   // Invariant: nonstatic_field end/start should only change if there are
+3660   // nonstatic fields in the class, or if the class is contended. We compare
+3661   // against the non-aligned value, so that end alignment will not fail the
+3662   // assert without actually having the fields.
+3663   assert((notaligned_nonstatic_fields_end == nonstatic_fields_start) ||
+3664          is_contended_class ||
+3665          (nonstatic_fields_count &gt; 0), "double-check nonstatic start/end");
+3666 
+3667   // Number of non-static oop map blocks allocated at end of klass.
+3668   const unsigned int total_oop_map_count =
+3669     compute_oop_map_count(_super_klass, nonstatic_oop_map_count,
+3670                           first_nonstatic_oop_offset);
+3671 
+<span class="changed">3672 #ifndef PRODUCT</span>
+3673   if (PrintFieldLayout) {
+3674     print_field_layout(_class_name,
+3675           _fields,
+3676           _cp,
+3677           instance_size,
+3678           nonstatic_fields_start,
+3679           nonstatic_fields_end,
+3680           static_fields_end);
+3681   }
+3682 
+<span class="changed">3683 #endif</span>
+3684   // Pass back information needed for InstanceKlass creation
+3685   info-&gt;nonstatic_oop_offsets = nonstatic_oop_offsets;
+3686   info-&gt;nonstatic_oop_counts = nonstatic_oop_counts;
+3687   info-&gt;nonstatic_oop_map_count = nonstatic_oop_map_count;
+3688   info-&gt;total_oop_map_count = total_oop_map_count;
+3689   info-&gt;instance_size = instance_size;
+3690   info-&gt;static_field_size = static_field_size;
+3691   info-&gt;nonstatic_field_size = nonstatic_field_size;
+3692   info-&gt;has_nonstatic_fields = has_nonstatic_fields;
+3693 }
+3694 
+3695 
+3696 instanceKlassHandle ClassFileParser::parseClassFile(Symbol* name,
+3697                                                     ClassLoaderData* loader_data,
+3698                                                     Handle protection_domain,
+3699                                                     KlassHandle host_klass,
+3700                                                     GrowableArray&lt;Handle&gt;* cp_patches,
+3701                                                     TempNewSymbol&amp; parsed_name,
+3702                                                     bool verify,
+3703                                                     TRAPS) {
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+3652 
+3653   int instance_size             = align_object_size(instance_end / wordSize);
+3654 
+3655   assert(instance_size == align_object_size(align_size_up(
+3656          (instanceOopDesc::base_offset_in_bytes() + nonstatic_field_size*heapOopSize),
+3657           wordSize) / wordSize), "consistent layout helper value");
+3658 
+3659   // Invariant: nonstatic_field end/start should only change if there are
+3660   // nonstatic fields in the class, or if the class is contended. We compare
+3661   // against the non-aligned value, so that end alignment will not fail the
+3662   // assert without actually having the fields.
+3663   assert((notaligned_nonstatic_fields_end == nonstatic_fields_start) ||
+3664          is_contended_class ||
+3665          (nonstatic_fields_count &gt; 0), "double-check nonstatic start/end");
+3666 
+3667   // Number of non-static oop map blocks allocated at end of klass.
+3668   const unsigned int total_oop_map_count =
+3669     compute_oop_map_count(_super_klass, nonstatic_oop_map_count,
+3670                           first_nonstatic_oop_offset);
+3671 
+<span class="changed">3672 //#ifndef PRODUCT</span>
+3673   if (PrintFieldLayout) {
+3674     print_field_layout(_class_name,
+3675           _fields,
+3676           _cp,
+3677           instance_size,
+3678           nonstatic_fields_start,
+3679           nonstatic_fields_end,
+3680           static_fields_end);
+3681   }
+3682 
+<span class="changed">3683 //#endif</span>
+3684   // Pass back information needed for InstanceKlass creation
+3685   info-&gt;nonstatic_oop_offsets = nonstatic_oop_offsets;
+3686   info-&gt;nonstatic_oop_counts = nonstatic_oop_counts;
+3687   info-&gt;nonstatic_oop_map_count = nonstatic_oop_map_count;
+3688   info-&gt;total_oop_map_count = total_oop_map_count;
+3689   info-&gt;instance_size = instance_size;
+3690   info-&gt;static_field_size = static_field_size;
+3691   info-&gt;nonstatic_field_size = nonstatic_field_size;
+3692   info-&gt;has_nonstatic_fields = has_nonstatic_fields;
+3693 }
+3694 
+3695 
+3696 instanceKlassHandle ClassFileParser::parseClassFile(Symbol* name,
+3697                                                     ClassLoaderData* loader_data,
+3698                                                     Handle protection_domain,
+3699                                                     KlassHandle host_klass,
+3700                                                     GrowableArray&lt;Handle&gt;* cp_patches,
+3701                                                     TempNewSymbol&amp; parsed_name,
+3702                                                     bool verify,
+3703                                                     TRAPS) {
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

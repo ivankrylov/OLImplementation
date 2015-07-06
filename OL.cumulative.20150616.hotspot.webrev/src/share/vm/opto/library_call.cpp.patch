@@ -1,0 +1,339 @@
+--- old/src/share/vm/opto/library_call.cpp	2015-06-16 10:25:47.650357204 -0700
++++ new/src/share/vm/opto/library_call.cpp	2015-06-16 10:25:47.578358946 -0700
+@@ -31,7 +31,6 @@
+ #include "opto/addnode.hpp"
+ #include "opto/callGenerator.hpp"
+ #include "opto/cfgnode.hpp"
+-#include "opto/connode.hpp"
+ #include "opto/idealKit.hpp"
+ #include "opto/mathexactnode.hpp"
+ #include "opto/mulnode.hpp"
+@@ -230,6 +229,7 @@
+   // Generates the guards that check whether the result of
+   // Unsafe.getObject should be recorded in an SATB log buffer.
+   void insert_pre_barrier(Node* base_oop, Node* offset, Node* pre_val, bool need_mem_bar);
++  bool inline_unsafe_deriveContainedObjectAtOffset();
+   bool inline_unsafe_access(bool is_native_ptr, bool is_store, BasicType type, bool is_volatile);
+   bool inline_unsafe_prefetch(bool is_native_ptr, bool is_store, bool is_static);
+   static bool klass_needs_init_guard(Node* kls);
+@@ -306,6 +306,9 @@
+   bool inline_fp_conversions(vmIntrinsics::ID id);
+   bool inline_number_methods(vmIntrinsics::ID id);
+   bool inline_reference_get();
++  bool inline_derive_contained_object();
++  bool inline_asa_get();
++  Node* load_container_class(Node* ctrObj);
+   bool inline_aescrypt_Block(vmIntrinsics::ID id);
+   bool inline_cipherBlockChaining_AESCrypt(vmIntrinsics::ID id);
+   Node* inline_cipherBlockChaining_AESCrypt_predicate(bool decrypting);
+@@ -324,8 +327,6 @@
+   bool inline_updateBytesCRC32();
+   bool inline_updateByteBufferCRC32();
+   bool inline_multiplyToLen();
+-
+-  bool inline_profileBoolean();
+ };
+ 
+ 
+@@ -518,6 +519,10 @@
+     break;
+ #endif
+ 
++  case vmIntrinsics::_deriveContainedObjectAtOffset:
++    if (!UseObjectLayoutIntrinsics) return NULL;
++    break;
++
+   case vmIntrinsics::_aescrypt_encryptBlock:
+   case vmIntrinsics::_aescrypt_decryptBlock:
+     if (!UseAESIntrinsics) return NULL;
+@@ -909,6 +914,9 @@
+ 
+   case vmIntrinsics::_Reference_get:            return inline_reference_get();
+ 
++  case vmIntrinsics::_deriveContainedObjectAtOffset:
++                                                return inline_unsafe_deriveContainedObjectAtOffset();
++
+   case vmIntrinsics::_aescrypt_encryptBlock:
+   case vmIntrinsics::_aescrypt_decryptBlock:    return inline_aescrypt_Block(intrinsic_id());
+ 
+@@ -937,9 +945,6 @@
+   case vmIntrinsics::_updateByteBufferCRC32:
+     return inline_updateByteBufferCRC32();
+ 
+-  case vmIntrinsics::_profileBoolean:
+-    return inline_profileBoolean();
+-
+   default:
+     // If you get here, it may be that someone has added a new intrinsic
+     // to the list in vmSymbols.hpp without implementing it here.
+@@ -2378,6 +2383,36 @@
+   return true;
+ }
+ 
++//------------------inline_unsafe_deriveContainedObjectAtOffset---------------
++
++bool LibraryCallKit::inline_unsafe_deriveContainedObjectAtOffset() {
++  Node* receiver = argument(0); // the unsafe instance
++  Node* base     = argument(1);
++  Node* offset   = argument(2);
++
++  // null check unsafe: must have capability
++  receiver = null_check(receiver);
++  if (stopped()) {
++    return true;
++  }
++
++  // null check base
++  base = null_check(base);
++  if (stopped()) {
++    return true;
++  }
++
++  // if (!is_size_aligned((size_t) offset, HeapWordSize))
++  //   throw new IllegalArgumentException();
++  // TODO
++
++  Node* adr = basic_plus_adr(top(), base, offset); // don't want to keep base-derived relationship here
++  Node* cast = new (C) CastDerivedNode(adr, TypeInstPtr::NOTNULL); // assuming a non-null Object
++  cast = _gvn.transform(cast);
++  set_result(cast);
++  return true;
++}
++
+ //----------------------------inline_unsafe_access----------------------------
+ 
+ const static BasicType T_ADDRESS_HOLDER = T_LONG;
+@@ -6049,6 +6084,151 @@
+   return loadedField;
+ }
+ 
++Node * LibraryCallKit::load_container_class(Node* ctrObj) {
++
++  const TypeInstPtr* tinst = _gvn.type(ctrObj)->isa_instptr();
++  assert(tinst != NULL, "obj is null");
++  assert(tinst->klass()->is_loaded(), "obj is not loaded");
++
++  ciField* field = tinst->klass()->as_instance_klass()->get_field_by_name(
++          ciSymbol::make("elementClass"), ciSymbol::make("Ljava/lang/Class;"), false);
++  if (field == NULL) return (Node *) NULL;
++  assert (field != NULL, "undefined field");
++
++  ciType* field_klass = field->type();
++  assert(field_klass->is_loaded(), "should be loaded");
++  const TypePtr* adr_type = C->alias_type(field)->adr_type();
++  int offset  = field->offset_in_bytes();
++  Node* adr = basic_plus_adr(ctrObj, ctrObj, offset);
++  BasicType bt = field->layout_type();
++  assert(bt == T_OBJECT, "");
++
++  const Type* type = TypeOopPtr::make_from_klass(field_klass->as_klass());
++  Node* loadedField = make_load(NULL, adr, type, bt, adr_type, MemNode::unordered, false);
++  return loadedField;
++}
++
++bool LibraryCallKit::inline_asa_get() {
++    assert(UseObjectLayoutIntrinsics, "not implemented on this platform");
++
++#ifndef PRODUCT
++  tty->print_cr("Attempting to inline org.ObjectLayout.AbstractStructuredArray.get(long) ...");
++  {
++    ResourceMark rm;
++    // Check the signature
++    ciSignature* sig = callee()->signature();
++    BasicType rtype = sig->return_type()->basic_type();
++    assert(rtype == T_OBJECT, "return value is object");
++    assert(sig->count() == 1, "1 arguments");
++    assert(sig->type_at(0)->basic_type() == T_LONG,   "sanity");
++  }
++#endif // PRODUCT
++  Node* receiver = argument(0);
++  Node* index    = argument(1);
++
++  receiver = null_check_receiver();
++  if (stopped()) return true;
++
++  Node* bodySize = NULL;
++  Node* elemtSize = NULL;
++  Node* padSize = NULL;
++
++  int len_off = org_ObjectLayout_AbstractStructuredArray::length_offset();
++  int bs_off  = org_ObjectLayout_AbstractStructuredArray::bodySize_offset();
++  int es_off  = org_ObjectLayout_AbstractStructuredArray::elementSize_offset();
++  int ps_off  = org_ObjectLayout_AbstractStructuredArray::paddingSize_offset();
++
++  Node* lnp = basic_plus_adr(top(), receiver, len_off);
++  if (lnp == NULL) return false; // cannot happen?
++  Node* lnv = make_load(NULL, lnp, TypeLong::LONG, T_LONG, MemNode::unordered);
++
++  Node* bsp = basic_plus_adr(top(), receiver, bs_off);
++  if (bsp == NULL) return false; // cannot happen?
++  Node* bsv = make_load(NULL, bsp, TypeInt::INT, T_INT, MemNode::unordered);
++
++  Node* esp = basic_plus_adr(top(), receiver, es_off);
++  if (esp == NULL) return false; // cannot happen?
++  Node* esv = make_load(NULL, esp, TypeLong::LONG, T_LONG, MemNode::unordered);
++
++  Node* psp = basic_plus_adr(top(), receiver, ps_off);
++  if (psp == NULL) return false; // cannot happen?
++  Node* psv = make_load(NULL, psp, TypeLong::LONG, T_LONG, MemNode::unordered);
++
++  /* long offset = getBodySize() + index*getElementSize() + getPaddingSize(); */
++
++  Node* bs_ps_sum = _gvn.transform(new (C) AddLNode(bsv, psv));
++  Node* idx_es_mul = _gvn.transform(new (C) MulLNode(index, esv));
++  Node* offset = _gvn.transform(new (C) AddLNode(bs_ps_sum, idx_es_mul));
++
++  const Type* t = TypeOopPtr::BOTTOM; // FIXME
++
++  Node* result = make_load(NULL, offset, t, T_OBJECT, MemNode::unordered);
++
++  _gvn.set_type(result, t);
++
++  set_result(result);
++#ifndef PRODUCT
++  tty->print_cr("Done.");
++#endif
++  return false;
++}
++
++/*
++ * Derive contained object at offset.
++ * Object deriveContainedObjectAtOffset(Object container, long index)
++ */
++bool LibraryCallKit::inline_derive_contained_object() {
++    assert(UseObjectLayoutIntrinsics, "not implemented on this platform");
++
++#ifndef PRODUCT
++  tty->print_cr("Attempting to inline sun.misc.Unsafe.deriveContainedObjectAtOffset(Object,long) ...");
++  {
++    ResourceMark rm;
++    // Check the signature
++    ciSignature* sig = callee()->signature();
++    BasicType rtype = sig->return_type()->basic_type();
++    assert(rtype == T_OBJECT, "return value is object");
++    assert(sig->count() == 2, "2 arguments");
++    assert(sig->type_at(0)->basic_type() == T_OBJECT, "sanity");
++    assert(sig->type_at(1)->basic_type() == T_LONG,   "sanity");
++  }
++#endif // PRODUCT
++
++  Node* receiver = argument(0); // type: oop
++  Node* container = argument(1); // type: oop
++  Node* offset = argument(2); // type: long
++
++  receiver  = null_check(receiver);
++  container = null_check(container);
++  if (stopped()) {
++    return true;
++  }
++
++  Node* result = basic_plus_adr(container, container, offset);
++
++  const TypePtr *adr_type = _gvn.type(result)->isa_ptr();
++  Compile::AliasType* alias_type = C->alias_type(adr_type);
++  assert(alias_type->index() != Compile::AliasIdxBot, "no bare pointers here");
++
++  bool need_mem_bar = (alias_type->adr_type() == TypeOopPtr::BOTTOM); // it's true
++  
++  Node* heap_base_oop = container;
++  bool need_read_barrier = offset != top() && heap_base_oop != top(); // it's true
++  
++  if (need_mem_bar) insert_mem_bar(Op_MemBarCPUOrder);
++
++  if (need_read_barrier) {
++    insert_pre_barrier(heap_base_oop, offset, result, !(need_mem_bar));
++  }
++
++  set_result(result);
++
++  if (need_mem_bar) insert_mem_bar(Op_MemBarCPUOrder);
++#ifndef PRODUCT
++  tty->print_cr("Done.");
++#endif
++  return true;
++}
+ 
+ //------------------------------inline_aescrypt_Block-----------------------
+ bool LibraryCallKit::inline_aescrypt_Block(vmIntrinsics::ID id) {
+@@ -6550,81 +6730,3 @@
+ 
+   return instof_false;  // even if it is NULL
+ }
+-
+-bool LibraryCallKit::inline_profileBoolean() {
+-  Node* counts = argument(1);
+-  const TypeAryPtr* ary = NULL;
+-  ciArray* aobj = NULL;
+-  if (counts->is_Con()
+-      && (ary = counts->bottom_type()->isa_aryptr()) != NULL
+-      && (aobj = ary->const_oop()->as_array()) != NULL
+-      && (aobj->length() == 2)) {
+-    // Profile is int[2] where [0] and [1] correspond to false and true value occurrences respectively.
+-    jint false_cnt = aobj->element_value(0).as_int();
+-    jint  true_cnt = aobj->element_value(1).as_int();
+-
+-    method()->set_injected_profile(true);
+-
+-    if (C->log() != NULL) {
+-      C->log()->elem("observe source='profileBoolean' false='%d' true='%d'",
+-                     false_cnt, true_cnt);
+-    }
+-
+-    if (false_cnt + true_cnt == 0) {
+-      // According to profile, never executed.
+-      uncommon_trap_exact(Deoptimization::Reason_intrinsic,
+-                          Deoptimization::Action_reinterpret);
+-      return true;
+-    }
+-
+-    // result is a boolean (0 or 1) and its profile (false_cnt & true_cnt)
+-    // is a number of each value occurrences.
+-    Node* result = argument(0);
+-    if (false_cnt == 0 || true_cnt == 0) {
+-      // According to profile, one value has been never seen.
+-      int expected_val = (false_cnt == 0) ? 1 : 0;
+-
+-      Node* cmp  = _gvn.transform(new (C) CmpINode(result, intcon(expected_val)));
+-      Node* test = _gvn.transform(new (C) BoolNode(cmp, BoolTest::eq));
+-
+-      IfNode* check = create_and_map_if(control(), test, PROB_ALWAYS, COUNT_UNKNOWN);
+-      Node* fast_path = _gvn.transform(new (C) IfTrueNode(check));
+-      Node* slow_path = _gvn.transform(new (C) IfFalseNode(check));
+-
+-      { // Slow path: uncommon trap for never seen value and then reexecute
+-        // MethodHandleImpl::profileBoolean() to bump the count, so JIT knows
+-        // the value has been seen at least once.
+-        PreserveJVMState pjvms(this);
+-        PreserveReexecuteState preexecs(this);
+-        jvms()->set_should_reexecute(true);
+-
+-        set_control(slow_path);
+-        set_i_o(i_o());
+-
+-        uncommon_trap_exact(Deoptimization::Reason_intrinsic,
+-                            Deoptimization::Action_reinterpret);
+-      }
+-      // The guard for never seen value enables sharpening of the result and
+-      // returning a constant. It allows to eliminate branches on the same value
+-      // later on.
+-      set_control(fast_path);
+-      result = intcon(expected_val);
+-    }
+-    // Stop profiling.
+-    // MethodHandleImpl::profileBoolean() has profiling logic in its bytecode.
+-    // By replacing method body with profile data (represented as ProfileBooleanNode
+-    // on IR level) we effectively disable profiling.
+-    // It enables full speed execution once optimized code is generated.
+-    Node* profile = _gvn.transform(new (C) ProfileBooleanNode(result, false_cnt, true_cnt));
+-    C->record_for_igvn(profile);
+-    set_result(profile);
+-    return true;
+-  } else {
+-    // Continue profiling.
+-    // Profile data isn't available at the moment. So, execute method's bytecode version.
+-    // Usually, when GWT LambdaForms are profiled it means that a stand-alone nmethod
+-    // is compiled and counters aren't available since corresponding MethodHandle
+-    // isn't a compile-time constant.
+-    return false;
+-  }
+-}

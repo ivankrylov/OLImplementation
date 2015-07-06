@@ -1,0 +1,409 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/gc_implementation/parallelScavenge </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/parallelScavenge/psMarkSweep.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 150     HandleMark hm;  // Discard invalid handles created during verification
+ 151     Universe::verify(" VerifyBeforeGC:");
+ 152   }
+ 153 
+ 154   // Verify object start arrays
+ 155   if (VerifyObjectStartArray &amp;&amp;
+ 156       VerifyBeforeGC) {
+ 157     old_gen-&gt;verify_object_start_array();
+ 158   }
+ 159 
+ 160   heap-&gt;pre_full_gc_dump(_gc_timer);
+ 161 
+ 162   // Filled in below to track the state of the young gen after the collection.
+ 163   bool eden_empty;
+ 164   bool survivors_empty;
+ 165   bool young_gen_empty;
+ 166 
+ 167   {
+ 168     HandleMark hm;
+ 169 
+
+ 170     TraceCPUTime tcpu(PrintGCDetails, true, gclog_or_tty);
+ 171     GCTraceTime t1(GCCauseString("Full GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer-&gt;gc_id());
+ 172     TraceCollectorStats tcs(counters());
+ 173     TraceMemoryManagerStats tms(true /* Full GC */,gc_cause);
+ 174 
+<span class="changed"> 175     if (TraceGen1Time) accumulated_time()-&gt;start();</span>
+
+
+
+
+
+
+ 176 
+ 177     // Let the size policy know we're starting
+ 178     size_policy-&gt;major_collection_begin();
+ 179 
+ 180     CodeCache::gc_prologue();
+ 181     Threads::gc_prologue();
+ 182     BiasedLocking::preserve_marks();
+ 183 
+ 184     // Capture heap size before collection for printing.
+ 185     size_t prev_used = heap-&gt;used();
+ 186 
+ 187     // Capture metadata size before collection for sizing.
+ 188     size_t metadata_prev_used = MetaspaceAux::used_bytes();
+ 189 
+ 190     // For PrintGCDetails
+ 191     size_t old_gen_prev_used = old_gen-&gt;used_in_bytes();
+ 192     size_t young_gen_prev_used = young_gen-&gt;used_in_bytes();
+ 193 
+ 194     allocate_stacks();
+ 195 
+ 196     COMPILER2_PRESENT(DerivedPointerTable::clear());
+ 197 
+ 198     ref_processor()-&gt;enable_discovery(true /*verify_disabled*/, true /*verify_no_refs*/);
+ 199     ref_processor()-&gt;setup_policy(clear_all_softrefs);
+ 200 
+ 201     mark_sweep_phase1(clear_all_softrefs);
+ 202 
+
+
+
+
+ 203     mark_sweep_phase2();
+ 204 
+<span class="changed"> 205     // Don't add any more derived pointers during phase3</span>
+<span class="changed"> 206     COMPILER2_PRESENT(assert(DerivedPointerTable::is_active(), "Sanity"));</span>
+
+
+
+
+ 207     COMPILER2_PRESENT(DerivedPointerTable::set_active(false));
+ 208 
+ 209     mark_sweep_phase3();
+ 210 
+
+
+
+
+ 211     mark_sweep_phase4();
+ 212 
+
+
+
+
+ 213     restore_marks();
+ 214 
+ 215     deallocate_stacks();
+ 216 
+ 217     if (ZapUnusedHeapArea) {
+ 218       // Do a complete mangle (top to end) because the usage for
+ 219       // scratch does not maintain a top pointer.
+ 220       young_gen-&gt;to_space()-&gt;mangle_unused_area_complete();
+ 221     }
+ 222 
+ 223     eden_empty = young_gen-&gt;eden_space()-&gt;is_empty();
+ 224     if (!eden_empty) {
+ 225       eden_empty = absorb_live_data_from_eden(size_policy, young_gen, old_gen);
+ 226     }
+ 227 
+ 228     // Update heap occupancy information which is used as
+ 229     // input to soft ref clearing policy at the next gc.
+ 230     Universe::update_heap_info_at_gc();
+ 231 
+ 232     survivors_empty = young_gen-&gt;from_space()-&gt;is_empty() &amp;&amp;
+
+</pre><hr></hr><pre>
+ 328       }
+ 329       if (PrintAdaptiveSizePolicy) {
+ 330         gclog_or_tty-&gt;print_cr("AdaptiveSizeStop: collection: %d ",
+ 331                        heap-&gt;total_collections());
+ 332       }
+ 333     }
+ 334 
+ 335     if (UsePerfData) {
+ 336       heap-&gt;gc_policy_counters()-&gt;update_counters();
+ 337       heap-&gt;gc_policy_counters()-&gt;update_old_capacity(
+ 338         old_gen-&gt;capacity_in_bytes());
+ 339       heap-&gt;gc_policy_counters()-&gt;update_young_capacity(
+ 340         young_gen-&gt;capacity_in_bytes());
+ 341     }
+ 342 
+ 343     heap-&gt;resize_all_tlabs();
+ 344 
+ 345     // We collected the heap, recalculate the metaspace capacity
+ 346     MetaspaceGC::compute_new_size();
+ 347 
+<span class="changed"> 348     if (TraceGen1Time) accumulated_time()-&gt;stop();</span>
+
+
+
+
+
+
+ 349 
+ 350     if (PrintGC) {
+ 351       if (PrintGCDetails) {
+ 352         // Don't print a GC timestamp here.  This is after the GC so
+ 353         // would be confusing.
+ 354         young_gen-&gt;print_used_change(young_gen_prev_used);
+ 355         old_gen-&gt;print_used_change(old_gen_prev_used);
+ 356       }
+ 357       heap-&gt;print_heap_change(prev_used);
+ 358       if (PrintGCDetails) {
+ 359         MetaspaceAux::print_metaspace_change(metadata_prev_used);
+ 360       }
+ 361     }
+ 362 
+ 363     // Track memory usage and detect low memory
+ 364     MemoryService::track_memory_usage();
+ 365     heap-&gt;update_counters();
+ 366   }
+ 367 
+ 368   if (VerifyAfterGC &amp;&amp; heap-&gt;total_collections() &gt;= VerifyGCStartAt) {
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 150     HandleMark hm;  // Discard invalid handles created during verification
+ 151     Universe::verify(" VerifyBeforeGC:");
+ 152   }
+ 153 
+ 154   // Verify object start arrays
+ 155   if (VerifyObjectStartArray &amp;&amp;
+ 156       VerifyBeforeGC) {
+ 157     old_gen-&gt;verify_object_start_array();
+ 158   }
+ 159 
+ 160   heap-&gt;pre_full_gc_dump(_gc_timer);
+ 161 
+ 162   // Filled in below to track the state of the young gen after the collection.
+ 163   bool eden_empty;
+ 164   bool survivors_empty;
+ 165   bool young_gen_empty;
+ 166 
+ 167   {
+ 168     HandleMark hm;
+ 169 
+<span class="new"> 170     gclog_or_tty-&gt;date_stamp(PrintGC &amp;&amp; PrintGCDateStamps);</span>
+ 171     TraceCPUTime tcpu(PrintGCDetails, true, gclog_or_tty);
+ 172     GCTraceTime t1(GCCauseString("Full GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer-&gt;gc_id());
+ 173     TraceCollectorStats tcs(counters());
+ 174     TraceMemoryManagerStats tms(true /* Full GC */,gc_cause);
+ 175 
+<span class="changed"> 176     if (TraceGen1Time) {</span>
+<span class="changed"> 177       accumulated_time()-&gt;start();</span>
+<span class="changed"> 178     }</span>
+<span class="changed"> 179 </span>
+<span class="changed"> 180     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="changed"> 181       tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Starting full GC...");</span>
+<span class="changed"> 182     }</span>
+ 183 
+ 184     // Let the size policy know we're starting
+ 185     size_policy-&gt;major_collection_begin();
+ 186 
+ 187     CodeCache::gc_prologue();
+ 188     Threads::gc_prologue();
+ 189     BiasedLocking::preserve_marks();
+ 190 
+ 191     // Capture heap size before collection for printing.
+ 192     size_t prev_used = heap-&gt;used();
+ 193 
+ 194     // Capture metadata size before collection for sizing.
+ 195     size_t metadata_prev_used = MetaspaceAux::used_bytes();
+ 196 
+ 197     // For PrintGCDetails
+ 198     size_t old_gen_prev_used = old_gen-&gt;used_in_bytes();
+ 199     size_t young_gen_prev_used = young_gen-&gt;used_in_bytes();
+ 200 
+ 201     allocate_stacks();
+ 202 
+ 203     COMPILER2_PRESENT(DerivedPointerTable::clear());
+ 204 
+ 205     ref_processor()-&gt;enable_discovery(true /*verify_disabled*/, true /*verify_no_refs*/);
+ 206     ref_processor()-&gt;setup_policy(clear_all_softrefs);
+ 207 
+ 208     mark_sweep_phase1(clear_all_softrefs);
+ 209 
+<span class="new"> 210     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="new"> 211       tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Finished phase 1...");</span>
+<span class="new"> 212     }</span>
+<span class="new"> 213 </span>
+ 214     mark_sweep_phase2();
+ 215 
+<span class="changed"> 216     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="changed"> 217       tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Finished phase 2...");</span>
+<span class="changed"> 218     }</span>
+<span class="changed"> 219 </span>
+<span class="changed"> 220     // Don't add any more derived pointers during phase 3</span>
+<span class="changed"> 221     COMPILER2_PRESENT(assert(DerivedPointerTable::is_active(), "sanity check"));</span>
+ 222     COMPILER2_PRESENT(DerivedPointerTable::set_active(false));
+ 223 
+ 224     mark_sweep_phase3();
+ 225 
+<span class="new"> 226     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="new"> 227       tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Finished phase 3...");</span>
+<span class="new"> 228     }</span>
+<span class="new"> 229 </span>
+ 230     mark_sweep_phase4();
+ 231 
+<span class="new"> 232     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="new"> 233       tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Finished phase 4...");</span>
+<span class="new"> 234     }</span>
+<span class="new"> 235 </span>
+ 236     restore_marks();
+ 237 
+ 238     deallocate_stacks();
+ 239 
+ 240     if (ZapUnusedHeapArea) {
+ 241       // Do a complete mangle (top to end) because the usage for
+ 242       // scratch does not maintain a top pointer.
+ 243       young_gen-&gt;to_space()-&gt;mangle_unused_area_complete();
+ 244     }
+ 245 
+ 246     eden_empty = young_gen-&gt;eden_space()-&gt;is_empty();
+ 247     if (!eden_empty) {
+ 248       eden_empty = absorb_live_data_from_eden(size_policy, young_gen, old_gen);
+ 249     }
+ 250 
+ 251     // Update heap occupancy information which is used as
+ 252     // input to soft ref clearing policy at the next gc.
+ 253     Universe::update_heap_info_at_gc();
+ 254 
+ 255     survivors_empty = young_gen-&gt;from_space()-&gt;is_empty() &amp;&amp;
+
+</pre><hr></hr><pre>
+ 351       }
+ 352       if (PrintAdaptiveSizePolicy) {
+ 353         gclog_or_tty-&gt;print_cr("AdaptiveSizeStop: collection: %d ",
+ 354                        heap-&gt;total_collections());
+ 355       }
+ 356     }
+ 357 
+ 358     if (UsePerfData) {
+ 359       heap-&gt;gc_policy_counters()-&gt;update_counters();
+ 360       heap-&gt;gc_policy_counters()-&gt;update_old_capacity(
+ 361         old_gen-&gt;capacity_in_bytes());
+ 362       heap-&gt;gc_policy_counters()-&gt;update_young_capacity(
+ 363         young_gen-&gt;capacity_in_bytes());
+ 364     }
+ 365 
+ 366     heap-&gt;resize_all_tlabs();
+ 367 
+ 368     // We collected the heap, recalculate the metaspace capacity
+ 369     MetaspaceGC::compute_new_size();
+ 370 
+<span class="changed"> 371     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="changed"> 372       tty-&gt;print_cr("PSMarkSweep::invoke_no_policy: Finished full GC");</span>
+<span class="changed"> 373     }</span>
+<span class="changed"> 374 </span>
+<span class="changed"> 375     if (TraceGen1Time) {</span>
+<span class="changed"> 376       accumulated_time()-&gt;stop();</span>
+<span class="changed"> 377     }</span>
+ 378 
+ 379     if (PrintGC) {
+ 380       if (PrintGCDetails) {
+ 381         // Don't print a GC timestamp here.  This is after the GC so
+ 382         // would be confusing.
+ 383         young_gen-&gt;print_used_change(young_gen_prev_used);
+ 384         old_gen-&gt;print_used_change(old_gen_prev_used);
+ 385       }
+ 386       heap-&gt;print_heap_change(prev_used);
+ 387       if (PrintGCDetails) {
+ 388         MetaspaceAux::print_metaspace_change(metadata_prev_used);
+ 389       }
+ 390     }
+ 391 
+ 392     // Track memory usage and detect low memory
+ 393     MemoryService::track_memory_usage();
+ 394     heap-&gt;update_counters();
+ 395   }
+ 396 
+ 397   if (VerifyAfterGC &amp;&amp; heap-&gt;total_collections() &gt;= VerifyGCStartAt) {
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

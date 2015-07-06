@@ -1,0 +1,692 @@
+--- old/src/share/vm/prims/unsafe.cpp	2015-06-16 10:25:48.610333937 -0700
++++ new/src/share/vm/prims/unsafe.cpp	2015-06-16 10:25:48.530335878 -0700
+@@ -322,33 +322,10 @@
+ UNSAFE_END
+ 
+ #ifndef SUPPORTS_NATIVE_CX8
++// Keep old code for platforms which may not have atomic jlong (8 bytes) instructions
+ 
+-// VM_Version::supports_cx8() is a surrogate for 'supports atomic long memory ops'.
+-//
+-// On platforms which do not support atomic compare-and-swap of jlong (8 byte)
+-// values we have to use a lock-based scheme to enforce atomicity. This has to be
+-// applied to all Unsafe operations that set the value of a jlong field. Even so
+-// the compareAndSwapLong operation will not be atomic with respect to direct stores
+-// to the field from Java code. It is important therefore that any Java code that
+-// utilizes these Unsafe jlong operations does not perform direct stores. To permit
+-// direct loads of the field from Java code we must also use Atomic::store within the
+-// locked regions. And for good measure, in case there are direct stores, we also
+-// employ Atomic::load within those regions. Note that the field in question must be
+-// volatile and so must have atomic load/store accesses applied at the Java level.
+-//
+-// The locking scheme could utilize a range of strategies for controlling the locking
+-// granularity: from a lock per-field through to a single global lock. The latter is
+-// the simplest and is used for the current implementation. Note that the Java object
+-// that contains the field, can not, in general, be used for locking. To do so can lead
+-// to deadlocks as we may introduce locking into what appears to the Java code to be a
+-// lock-free path.
+-//
+-// As all the locked-regions are very short and themselves non-blocking we can treat
+-// them as leaf routines and elide safepoint checks (ie we don't perform any thread
+-// state transitions even when blocking for the lock). Note that if we do choose to
+-// add safepoint checks and thread state transitions, we must ensure that we calculate
+-// the address of the field _after_ we have acquired the lock, else the object may have
+-// been moved by the GC
++// Volatile long versions must use locks if !VM_Version::supports_cx8().
++// support_cx8 is a surrogate for 'supports atomic long memory ops'.
+ 
+ UNSAFE_ENTRY(jlong, Unsafe_GetLongVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset))
+   UnsafeWrapper("Unsafe_GetLongVolatile");
+@@ -360,8 +337,8 @@
+     else {
+       Handle p (THREAD, JNIHandles::resolve(obj));
+       jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+-      MutexLockerEx mu(UnsafeJlong_lock, Mutex::_no_safepoint_check_flag);
+-      jlong value = Atomic::load(addr);
++      ObjectLocker ol(p, THREAD);
++      jlong value = *addr;
+       return value;
+     }
+   }
+@@ -376,8 +353,8 @@
+     else {
+       Handle p (THREAD, JNIHandles::resolve(obj));
+       jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+-      MutexLockerEx mu(UnsafeJlong_lock, Mutex::_no_safepoint_check_flag);
+-      Atomic::store(x, addr);
++      ObjectLocker ol(p, THREAD);
++      *addr = x;
+     }
+   }
+ UNSAFE_END
+@@ -486,8 +463,8 @@
+     else {
+       Handle p (THREAD, JNIHandles::resolve(obj));
+       jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+-      MutexLockerEx mu(UnsafeJlong_lock, Mutex::_no_safepoint_check_flag);
+-      Atomic::store(x, addr);
++      ObjectLocker ol(p, THREAD);
++      *addr = x;
+     }
+   }
+ #endif
+@@ -1236,19 +1213,14 @@
+   UnsafeWrapper("Unsafe_CompareAndSwapLong");
+   Handle p (THREAD, JNIHandles::resolve(obj));
+   jlong* addr = (jlong*)(index_oop_from_field_offset_long(p(), offset));
+-#ifdef SUPPORTS_NATIVE_CX8
+-  return (jlong)(Atomic::cmpxchg(x, addr, e)) == e;
+-#else
+   if (VM_Version::supports_cx8())
+     return (jlong)(Atomic::cmpxchg(x, addr, e)) == e;
+   else {
+     jboolean success = false;
+-    MutexLockerEx mu(UnsafeJlong_lock, Mutex::_no_safepoint_check_flag);
+-    jlong val = Atomic::load(addr);
+-    if (val == e) { Atomic::store(x, addr); success = true; }
++    ObjectLocker ol(p, THREAD);
++    if (*addr == e) { *addr = x; success = true; }
+     return success;
+   }
+-#endif
+ UNSAFE_END
+ 
+ UNSAFE_ENTRY(void, Unsafe_Park(JNIEnv *env, jobject unsafe, jboolean isAbsolute, jlong time))
+@@ -1358,6 +1330,568 @@
+   Prefetch::write(addr, (intx)offset);
+ UNSAFE_END
+ 
++// Implementation of ObjectLayout intrinsics
++
++// Return the size, in words, of an instance of the given class. The class is
++// specified by the object that is an instance of java.lang.Class.
++static jlong get_instance_size_helper(oop obj, TRAPS) {
++  instanceKlassHandle h_klass(THREAD, java_lang_Class::as_Klass(obj));
++
++  // Make sure we are not fetching the instance size of an abstract klass
++  h_klass->check_valid_for_instantiation(true, CHECK_0);
++
++  // Make sure klass is initialized
++  h_klass->initialize(CHECK_0);
++
++  return (jlong) h_klass->size_helper();
++}
++
++// Return the size, in words, of an instance of the given class
++static jlong get_instance_size_helper(jclass cls, TRAPS) {
++  return get_instance_size_helper(JNIHandles::resolve_non_null(cls), THREAD);
++}
++
++// Return the size, in words, of prepadding for a contained object, which is
++// used to allocate the corresponding relative container offset (RCO) object.
++// RCO objects are implemented as standard filler objects (arrays of integers)
++// able to store the payload of 8 bytes.
++static jlong get_prepadding_helper() {
++  jlong size_in_bytes =
++      arrayOopDesc::base_offset_in_bytes(T_INT) + sizeof(jlong);
++  jlong size_in_words =
++      (size_in_bytes + (HeapWordSize - 1)) >> LogHeapWordSize;
++  return (jlong) align_object_size((intptr_t) size_in_words);
++}
++
++// Create the RCO object for the object that will be allocated at the given
++// address and initialize it with the given offset value
++static void create_rco_object(address obj_addr, jlong offset_in_bytes) {
++  // Create the RCO object
++  jlong prepadding_in_words = get_prepadding_helper();
++  address rco_obj_addr = obj_addr - (prepadding_in_words << LogHeapWordSize);
++  CollectedHeap::fill_with_object((HeapWord*) rco_obj_addr,
++      (size_t) prepadding_in_words, false);
++
++  // Store the offset value in the last 8 bytes of the RCO object
++  *((jlong*) (obj_addr - sizeof(jlong))) = offset_in_bytes;
++}
++
++// Utility class describing the configuration of a structured array. It is used
++// to configure objects extending org.ObjectLayout.AbstractStructuredArray class
++// before their actual construction. All fields have exactly the same meanings
++// as the corresponding fields of org.ObjectLayout.AbstractStructuredArray
++// class. All sizes are in bytes.
++class AbstractStructuredArrayConfiguration VALUE_OBJ_CLASS_SPEC {
++ public:
++  jint body_size;
++  jlong length;
++  jlong element_size;
++  jlong padding_size;
++  instanceHandle h_element_class;
++
++ public:
++  // Configure the given object extending
++  // org.ObjectLayout.AbstractStructuredArray class
++  void configure_instance(oop obj) {
++    org_ObjectLayout_AbstractStructuredArray::set_bodySize(obj, body_size);
++    org_ObjectLayout_AbstractStructuredArray::set_length(obj, length);
++    org_ObjectLayout_AbstractStructuredArray::set_elementSize(
++        obj, element_size);
++    org_ObjectLayout_AbstractStructuredArray::set_paddingSize(
++        obj, padding_size);
++    org_ObjectLayout_AbstractStructuredArray::set_elementClass(
++        obj, h_element_class());
++  }
++};
++
++// Utility class describing the configurations of all nesting levels of
++// a structured array. Numbering of levels starts from the outermost one.
++class UnfoldedStructuredArrayConfiguration VALUE_OBJ_CLASS_SPEC {
++ private:
++  int dims;
++  AbstractStructuredArrayConfiguration* configs;
++
++ public:
++  UnfoldedStructuredArrayConfiguration() {
++    dims = 0;
++    configs = NULL;
++  }
++
++  ~UnfoldedStructuredArrayConfiguration() {
++    if (configs != NULL) {
++      FREE_C_HEAP_ARRAY(AbstractStructuredArrayConfiguration, configs,
++          mtInternal);
++    }
++  }
++
++  // Initialize the configurations from the given outermost structured array
++  // class and two parallel arrays determining counts of the elements and their
++  // classes for all nesting levels, starting from the outermost one. The caller
++  // is responsible for providing the correct input data.
++  void initialize(jclass container_cls, typeArrayHandle h_element_counts,
++      objArrayHandle h_element_classes, TRAPS) {
++    dims = h_element_counts->length();
++
++    configs = NEW_C_HEAP_ARRAY(AbstractStructuredArrayConfiguration, dims,
++        mtInternal);
++    if (configs == NULL) {
++      dims = 0;
++      THROW(vmSymbols::java_lang_OutOfMemoryError());
++    }
++
++    int i = dims - 1;
++    jlong prepadding_in_words = get_prepadding_helper();
++    jlong body_size_in_words = get_instance_size_helper(
++        h_element_classes->obj_at(i), THREAD);
++    jlong size_in_words = prepadding_in_words + body_size_in_words;
++    configs[i].length = h_element_counts->long_at(i);
++    configs[i].element_size = size_in_words << LogHeapWordSize;
++    configs[i].padding_size = prepadding_in_words << LogHeapWordSize;
++    instanceHandle h_temp_element_class(THREAD,
++        (instanceOop) (h_element_classes->obj_at(i)));
++    configs[i].h_element_class = h_temp_element_class;
++
++    while (--i >= 0) {
++      body_size_in_words = get_instance_size_helper(
++          h_element_classes->obj_at(i), THREAD);
++      size_in_words = prepadding_in_words + body_size_in_words +
++          (h_element_counts->long_at(i + 1) * size_in_words);
++      configs[i + 1].body_size = (jint) (body_size_in_words << LogHeapWordSize);
++      configs[i].length = h_element_counts->long_at(i);
++      configs[i].element_size = size_in_words << LogHeapWordSize;
++      configs[i].padding_size = prepadding_in_words << LogHeapWordSize;
++      instanceHandle h_temp_element_class(THREAD,
++          (instanceOop) (h_element_classes->obj_at(i)));
++      configs[i].h_element_class = h_temp_element_class;
++    }
++
++    body_size_in_words = get_instance_size_helper(container_cls, THREAD);
++    configs[0].body_size = (jint) (body_size_in_words << LogHeapWordSize);
++  }
++
++  // Accessors
++
++  int dimensions() {
++    assert(configs != NULL, "object must be initialized");
++    return dims;
++  }
++
++  jint body_size(int level) {
++    assert(configs != NULL, "object must be initialized");
++    assert(level >= 0 && level < dims, "level out of bounds");
++    return configs[level].body_size;
++  }
++
++  jlong length(int level) {
++    assert(configs != NULL, "object must be initialized");
++    assert(level >= 0 && level < dims, "level out of bounds");
++    return configs[level].length;
++  }
++
++  jlong element_size(int level) {
++    assert(configs != NULL, "object must be initialized");
++    assert(level >= 0 && level < dims, "level out of bounds");
++    return configs[level].element_size;
++  }
++
++  jlong padding_size(int level) {
++    assert(configs != NULL, "object must be initialized");
++    assert(level >= 0 && level < dims, "level out of bounds");
++    return configs[level].padding_size;
++  }
++
++  instanceHandle element_class(int level) {
++    assert(configs != NULL, "object must be initialized");
++    assert(level >= 0 && level < dims, "level out of bounds");
++    return configs[level].h_element_class;
++  }
++
++  // Configure the given object extending
++  // org.ObjectLayout.AbstractStructuredArray class and belonging to the given
++  // nesting level
++  void configure_instance(oop obj, int level) {
++    assert(configs != NULL, "object must be initialized");
++    assert(level >= 0 && level < dims, "level out of bounds");
++    configs[level].configure_instance(obj);
++  }
++};
++
++UNSAFE_ENTRY(jlong, Unsafe_GetInstanceSize(JNIEnv* env, jobject unsafe,
++    jclass cls))
++  UnsafeWrapper("Unsafe_GetInstanceSize");
++  if (TraceObjectLayoutIntrinsics) {
++    ResourceMark rm;
++    tty->print("Unsafe_GetInstanceSize: cls=");
++    if (cls != NULL) {
++      java_lang_Class::print_signature(JNIHandles::resolve_non_null(cls), tty);
++      tty->cr();
++    } else {
++      tty->print_cr("<null>");
++    }
++  }
++  if (cls == NULL) {
++    THROW_0(vmSymbols::java_lang_NullPointerException());
++  }
++
++  jlong size_in_words = get_instance_size_helper(cls, CHECK_0);
++  return size_in_words << LogHeapWordSize;
++UNSAFE_END
++
++UNSAFE_ENTRY(jlong, Unsafe_GetInstanceFootprintWhenContained(JNIEnv* env,
++    jobject unsafe, jclass cls))
++  UnsafeWrapper("Unsafe_GetInstanceFootprintWhenContained");
++  if (TraceObjectLayoutIntrinsics) {
++    ResourceMark rm;
++    tty->print("Unsafe_GetInstanceFootprintWhenContained: cls=");
++    if (cls != NULL) {
++      java_lang_Class::print_signature(JNIHandles::resolve_non_null(cls), tty);
++      tty->cr();
++    } else {
++      tty->print_cr("<null>");
++    }
++  }
++  if (cls == NULL) {
++    THROW_0(vmSymbols::java_lang_NullPointerException());
++  }
++
++  jlong size_in_words = get_prepadding_helper() +
++      get_instance_size_helper(cls, CHECK_0);
++  return size_in_words << LogHeapWordSize;
++UNSAFE_END
++
++UNSAFE_ENTRY(jlong, Unsafe_GetContainingObjectFootprint(JNIEnv* env,
++    jobject unsafe, jclass container_cls, jlong element_size_in_bytes,
++    jlong number_of_elements))
++  UnsafeWrapper("Unsafe_GetContainingObjectFootprint");
++  if (TraceObjectLayoutIntrinsics) {
++    ResourceMark rm;
++    tty->print("Unsafe_GetContainingObjectFootprint: container_cls=");
++    if (container_cls != NULL) {
++      java_lang_Class::print_signature(
++          JNIHandles::resolve_non_null(container_cls), tty);
++    } else {
++      tty->print("<null>");
++    }
++    tty->print_cr(", element_size_in_bytes=%ld(0x%lX), number_of_elements=%ld",
++        element_size_in_bytes, element_size_in_bytes, number_of_elements);
++  }
++  if (container_cls == NULL) {
++    THROW_0(vmSymbols::java_lang_NullPointerException());
++  }
++  if (!is_size_aligned((size_t) element_size_in_bytes, HeapWordSize) ||
++      element_size_in_bytes <= 0 || number_of_elements < 0) {
++    THROW_0(vmSymbols::java_lang_IllegalArgumentException());
++  }
++
++  jlong body_size_in_words = get_instance_size_helper(container_cls, CHECK_0);
++  jlong element_size_in_words = element_size_in_bytes >> LogHeapWordSize;
++  return (body_size_in_words + (number_of_elements * element_size_in_words)) <<
++      LogHeapWordSize;
++UNSAFE_END
++
++UNSAFE_ENTRY(jlong, Unsafe_GetContainingObjectFootprintWhenContained(
++    JNIEnv* env, jobject unsafe, jclass container_cls,
++    jlong element_size_in_bytes, jlong number_of_elements))
++  UnsafeWrapper("Unsafe_GetContainingObjectFootprintWhenContained");
++  if (TraceObjectLayoutIntrinsics) {
++    ResourceMark rm;
++    tty->print("Unsafe_GetContainingObjectFootprintWhenContained: "
++        "container_cls=");
++    if (container_cls != NULL) {
++      java_lang_Class::print_signature(
++          JNIHandles::resolve_non_null(container_cls), tty);
++    } else {
++      tty->print("<null>");
++    }
++    tty->print_cr(", element_size_in_bytes=%ld(0x%lX), number_of_elements=%ld",
++        element_size_in_bytes, element_size_in_bytes, number_of_elements);
++  }
++  if (container_cls == NULL) {
++    THROW_0(vmSymbols::java_lang_NullPointerException());
++  }
++  if (!is_size_aligned((size_t) element_size_in_bytes, HeapWordSize) ||
++      element_size_in_bytes <= 0 || number_of_elements < 0) {
++    THROW_0(vmSymbols::java_lang_IllegalArgumentException());
++  }
++
++  jlong prepadding_in_words = get_prepadding_helper();
++  jlong body_size_in_words = get_instance_size_helper(container_cls, CHECK_0);
++  jlong element_size_in_words = element_size_in_bytes >> LogHeapWordSize;
++  return (prepadding_in_words + body_size_in_words +
++      (number_of_elements * element_size_in_words)) << LogHeapWordSize;
++UNSAFE_END
++
++UNSAFE_ENTRY(jlong, Unsafe_GetPrePaddingInObjectFootprint(JNIEnv* env,
++    jobject unsafe, jlong obj_footprint_in_bytes))
++  UnsafeWrapper("Unsafe_GetPrePaddingInObjectFootprint");
++  if (TraceObjectLayoutIntrinsics) {
++    tty->print_cr("Unsafe_GetPrePaddingInObjectFootprint: "
++        "obj_footprint_in_bytes=%ld(0x%lX)", obj_footprint_in_bytes,
++        obj_footprint_in_bytes);
++  }
++
++  return get_prepadding_helper() << LogHeapWordSize;
++UNSAFE_END
++
++UNSAFE_ENTRY(jobject, Unsafe_AllocateHeapForElementArrayClass(JNIEnv* env,
++    jobject unsafe, jclass container_cls, jlongArray element_counts,
++    jobjectArray element_classes))
++  UnsafeWrapper("Unsafe_AllocateHeapForElementArrayClass");
++  if (TraceObjectLayoutIntrinsics) {
++    ResourceMark rm;
++    tty->print("Unsafe_AllocateHeapForElementArrayClass: container_cls=");
++    if (container_cls != NULL) {
++      java_lang_Class::print_signature(
++          JNIHandles::resolve_non_null(container_cls), tty);
++    } else {
++      tty->print("<null>");
++    }
++    tty->print_cr(", element_counts=" PTR_FORMAT
++        ", element_classes=" PTR_FORMAT,
++        p2i((void*) JNIHandles::resolve(element_counts)),
++        p2i((void*) JNIHandles::resolve(element_classes)));
++  }
++  if (container_cls == NULL || element_counts == NULL ||
++      element_classes == NULL) {
++    THROW_NULL(vmSymbols::java_lang_NullPointerException());
++  }
++
++  typeArrayHandle h_element_counts(THREAD,
++      typeArrayOop(JNIHandles::resolve_non_null(element_counts)));
++  objArrayHandle h_element_classes(THREAD,
++      objArrayOop(JNIHandles::resolve_non_null(element_classes)));
++  int dims = h_element_counts->length();
++
++  if (dims == 0 || dims != h_element_classes->length()) {
++    THROW_NULL(vmSymbols::java_lang_IllegalArgumentException());
++  }
++  for (int i = 0; i < dims; i++) {
++    if (h_element_counts->long_at(i) < 0 ||
++        h_element_classes->obj_at(i) == NULL) {
++      THROW_NULL(vmSymbols::java_lang_IllegalArgumentException());
++    }
++  }
++
++  // Make sure that all the involved klasses are valid for instantiation
++  // and initialized
++  instanceKlassHandle h_container_klass(THREAD,
++      java_lang_Class::as_Klass(JNIHandles::resolve_non_null(container_cls)));
++  h_container_klass->check_valid_for_instantiation(true, CHECK_NULL);
++  h_container_klass->initialize(CHECK_NULL);
++  for (int i = 0; i < dims; i++) {
++    instanceKlassHandle h_element_klass(THREAD,
++        java_lang_Class::as_Klass(h_element_classes->obj_at(i)));
++    h_element_klass->check_valid_for_instantiation(true, CHECK_NULL);
++    h_element_klass->initialize(CHECK_NULL);
++  }
++
++  // We need to allocate in the Java heap a memory region for a multi-
++  // dimensional structured array which is described by the given specification.
++  // The specification consists of two parallel arrays determining counts
++  // of the elements (h_element_counts) and their classes (h_element_classes)
++  // for all nesting levels, starting from the outermost one. The number of
++  // dimensions is determined by the length of these arrays.
++  //
++  // Here are the steps we need to do:
++  // 1. Calculate the total memory footprint of the multi-dimensional
++  //    structured array (including containing, contained, and RCO objects
++  //    on all nesting levels).
++  // 2. Allocate a memory region with the calculated size.
++  // 3. Initialize the headers of all the objects that make up the multi-
++  //    dimensional structured array (including containing, contained, and RCO
++  //    objects on all nesting levels); initialize special fields of all the
++  //    containing objects; set up the offset values in all the RCO objects.
++  //    It is important to complete all this initialization work before the
++  //    return from this method, otherwise the uninitialized contents get
++  //    exposed to the Java heap scanners and garbage collectors. An attempt
++  //    to scan an uninitialized or partially initialized structured array
++  //    would most likely result in a crash. It is also important to note that
++  //    by initialization here we don't mean actual creation of involved
++  //    Java objects (calling their constructors, etc.), but just doing
++  //    a specific set of steps for making the region of memory representing
++  //    the multi-dimensional structured array parsable by heap scanners and
++  //    GCs.
++
++  // Initialize configurations of all nesting levels of the structured array
++  UnfoldedStructuredArrayConfiguration configuration;
++  configuration.initialize(container_cls, h_element_counts, h_element_classes,
++      CHECK_NULL);
++
++  // Multi-dimensional cursor able to address elements of the most inner level
++  jlong* cursors = NEW_C_HEAP_ARRAY(jlong, dims, mtInternal);
++  if (cursors == NULL) {
++    THROW_NULL(vmSymbols::java_lang_OutOfMemoryError());
++  }
++  for (int i = 0; i < dims; i++) {
++    cursors[i] = 0;
++  }
++
++  // Calculate the total memory footprint of the multi-dimensional structured
++  // array
++  jlong size_in_words = (configuration.body_size(0) +
++      (configuration.length(0) * configuration.element_size(0))) >>
++      LogHeapWordSize;
++
++#ifdef ASSERT
++  if (TraceObjectLayoutIntrinsics) {
++    tty->print_cr("  Unsafe_AllocateHeapForElementArrayClass: "
++        "size=0x%lX", size_in_words << LogHeapWordSize);
++  }
++#endif // ASSERT
++
++  // Allocate a memory region with the calculated size
++  oop container_obj =
++      h_container_klass->allocate_instance((int) size_in_words, CHECK_NULL);
++  configuration.configure_instance(container_obj, 0);
++
++  // Initialize the headers of all the objects that make up the multi-
++  // dimensional structured array; initialize special fields of all the
++  // containing objects; set up the offset values in all the RCO objects
++
++  address last_container_addr = (address) container_obj;
++  address derived_obj_addr = ((address) container_obj) +
++      configuration.body_size(0) + configuration.padding_size(0);
++
++  // This cycle initializes one innermost structured array per iteration. It
++  // also correctly handles situations when there are arrays with zero lengths
++  // somewhere in the hierarchy. In this case the cycle initializes one
++  // outermost structured array with zero length per cycle.
++  int cur_dim = 0;
++  do {
++    // Initialize one outermost structured array with zero length or, if there
++    // are no such arrays, one innermost structured array, including all its
++    // containers that are not initialized yet
++    while (cur_dim < dims - 1) {
++      if (configuration.length(cur_dim) == 0) {
++        break;
++      }
++      create_rco_object(derived_obj_addr,
++          derived_obj_addr - last_container_addr);
++      instanceKlassHandle h_element_klass(THREAD,
++          java_lang_Class::as_Klass(configuration.element_class(cur_dim)()));
++      oop derived_obj = h_element_klass->allocate_instance_at(derived_obj_addr,
++          true, true, CHECK_NULL);
++      configuration.configure_instance(derived_obj, cur_dim + 1);
++      last_container_addr = derived_obj_addr;
++      derived_obj_addr += configuration.body_size(cur_dim + 1) +
++          configuration.padding_size(cur_dim + 1);
++      cur_dim++;
++    }
++
++    // If we got to the innermost structured array, initialize its elements
++    if (cur_dim == dims - 1) {
++      instanceKlassHandle h_element_klass(THREAD,
++          java_lang_Class::as_Klass(configuration.element_class(cur_dim)()));
++      for (jlong i = 0; i < configuration.length(cur_dim); i++) {
++        create_rco_object(derived_obj_addr,
++            derived_obj_addr - last_container_addr);
++        h_element_klass->allocate_instance_at(derived_obj_addr, true, false,
++            CHECK_NULL);
++        derived_obj_addr += configuration.element_size(cur_dim);
++      }
++    }
++
++    // Move the cursor to the next structured array. The cursor will overflow
++    // and reset to the vector of zeros after all the hierarchy is traversed.
++    while (cur_dim > 0) {
++      cur_dim--;
++      cursors[cur_dim]++;
++      if (cursors[cur_dim] < configuration.length(cur_dim)) {
++        break;
++      }
++      cursors[cur_dim] = 0;
++    }
++  } while (cur_dim != 0 || cursors[cur_dim] != 0);
++
++  FREE_C_HEAP_ARRAY(jlong, cursors, mtInternal);
++
++  return JNIHandles::make_local(env, container_obj);
++UNSAFE_END
++
++UNSAFE_ENTRY(void, Unsafe_ConstructObjectAtOffset(JNIEnv* env, jobject unsafe,
++    jobject container, jlong offset, jlong obj_prepadding,
++    jboolean is_contained, jboolean is_container, jlong obj_footprint,
++    jobject ctor, jobjectArray ctor_args))
++  UnsafeWrapper("Unsafe_ConstructObjectAtOffset");
++  if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++    tty->print_cr("Unsafe_ConstructObjectAtOffset: "
++        "container=" PTR_FORMAT ", offset=0x%lX, "
++        "obj_prepadding=0x%lX, %scontained, %scontainer, obj_footprint=0x%lX, "
++        "ctor=" PTR_FORMAT ", ctor_args=" PTR_FORMAT,
++        p2i((void*) JNIHandles::resolve(container)),
++        offset,
++        obj_prepadding,
++        is_contained ? "" : "not ",
++        is_container ? "" : "not ",
++        obj_footprint,
++        p2i((void*) JNIHandles::resolve(ctor)),
++        p2i((void*) JNIHandles::resolve(ctor_args)));
++  }
++  if (container == NULL || ctor == NULL) {
++    THROW(vmSymbols::java_lang_NullPointerException());
++  }
++  if (!is_size_aligned((size_t) offset, HeapWordSize) || offset < 0 ||
++      ((is_contained == JNI_FALSE) && (obj_prepadding != 0)) ||
++      ((is_contained != JNI_FALSE) &&
++      (obj_prepadding != (get_prepadding_helper() << LogHeapWordSize)))) {
++    THROW(vmSymbols::java_lang_IllegalArgumentException());
++  }
++
++  // Calculate the address at which the object will be created
++  oop container_obj = JNIHandles::resolve_non_null(container);
++  address derived_obj_addr = ((address) container_obj) + offset;
++
++  // Create the object
++  oop ctor_mirror = JNIHandles::resolve_non_null(ctor);
++
++  objArrayHandle h_ctor_args(THREAD,
++      objArrayOop(JNIHandles::resolve(ctor_args)));
++
++  oop result = Reflection::invoke_constructor_in_place(derived_obj_addr,
++      (is_contained != JNI_FALSE), (is_container != JNI_FALSE),
++      ctor_mirror, h_ctor_args, CHECK);
++
++  if (JvmtiExport::should_post_vm_object_alloc()) {
++    JvmtiExport::post_vm_object_alloc(JavaThread::current(), result);
++  }
++UNSAFE_END
++
++UNSAFE_ENTRY(jobject, Unsafe_DeriveContainedObjectAtOffset(JNIEnv* env,
++    jobject unsafe, jobject container, jlong offset_in_bytes))
++  UnsafeWrapper("Unsafe_DeriveContainedObjectAtOffset");
++  if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++    tty->print_cr("Unsafe_DeriveContainedObjectAtOffset: "
++        "container=" PTR_FORMAT ", offset_in_bytes=%ld(0x%lX)",
++        p2i((void*) JNIHandles::resolve(container)), offset_in_bytes,
++        offset_in_bytes);
++  }
++  if (container == NULL) {
++    THROW_NULL(vmSymbols::java_lang_NullPointerException());
++  }
++  if (!is_size_aligned((size_t) offset_in_bytes, HeapWordSize) ||
++      offset_in_bytes < 0) {
++    THROW_NULL(vmSymbols::java_lang_IllegalArgumentException());
++  }
++
++  oop container_obj = JNIHandles::resolve_non_null(container);
++  oop derived_obj = (oop) (((address) container_obj) + offset_in_bytes);
++
++#ifdef ASSERT
++  if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++    if (derived_obj->is_contained()) {
++      jlong stored_offset_in_bytes = derived_obj->relative_container_offset();
++      tty->print_cr("  Unsafe_DeriveContainedObjectAtOffset: "
++          "derived object contained, RCO=%ld(0x%lX)",
++          stored_offset_in_bytes, stored_offset_in_bytes);
++    } else {
++      tty->print_cr("  Unsafe_DeriveContainedObjectAtOffset: "
++          "derived object not contained");
++    }
++  }
++#endif // ASSERT
++
++  return JNIHandles::make_local(env, derived_obj);
++UNSAFE_END
+ 
+ /// JVM_RegisterUnsafeMethods
+ 
+@@ -1697,6 +2231,17 @@
+     {CC"fullFence",          CC"()V",                    FN_PTR(Unsafe_FullFence)},
+ };
+ 
++static JNINativeMethod objectlayout_methods[] = {
++  { CC "getInstanceSize",                           CC "("CLS")J",                 FN_PTR(Unsafe_GetInstanceSize) },
++  { CC "getInstanceFootprintWhenContained",         CC "("CLS")J",                 FN_PTR(Unsafe_GetInstanceFootprintWhenContained) },
++  { CC "getContainingObjectFootprint",              CC "("CLS"JJ)J",               FN_PTR(Unsafe_GetContainingObjectFootprint) },
++  { CC "getContainingObjectFootprintWhenContained", CC "("CLS"JJ)J",               FN_PTR(Unsafe_GetContainingObjectFootprintWhenContained) },
++  { CC "getPrePaddingInObjectFootprint",            CC "(J)J",                     FN_PTR(Unsafe_GetPrePaddingInObjectFootprint) },
++  { CC "allocateHeapForElementArrayClass",          CC "("CLS"[J["CLS")"OBJ,       FN_PTR(Unsafe_AllocateHeapForElementArrayClass) },
++  { CC "constructObjectAtOffset",                   CC "("OBJ"JJZZJ"CTR"["OBJ")V", FN_PTR(Unsafe_ConstructObjectAtOffset) },
++  { CC "deriveContainedObjectAtOffset",             CC "("OBJ"J)"OBJ,              FN_PTR(Unsafe_DeriveContainedObjectAtOffset) }
++};
++
+ #undef CC
+ #undef FN_PTR
+ 
+@@ -1796,5 +2341,10 @@
+ 
+     // Fence methods
+     register_natives("1.8 fence methods", env, unsafecls, fence_methods, sizeof(fence_methods)/sizeof(JNINativeMethod));
++
++    // ObjectLayout intrinsics
++    register_natives("ObjectLayout intrinsics", env, unsafecls,
++      objectlayout_methods,
++      sizeof(objectlayout_methods) / sizeof(JNINativeMethod));
+   }
+ JVM_END

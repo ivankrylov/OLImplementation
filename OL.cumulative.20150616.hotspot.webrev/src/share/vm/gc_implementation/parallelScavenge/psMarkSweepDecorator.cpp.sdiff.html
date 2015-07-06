@@ -1,0 +1,843 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/gc_implementation/parallelScavenge </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+  55   PSMarkSweepDecorator* third = heap-&gt;young_gen()-&gt;from_mark_sweep();
+  56   PSMarkSweepDecorator* fourth = heap-&gt;young_gen()-&gt;to_mark_sweep();
+  57 
+  58   if ( _destination_decorator == first ) {
+  59     _destination_decorator = second;
+  60   } else if ( _destination_decorator == second ) {
+  61     _destination_decorator = third;
+  62   } else if ( _destination_decorator == third ) {
+  63     _destination_decorator = fourth;
+  64   } else {
+  65     fatal("PSMarkSweep attempting to advance past last compaction area");
+  66   }
+  67 }
+  68 
+  69 PSMarkSweepDecorator* PSMarkSweepDecorator::destination_decorator() {
+  70   assert(_destination_decorator != NULL, "Sanity");
+  71 
+  72   return _destination_decorator;
+  73 }
+  74 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  75 // FIX ME FIX ME FIX ME FIX ME!!!!!!!!!
+  76 // The object forwarding code is duplicated. Factor this out!!!!!
+  77 //
+  78 // This method "precompacts" objects inside its space to dest. It places forwarding
+  79 // pointers into markOops for use by adjust_pointers. If "dest" should overflow, we
+  80 // finish by compacting into our own space.
+  81 
+  82 void PSMarkSweepDecorator::precompact() {
+  83   // Reset our own compact top.
+  84   set_compaction_top(space()-&gt;bottom());
+  85 
+  86   /* We allow some amount of garbage towards the bottom of the space, so
+  87    * we don't start compacting before there is a significant gain to be made.
+  88    * Occasionally, we want to ensure a full compaction, which is determined
+  89    * by the MarkSweepAlwaysCompactCount parameter. This is a significant
+  90    * performance improvement!
+  91    */
+  92   bool skip_dead = ((PSMarkSweep::total_invocations() % MarkSweepAlwaysCompactCount) != 0);
+  93 
+  94   size_t allowed_deadspace = 0;
+
+</pre><hr></hr><pre>
+ 108   HeapWord* t = space()-&gt;top();
+ 109 
+ 110   HeapWord*  end_of_live= q;    /* One byte beyond the last byte of the last
+ 111                                    live object. */
+ 112   HeapWord*  first_dead = space()-&gt;end(); /* The first dead object. */
+ 113   LiveRange* liveRange  = NULL; /* The current live range, recorded in the
+ 114                                    first header of preceding free area. */
+ 115   _first_dead = first_dead;
+ 116 
+ 117   const intx interval = PrefetchScanIntervalInBytes;
+ 118 
+ 119   while (q &lt; t) {
+ 120     assert(oop(q)-&gt;mark()-&gt;is_marked() || oop(q)-&gt;mark()-&gt;is_unlocked() ||
+ 121            oop(q)-&gt;mark()-&gt;has_bias_pattern(),
+ 122            "these are the only valid states during a mark sweep");
+ 123     if (oop(q)-&gt;is_gc_marked()) {
+ 124       /* prefetch beyond q */
+ 125       Prefetch::write(q, interval);
+ 126       size_t size = oop(q)-&gt;size();
+ 127 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 128       size_t compaction_max_size = pointer_delta(compact_end, compact_top);
+ 129 
+ 130       // This should only happen if a space in the young gen overflows the
+ 131       // old gen. If that should happen, we null out the start_array, because
+ 132       // the young spaces are not covered by one.
+ 133       while(size &gt; compaction_max_size) {
+ 134         // First record the last compact_top
+ 135         dest-&gt;set_compaction_top(compact_top);
+ 136 
+ 137         // Advance to the next compaction decorator
+ 138         advance_destination_decorator();
+ 139         dest = destination_decorator();
+ 140 
+ 141         // Update compaction info
+ 142         start_array = dest-&gt;start_array();
+ 143         compact_top = dest-&gt;compaction_top();
+ 144         compact_end = dest-&gt;space()-&gt;end();
+ 145         assert(compact_top == dest-&gt;space()-&gt;bottom(), "Advanced to space already in use");
+ 146         assert(compact_end &gt; compact_top, "Must always be space remaining");
+ 147         compaction_max_size =
+ 148           pointer_delta(compact_end, compact_top);
+ 149       }
+ 150 
+ 151       // store the forwarding pointer into the mark word
+<span class="changed"> 152       if (q != compact_top) {</span>
+
+
+
+
+ 153         oop(q)-&gt;forward_to(oop(compact_top));
+ 154         assert(oop(q)-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");
+<span class="changed"> 155       } else {</span>
+
+
+
+
+
+ 156         // if the object isn't moving we can just set the mark to the default
+ 157         // mark and handle it specially later on.
+
+
+
+ 158         oop(q)-&gt;init_mark();
+ 159         assert(oop(q)-&gt;forwardee() == NULL, "should be forwarded to NULL");
+<span class="changed"> 160       }</span>
+
+ 161 
+ 162       // Update object start array
+ 163       if (start_array) {
+ 164         start_array-&gt;allocate_block(compact_top);
+ 165       }
+ 166 
+ 167       compact_top += size;
+ 168       assert(compact_top &lt;= dest-&gt;space()-&gt;end(),
+ 169         "Exceeding space in destination");
+ 170 
+ 171       q += size;
+ 172       end_of_live = q;
+ 173     } else {
+ 174       /* run over all the contiguous dead objects */
+ 175       HeapWord* end = q;
+ 176       do {
+ 177         /* prefetch beyond end */
+ 178         Prefetch::write(end, interval);
+ 179         end += oop(end)-&gt;size();
+ 180       } while (end &lt; t &amp;&amp; (!oop(end)-&gt;is_gc_marked()));
+
+</pre><hr></hr><pre>
+ 192           // the young spaces are not covered by one.
+ 193           while (sz &gt; compaction_max_size) {
+ 194             // First record the last compact_top
+ 195             dest-&gt;set_compaction_top(compact_top);
+ 196 
+ 197             // Advance to the next compaction decorator
+ 198             advance_destination_decorator();
+ 199             dest = destination_decorator();
+ 200 
+ 201             // Update compaction info
+ 202             start_array = dest-&gt;start_array();
+ 203             compact_top = dest-&gt;compaction_top();
+ 204             compact_end = dest-&gt;space()-&gt;end();
+ 205             assert(compact_top == dest-&gt;space()-&gt;bottom(), "Advanced to space already in use");
+ 206             assert(compact_end &gt; compact_top, "Must always be space remaining");
+ 207             compaction_max_size =
+ 208               pointer_delta(compact_end, compact_top);
+ 209           }
+ 210 
+ 211           // store the forwarding pointer into the mark word
+<span class="changed"> 212           if (q != compact_top) {</span>
+
+
+
+
+ 213             oop(q)-&gt;forward_to(oop(compact_top));
+ 214             assert(oop(q)-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");
+<span class="changed"> 215           } else {</span>
+
+
+
+
+
+ 216             // if the object isn't moving we can just set the mark to the default
+ 217             // mark and handle it specially later on.
+ 218             oop(q)-&gt;init_mark();
+ 219             assert(oop(q)-&gt;forwardee() == NULL, "should be forwarded to NULL");
+<span class="changed"> 220           }</span>
+ 221 
+ 222           // Update object start array
+ 223           if (start_array) {
+ 224             start_array-&gt;allocate_block(compact_top);
+ 225           }
+ 226 
+ 227           compact_top += sz;
+ 228           assert(compact_top &lt;= dest-&gt;space()-&gt;end(),
+ 229             "Exceeding space in destination");
+ 230 
+ 231           q = end;
+ 232           end_of_live = end;
+ 233           continue;
+ 234         }
+ 235       }
+ 236 
+ 237       /* for the previous LiveRange, record the end of the live objects. */
+ 238       if (liveRange) {
+ 239         liveRange-&gt;set_end(q);
+ 240       }
+
+</pre><hr></hr><pre>
+ 286 }
+ 287 
+ 288 void PSMarkSweepDecorator::adjust_pointers() {
+ 289   // adjust all the interior pointers to point at the new locations of objects
+ 290   // Used by MarkSweep::mark_sweep_phase3()
+ 291 
+ 292   HeapWord* q = space()-&gt;bottom();
+ 293   HeapWord* t = _end_of_live;  // Established by "prepare_for_compaction".
+ 294 
+ 295   assert(_first_dead &lt;= _end_of_live, "Stands to reason, no?");
+ 296 
+ 297   if (q &lt; t &amp;&amp; _first_dead &gt; q &amp;&amp;
+ 298       !oop(q)-&gt;is_gc_marked()) {
+ 299     // we have a chunk of the space which hasn't moved and we've
+ 300     // reinitialized the mark word during the previous pass, so we can't
+ 301     // use is_gc_marked for the traversal.
+ 302     HeapWord* end = _first_dead;
+ 303 
+ 304     while (q &lt; end) {
+ 305       // point all the oops to the new location
+
+
+
+
+ 306       size_t size = oop(q)-&gt;adjust_pointers();
+ 307       q += size;
+ 308     }
+ 309 
+ 310     if (_first_dead == t) {
+ 311       q = t;
+ 312     } else {
+ 313       // $$$ This is funky.  Using this to read the previously written
+ 314       // LiveRange.  See also use below.
+ 315       q = (HeapWord*)oop(_first_dead)-&gt;mark()-&gt;decode_pointer();
+ 316     }
+ 317   }
+ 318   const intx interval = PrefetchScanIntervalInBytes;
+ 319 
+ 320   debug_only(HeapWord* prev_q = NULL);
+ 321   while (q &lt; t) {
+ 322     // prefetch beyond q
+ 323     Prefetch::write(q, interval);
+ 324     if (oop(q)-&gt;is_gc_marked()) {
+ 325       // q is alive
+ 326       // point all the oops to the new location
+
+
+
+
+ 327       size_t size = oop(q)-&gt;adjust_pointers();
+ 328       debug_only(prev_q = q);
+ 329       q += size;
+ 330     } else {
+ 331       // q is not a live object, so its mark should point at the next
+ 332       // live object
+ 333       debug_only(prev_q = q);
+ 334       q = (HeapWord*) oop(q)-&gt;mark()-&gt;decode_pointer();
+ 335       assert(q &gt; prev_q, "we should be moving forward through memory");
+ 336     }
+ 337   }
+ 338 
+ 339   assert(q == t, "just checking");
+ 340 }
+ 341 
+ 342 void PSMarkSweepDecorator::compact(bool mangle_free_space ) {
+ 343   // Copy all live objects to their new location
+ 344   // Used by MarkSweep::mark_sweep_phase4()
+ 345 
+ 346   HeapWord*       q = space()-&gt;bottom();
+
+</pre><hr></hr><pre>
+ 375   const intx copy_interval = PrefetchCopyIntervalInBytes;
+ 376 
+ 377   while (q &lt; t) {
+ 378     if (!oop(q)-&gt;is_gc_marked()) {
+ 379       // mark is pointer to next marked oop
+ 380       debug_only(prev_q = q);
+ 381       q = (HeapWord*) oop(q)-&gt;mark()-&gt;decode_pointer();
+ 382       assert(q &gt; prev_q, "we should be moving forward through memory");
+ 383     } else {
+ 384       // prefetch beyond q
+ 385       Prefetch::read(q, scan_interval);
+ 386 
+ 387       // size and destination
+ 388       size_t size = oop(q)-&gt;size();
+ 389       HeapWord* compaction_top = (HeapWord*)oop(q)-&gt;forwardee();
+ 390 
+ 391       // prefetch beyond compaction_top
+ 392       Prefetch::write(compaction_top, copy_interval);
+ 393 
+ 394       // copy object and reinit its mark
+<span class="changed"> 395       assert(q != compaction_top, "everything in this pass should be moving");</span>
+
+
+
+
+ 396       Copy::aligned_conjoint_words(q, compaction_top, size);
+<span class="removed"> 397       oop(compaction_top)-&gt;init_mark();</span>
+ 398       assert(oop(compaction_top)-&gt;klass() != NULL, "should have a class");
+
+
+ 399 
+ 400       debug_only(prev_q = q);
+ 401       q += size;
+ 402     }
+ 403   }
+ 404 
+ 405   assert(compaction_top() &gt;= space()-&gt;bottom() &amp;&amp; compaction_top() &lt;= space()-&gt;end(),
+ 406          "should point inside space");
+ 407   space()-&gt;set_top(compaction_top());
+ 408 
+ 409   if (mangle_free_space) {
+ 410     space()-&gt;mangle_unused_area();
+ 411   }
+ 412 }
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+  55   PSMarkSweepDecorator* third = heap-&gt;young_gen()-&gt;from_mark_sweep();
+  56   PSMarkSweepDecorator* fourth = heap-&gt;young_gen()-&gt;to_mark_sweep();
+  57 
+  58   if ( _destination_decorator == first ) {
+  59     _destination_decorator = second;
+  60   } else if ( _destination_decorator == second ) {
+  61     _destination_decorator = third;
+  62   } else if ( _destination_decorator == third ) {
+  63     _destination_decorator = fourth;
+  64   } else {
+  65     fatal("PSMarkSweep attempting to advance past last compaction area");
+  66   }
+  67 }
+  68 
+  69 PSMarkSweepDecorator* PSMarkSweepDecorator::destination_decorator() {
+  70   assert(_destination_decorator != NULL, "Sanity");
+  71 
+  72   return _destination_decorator;
+  73 }
+  74 
+<span class="new">  75 void PSMarkSweepDecorator::forward_container(address src, address dst, uint nesting_level) {</span>
+<span class="new">  76   if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">  77     tty-&gt;print_cr("PSMarkSweepDecorator::forward_container: src=0x%p, dst=0x%p, nesting_level=%u",</span>
+<span class="new">  78         (void*) src, (void*) dst, nesting_level);</span>
+<span class="new">  79   }</span>
+<span class="new">  80 </span>
+<span class="new">  81   assert(((oop) src)-&gt;is_container(), "src not container");</span>
+<span class="new">  82 </span>
+<span class="new">  83   jint body_size = org_ObjectLayout_AbstractStructuredArray::bodySize((oop) src);</span>
+<span class="new">  84   jlong length = org_ObjectLayout_AbstractStructuredArray::length((oop) src);</span>
+<span class="new">  85   jlong padding_size = org_ObjectLayout_AbstractStructuredArray::paddingSize((oop) src);</span>
+<span class="new">  86   jlong element_size = org_ObjectLayout_AbstractStructuredArray::elementSize((oop) src);</span>
+<span class="new">  87 </span>
+<span class="new">  88   markOop mark_before = ((oop) src)-&gt;mark();</span>
+<span class="new">  89   ((oop) src)-&gt;forward_to((oop) dst);</span>
+<span class="new">  90   if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new">  91     tty-&gt;print_cr("  Forwarding container 0x%p to 0x%p, nesting_level=%u, mark before=0x%p, mark after=0x%p",</span>
+<span class="new">  92         (void*) src, (void*) dst, nesting_level, mark_before, ((oop) src)-&gt;mark());</span>
+<span class="new">  93   }</span>
+<span class="new">  94   assert(((oop) src)-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");</span>
+<span class="new">  95   src += body_size;</span>
+<span class="new">  96   dst += body_size;</span>
+<span class="new">  97 </span>
+<span class="new">  98   for (jlong i = 0; i &lt; length; i++) {</span>
+<span class="new">  99     oop prepadding_obj = (oop) src;</span>
+<span class="new"> 100     assert(!prepadding_obj-&gt;is_contained(), "sanity check");</span>
+<span class="new"> 101     assert(!prepadding_obj-&gt;is_container(), "sanity check");</span>
+<span class="new"> 102     markOop mark_before = prepadding_obj-&gt;mark();</span>
+<span class="new"> 103     prepadding_obj-&gt;forward_to((oop) dst);</span>
+<span class="new"> 104     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new"> 105       tty-&gt;print_cr("  Forwarding prepadding 0x%p to 0x%p, nesting_level=%u, mark before=0x%p, mark after=0x%p",</span>
+<span class="new"> 106           (void*) src, (void*) dst, nesting_level, mark_before, prepadding_obj-&gt;mark());</span>
+<span class="new"> 107     }</span>
+<span class="new"> 108     assert(prepadding_obj-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");</span>
+<span class="new"> 109 </span>
+<span class="new"> 110     oop element_obj = (oop) (src + padding_size);</span>
+<span class="new"> 111     assert(element_obj-&gt;is_contained(), "sanity check");</span>
+<span class="new"> 112     if (element_obj-&gt;is_container()) {</span>
+<span class="new"> 113       forward_container(src + padding_size, dst + padding_size, nesting_level + 1);</span>
+<span class="new"> 114     } else {</span>
+<span class="new"> 115       markOop mark_before = element_obj-&gt;mark();</span>
+<span class="new"> 116       element_obj-&gt;forward_to((oop) (dst + padding_size));</span>
+<span class="new"> 117       if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new"> 118         tty-&gt;print_cr("  Forwarding element 0x%p to 0x%p, nesting_level=%u, mark before=0x%p, mark after=0x%p",</span>
+<span class="new"> 119             (void*) (src + padding_size), (void*) (dst + padding_size), nesting_level,mark_before, element_obj-&gt;mark());</span>
+<span class="new"> 120       }</span>
+<span class="new"> 121       assert(element_obj-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");</span>
+<span class="new"> 122     }</span>
+<span class="new"> 123 </span>
+<span class="new"> 124     src += element_size;</span>
+<span class="new"> 125     dst += element_size;</span>
+<span class="new"> 126   }</span>
+<span class="new"> 127 }</span>
+<span class="new"> 128 </span>
+ 129 // FIX ME FIX ME FIX ME FIX ME!!!!!!!!!
+ 130 // The object forwarding code is duplicated. Factor this out!!!!!
+ 131 //
+ 132 // This method "precompacts" objects inside its space to dest. It places forwarding
+ 133 // pointers into markOops for use by adjust_pointers. If "dest" should overflow, we
+ 134 // finish by compacting into our own space.
+ 135 
+ 136 void PSMarkSweepDecorator::precompact() {
+ 137   // Reset our own compact top.
+ 138   set_compaction_top(space()-&gt;bottom());
+ 139 
+ 140   /* We allow some amount of garbage towards the bottom of the space, so
+ 141    * we don't start compacting before there is a significant gain to be made.
+ 142    * Occasionally, we want to ensure a full compaction, which is determined
+ 143    * by the MarkSweepAlwaysCompactCount parameter. This is a significant
+ 144    * performance improvement!
+ 145    */
+ 146   bool skip_dead = ((PSMarkSweep::total_invocations() % MarkSweepAlwaysCompactCount) != 0);
+ 147 
+ 148   size_t allowed_deadspace = 0;
+
+</pre><hr></hr><pre>
+ 162   HeapWord* t = space()-&gt;top();
+ 163 
+ 164   HeapWord*  end_of_live= q;    /* One byte beyond the last byte of the last
+ 165                                    live object. */
+ 166   HeapWord*  first_dead = space()-&gt;end(); /* The first dead object. */
+ 167   LiveRange* liveRange  = NULL; /* The current live range, recorded in the
+ 168                                    first header of preceding free area. */
+ 169   _first_dead = first_dead;
+ 170 
+ 171   const intx interval = PrefetchScanIntervalInBytes;
+ 172 
+ 173   while (q &lt; t) {
+ 174     assert(oop(q)-&gt;mark()-&gt;is_marked() || oop(q)-&gt;mark()-&gt;is_unlocked() ||
+ 175            oop(q)-&gt;mark()-&gt;has_bias_pattern(),
+ 176            "these are the only valid states during a mark sweep");
+ 177     if (oop(q)-&gt;is_gc_marked()) {
+ 178       /* prefetch beyond q */
+ 179       Prefetch::write(q, interval);
+ 180       size_t size = oop(q)-&gt;size();
+ 181 
+<span class="new"> 182       if (oop(q)-&gt;is_contained()) {</span>
+<span class="new"> 183         if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new"> 184           tty-&gt;print_cr("PSMarkSweepDecorator::precompact: 0x%p belongs to dead container, mark is 0x%p",</span>
+<span class="new"> 185               (void*) q, ((oop) q)-&gt;mark());</span>
+<span class="new"> 186         }</span>
+<span class="new"> 187         oop(q)-&gt;clear_contained();</span>
+<span class="new"> 188       }</span>
+<span class="new"> 189       if (oop(q)-&gt;is_container()) {</span>
+<span class="new"> 190         size = org_ObjectLayout_AbstractStructuredArray::footprint_with_contained_objects((oop) q) &gt;&gt; LogHeapWordSize;</span>
+<span class="new"> 191         if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new"> 192           tty-&gt;print_cr("PSMarkSweepDecorator::precompact: 0x%p is container of size %ld, mark is 0x%p",</span>
+<span class="new"> 193               (void*) q, size &lt;&lt; LogHeapWordSize, ((oop) q)-&gt;mark());</span>
+<span class="new"> 194         }</span>
+<span class="new"> 195       }</span>
+<span class="new"> 196 </span>
+ 197       size_t compaction_max_size = pointer_delta(compact_end, compact_top);
+ 198 
+ 199       // This should only happen if a space in the young gen overflows the
+ 200       // old gen. If that should happen, we null out the start_array, because
+ 201       // the young spaces are not covered by one.
+ 202       while(size &gt; compaction_max_size) {
+ 203         // First record the last compact_top
+ 204         dest-&gt;set_compaction_top(compact_top);
+ 205 
+ 206         // Advance to the next compaction decorator
+ 207         advance_destination_decorator();
+ 208         dest = destination_decorator();
+ 209 
+ 210         // Update compaction info
+ 211         start_array = dest-&gt;start_array();
+ 212         compact_top = dest-&gt;compaction_top();
+ 213         compact_end = dest-&gt;space()-&gt;end();
+ 214         assert(compact_top == dest-&gt;space()-&gt;bottom(), "Advanced to space already in use");
+ 215         assert(compact_end &gt; compact_top, "Must always be space remaining");
+ 216         compaction_max_size =
+ 217           pointer_delta(compact_end, compact_top);
+ 218       }
+ 219 
+ 220       // store the forwarding pointer into the mark word
+<span class="changed"> 221 //      if (q != compact_top) {</span>
+<span class="changed"> 222         if (oop(q)-&gt;is_container()) {</span>
+<span class="changed"> 223           forward_container((address) q, (address) compact_top, 0);</span>
+<span class="changed"> 224         } else {</span>
+<span class="changed"> 225           markOop mark_before = ((oop) q)-&gt;mark();</span>
+ 226           oop(q)-&gt;forward_to(oop(compact_top));
+ 227           assert(oop(q)-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");
+<span class="changed"> 228           if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="changed"> 229             tty-&gt;print_cr("Forwarding (1) object 0x%p to 0x%p, mark before=0x%p, mark after=0x%p",</span>
+<span class="changed"> 230                 (void*) q, (void*) compact_top,mark_before,  ((oop) q)-&gt;mark());</span>
+<span class="changed"> 231           }</span>
+<span class="changed"> 232         }</span>
+<span class="changed"> 233 /*      } else {</span>
+ 234         // if the object isn't moving we can just set the mark to the default
+ 235         // mark and handle it specially later on.
+<span class="new"> 236 //        if (oop(q)-&gt;is_container()) {</span>
+<span class="new"> 237 //          init_marks_in_container(oop(q));</span>
+<span class="new"> 238 //        } else {</span>
+ 239           oop(q)-&gt;init_mark();
+ 240           assert(oop(q)-&gt;forwardee() == NULL, "should be forwarded to NULL");
+<span class="changed"> 241 //        }</span>
+<span class="changed"> 242       }*/</span>
+ 243 
+ 244       // Update object start array
+ 245       if (start_array) {
+ 246         start_array-&gt;allocate_block(compact_top);
+ 247       }
+ 248 
+ 249       compact_top += size;
+ 250       assert(compact_top &lt;= dest-&gt;space()-&gt;end(),
+ 251         "Exceeding space in destination");
+ 252 
+ 253       q += size;
+ 254       end_of_live = q;
+ 255     } else {
+ 256       /* run over all the contiguous dead objects */
+ 257       HeapWord* end = q;
+ 258       do {
+ 259         /* prefetch beyond end */
+ 260         Prefetch::write(end, interval);
+ 261         end += oop(end)-&gt;size();
+ 262       } while (end &lt; t &amp;&amp; (!oop(end)-&gt;is_gc_marked()));
+
+</pre><hr></hr><pre>
+ 274           // the young spaces are not covered by one.
+ 275           while (sz &gt; compaction_max_size) {
+ 276             // First record the last compact_top
+ 277             dest-&gt;set_compaction_top(compact_top);
+ 278 
+ 279             // Advance to the next compaction decorator
+ 280             advance_destination_decorator();
+ 281             dest = destination_decorator();
+ 282 
+ 283             // Update compaction info
+ 284             start_array = dest-&gt;start_array();
+ 285             compact_top = dest-&gt;compaction_top();
+ 286             compact_end = dest-&gt;space()-&gt;end();
+ 287             assert(compact_top == dest-&gt;space()-&gt;bottom(), "Advanced to space already in use");
+ 288             assert(compact_end &gt; compact_top, "Must always be space remaining");
+ 289             compaction_max_size =
+ 290               pointer_delta(compact_end, compact_top);
+ 291           }
+ 292 
+ 293           // store the forwarding pointer into the mark word
+<span class="changed"> 294 //          if (q != compact_top) {</span>
+<span class="changed"> 295             if (oop(q)-&gt;is_container()) {</span>
+<span class="changed"> 296               forward_container((address) q, (address) compact_top, 0);</span>
+<span class="changed"> 297             } else {</span>
+<span class="changed"> 298               markOop mark_before = ((oop) q)-&gt;mark();</span>
+ 299               oop(q)-&gt;forward_to(oop(compact_top));
+ 300               assert(oop(q)-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");
+<span class="changed"> 301               if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="changed"> 302                 tty-&gt;print_cr("Forwarding (2) object 0x%p to 0x%p, mark before=0x%p, mark after=0x%p",</span>
+<span class="changed"> 303                     (void*) q, (void*) compact_top,  mark_before, ((oop) q)-&gt;mark());</span>
+<span class="changed"> 304               }</span>
+<span class="changed"> 305             }</span>
+<span class="changed"> 306 /*          } else {</span>
+ 307             // if the object isn't moving we can just set the mark to the default
+ 308             // mark and handle it specially later on.
+ 309             oop(q)-&gt;init_mark();
+ 310             assert(oop(q)-&gt;forwardee() == NULL, "should be forwarded to NULL");
+<span class="changed"> 311           }*/</span>
+ 312 
+ 313           // Update object start array
+ 314           if (start_array) {
+ 315             start_array-&gt;allocate_block(compact_top);
+ 316           }
+ 317 
+ 318           compact_top += sz;
+ 319           assert(compact_top &lt;= dest-&gt;space()-&gt;end(),
+ 320             "Exceeding space in destination");
+ 321 
+ 322           q = end;
+ 323           end_of_live = end;
+ 324           continue;
+ 325         }
+ 326       }
+ 327 
+ 328       /* for the previous LiveRange, record the end of the live objects. */
+ 329       if (liveRange) {
+ 330         liveRange-&gt;set_end(q);
+ 331       }
+
+</pre><hr></hr><pre>
+ 377 }
+ 378 
+ 379 void PSMarkSweepDecorator::adjust_pointers() {
+ 380   // adjust all the interior pointers to point at the new locations of objects
+ 381   // Used by MarkSweep::mark_sweep_phase3()
+ 382 
+ 383   HeapWord* q = space()-&gt;bottom();
+ 384   HeapWord* t = _end_of_live;  // Established by "prepare_for_compaction".
+ 385 
+ 386   assert(_first_dead &lt;= _end_of_live, "Stands to reason, no?");
+ 387 
+ 388   if (q &lt; t &amp;&amp; _first_dead &gt; q &amp;&amp;
+ 389       !oop(q)-&gt;is_gc_marked()) {
+ 390     // we have a chunk of the space which hasn't moved and we've
+ 391     // reinitialized the mark word during the previous pass, so we can't
+ 392     // use is_gc_marked for the traversal.
+ 393     HeapWord* end = _first_dead;
+ 394 
+ 395     while (q &lt; end) {
+ 396       // point all the oops to the new location
+<span class="new"> 397       if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new"> 398         tty-&gt;print_cr("PSMarkSweepDecorator::adjust_pointers: Special case 0x%p 0x%p",</span>
+<span class="new"> 399             (void*) q, ((oop) q)-&gt;mark());</span>
+<span class="new"> 400       }</span>
+ 401       size_t size = oop(q)-&gt;adjust_pointers();
+ 402       q += size;
+ 403     }
+ 404 
+ 405     if (_first_dead == t) {
+ 406       q = t;
+ 407     } else {
+ 408       // $$$ This is funky.  Using this to read the previously written
+ 409       // LiveRange.  See also use below.
+ 410       q = (HeapWord*)oop(_first_dead)-&gt;mark()-&gt;decode_pointer();
+ 411     }
+ 412   }
+ 413   const intx interval = PrefetchScanIntervalInBytes;
+ 414 
+ 415   debug_only(HeapWord* prev_q = NULL);
+ 416   while (q &lt; t) {
+ 417     // prefetch beyond q
+ 418     Prefetch::write(q, interval);
+ 419     if (oop(q)-&gt;is_gc_marked()) {
+ 420       // q is alive
+ 421       // point all the oops to the new location
+<span class="new"> 422       if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="new"> 423         tty-&gt;print_cr("PSMarkSweepDecorator::adjust_pointers: Normal case 0x%p 0x%p",</span>
+<span class="new"> 424             (void*) q, ((oop) q)-&gt;mark());</span>
+<span class="new"> 425       }</span>
+ 426       size_t size = oop(q)-&gt;adjust_pointers();
+ 427       debug_only(prev_q = q);
+ 428       q += size;
+ 429     } else {
+ 430       // q is not a live object, so its mark should point at the next
+ 431       // live object
+ 432       debug_only(prev_q = q);
+ 433       q = (HeapWord*) oop(q)-&gt;mark()-&gt;decode_pointer();
+ 434       assert(q &gt; prev_q, "we should be moving forward through memory");
+ 435     }
+ 436   }
+ 437 
+ 438   assert(q == t, "just checking");
+ 439 }
+ 440 
+ 441 void PSMarkSweepDecorator::compact(bool mangle_free_space ) {
+ 442   // Copy all live objects to their new location
+ 443   // Used by MarkSweep::mark_sweep_phase4()
+ 444 
+ 445   HeapWord*       q = space()-&gt;bottom();
+
+</pre><hr></hr><pre>
+ 474   const intx copy_interval = PrefetchCopyIntervalInBytes;
+ 475 
+ 476   while (q &lt; t) {
+ 477     if (!oop(q)-&gt;is_gc_marked()) {
+ 478       // mark is pointer to next marked oop
+ 479       debug_only(prev_q = q);
+ 480       q = (HeapWord*) oop(q)-&gt;mark()-&gt;decode_pointer();
+ 481       assert(q &gt; prev_q, "we should be moving forward through memory");
+ 482     } else {
+ 483       // prefetch beyond q
+ 484       Prefetch::read(q, scan_interval);
+ 485 
+ 486       // size and destination
+ 487       size_t size = oop(q)-&gt;size();
+ 488       HeapWord* compaction_top = (HeapWord*)oop(q)-&gt;forwardee();
+ 489 
+ 490       // prefetch beyond compaction_top
+ 491       Prefetch::write(compaction_top, copy_interval);
+ 492 
+ 493       // copy object and reinit its mark
+<span class="changed"> 494       if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {</span>
+<span class="changed"> 495         tty-&gt;print_cr("PSMarkSweepDecorator::compact: Copying 0x%p with mark 0x%p",</span>
+<span class="changed"> 496             (void*) q,((oop) q)-&gt;mark());</span>
+<span class="changed"> 497       }</span>
+<span class="changed"> 498 //      assert(q != compaction_top, "everything in this pass should be moving");</span>
+ 499       Copy::aligned_conjoint_words(q, compaction_top, size);
+
+ 500       assert(oop(compaction_top)-&gt;klass() != NULL, "should have a class");
+<span class="new"> 501 </span>
+<span class="new"> 502       ((oop) compaction_top)-&gt;convert_to_unmarked();</span>
+ 503 
+ 504       debug_only(prev_q = q);
+ 505       q += size;
+ 506     }
+ 507   }
+ 508 
+ 509   assert(compaction_top() &gt;= space()-&gt;bottom() &amp;&amp; compaction_top() &lt;= space()-&gt;end(),
+ 510          "should point inside space");
+ 511   space()-&gt;set_top(compaction_top());
+ 512 
+ 513   if (mangle_free_space) {
+ 514     space()-&gt;mangle_unused_area();
+ 515   }
+ 516 }
+</pre></td>
+</tr></table>
+</body></html>

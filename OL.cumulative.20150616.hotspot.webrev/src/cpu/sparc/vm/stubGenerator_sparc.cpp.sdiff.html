@@ -1,0 +1,187 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/cpu/sparc/vm </title>
+</head><body id="SUNWwebrev">
+<h2>src/cpu/sparc/vm/stubGenerator_sparc.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+4857     if (UseAESIntrinsics) {
+4858       StubRoutines::_aescrypt_encryptBlock = generate_aescrypt_encryptBlock();
+4859       StubRoutines::_aescrypt_decryptBlock = generate_aescrypt_decryptBlock();
+4860       StubRoutines::_cipherBlockChaining_encryptAESCrypt = generate_cipherBlockChaining_encryptAESCrypt();
+4861       StubRoutines::_cipherBlockChaining_decryptAESCrypt = generate_cipherBlockChaining_decryptAESCrypt_Parallel();
+4862     }
+4863 
+4864     // generate SHA1/SHA256/SHA512 intrinsics code
+4865     if (UseSHA1Intrinsics) {
+4866       StubRoutines::_sha1_implCompress     = generate_sha1_implCompress(false,   "sha1_implCompress");
+4867       StubRoutines::_sha1_implCompressMB   = generate_sha1_implCompress(true,    "sha1_implCompressMB");
+4868     }
+4869     if (UseSHA256Intrinsics) {
+4870       StubRoutines::_sha256_implCompress   = generate_sha256_implCompress(false, "sha256_implCompress");
+4871       StubRoutines::_sha256_implCompressMB = generate_sha256_implCompress(true,  "sha256_implCompressMB");
+4872     }
+4873     if (UseSHA512Intrinsics) {
+4874       StubRoutines::_sha512_implCompress   = generate_sha512_implCompress(false, "sha512_implCompress");
+4875       StubRoutines::_sha512_implCompressMB = generate_sha512_implCompress(true,  "sha512_implCompressMB");
+4876     }
+
+
+
+
+4877   }
+4878 
+4879 
+4880  public:
+4881   StubGenerator(CodeBuffer* code, bool all) : StubCodeGenerator(code) {
+4882     // replace the standard masm with a special one:
+4883     _masm = new MacroAssembler(code);
+4884 
+4885     _stub_count = !all ? 0x100 : 0x200;
+4886     if (all) {
+4887       generate_all();
+4888     } else {
+4889       generate_initial();
+4890     }
+4891 
+4892     // make sure this stub is available for all local calls
+4893     if (_atomic_add_stub.is_unbound()) {
+4894       // generate a second time, if necessary
+4895       (void) generate_atomic_add();
+4896     }
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+4857     if (UseAESIntrinsics) {
+4858       StubRoutines::_aescrypt_encryptBlock = generate_aescrypt_encryptBlock();
+4859       StubRoutines::_aescrypt_decryptBlock = generate_aescrypt_decryptBlock();
+4860       StubRoutines::_cipherBlockChaining_encryptAESCrypt = generate_cipherBlockChaining_encryptAESCrypt();
+4861       StubRoutines::_cipherBlockChaining_decryptAESCrypt = generate_cipherBlockChaining_decryptAESCrypt_Parallel();
+4862     }
+4863 
+4864     // generate SHA1/SHA256/SHA512 intrinsics code
+4865     if (UseSHA1Intrinsics) {
+4866       StubRoutines::_sha1_implCompress     = generate_sha1_implCompress(false,   "sha1_implCompress");
+4867       StubRoutines::_sha1_implCompressMB   = generate_sha1_implCompress(true,    "sha1_implCompressMB");
+4868     }
+4869     if (UseSHA256Intrinsics) {
+4870       StubRoutines::_sha256_implCompress   = generate_sha256_implCompress(false, "sha256_implCompress");
+4871       StubRoutines::_sha256_implCompressMB = generate_sha256_implCompress(true,  "sha256_implCompressMB");
+4872     }
+4873     if (UseSHA512Intrinsics) {
+4874       StubRoutines::_sha512_implCompress   = generate_sha512_implCompress(false, "sha512_implCompress");
+4875       StubRoutines::_sha512_implCompressMB = generate_sha512_implCompress(true,  "sha512_implCompressMB");
+4876     }
+<span class="new">4877 </span>
+<span class="new">4878     if (UseObjectLayoutIntrinsics) {</span>
+<span class="new">4879       guarantee(!UseObjectLayoutIntrinsics, "not yet implemented.");</span>
+<span class="new">4880     }</span>
+4881   }
+4882 
+4883 
+4884  public:
+4885   StubGenerator(CodeBuffer* code, bool all) : StubCodeGenerator(code) {
+4886     // replace the standard masm with a special one:
+4887     _masm = new MacroAssembler(code);
+4888 
+4889     _stub_count = !all ? 0x100 : 0x200;
+4890     if (all) {
+4891       generate_all();
+4892     } else {
+4893       generate_initial();
+4894     }
+4895 
+4896     // make sure this stub is available for all local calls
+4897     if (_atomic_add_stub.is_unbound()) {
+4898       // generate a second time, if necessary
+4899       (void) generate_atomic_add();
+4900     }
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

@@ -1,0 +1,14 @@
+--- old/src/share/vm/c1/c1_GraphBuilder.cpp	2015-06-16 10:25:39.954541601 -0700
++++ new/src/share/vm/c1/c1_GraphBuilder.cpp	2015-06-16 10:25:39.882543305 -0700
+@@ -3569,6 +3569,11 @@
+     case vmIntrinsics::_fullFence :
+       break;
+ 
++    // ObjectLayout intrinsics support
++    case vmIntrinsics::_deriveContainedObjectAtOffset:
++      if (!UseObjectLayoutIntrinsics) return false;
++      return false; // FIXME: not yet implemented
++
+     default                       : return false; // do not inline
+   }
+   // create intrinsic node

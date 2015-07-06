@@ -1,0 +1,183 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/cpu/ppc/vm </title>
+</head><body id="SUNWwebrev">
+<h2>src/cpu/ppc/vm/stubGenerator_ppc.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+2070 
+2071     // These entry points require SharedInfo::stack0 to be set up in
+2072     // non-core builds
+2073     StubRoutines::_throw_AbstractMethodError_entry         = generate_throw_exception("AbstractMethodError throw_exception",          CAST_FROM_FN_PTR(address, SharedRuntime::throw_AbstractMethodError),  false);
+2074     // Handle IncompatibleClassChangeError in itable stubs.
+2075     StubRoutines::_throw_IncompatibleClassChangeError_entry= generate_throw_exception("IncompatibleClassChangeError throw_exception", CAST_FROM_FN_PTR(address, SharedRuntime::throw_IncompatibleClassChangeError),  false);
+2076     StubRoutines::_throw_NullPointerException_at_call_entry= generate_throw_exception("NullPointerException at call throw_exception", CAST_FROM_FN_PTR(address, SharedRuntime::throw_NullPointerException_at_call), false);
+2077 
+2078     StubRoutines::_handler_for_unsafe_access_entry         = generate_handler_for_unsafe_access();
+2079 
+2080     // support for verify_oop (must happen after universe_init)
+2081     StubRoutines::_verify_oop_subroutine_entry             = generate_verify_oop();
+2082 
+2083     // arraycopy stubs used by compilers
+2084     generate_arraycopy_stubs();
+2085 
+2086     if (UseAESIntrinsics) {
+2087       guarantee(!UseAESIntrinsics, "not yet implemented.");
+2088     }
+2089 
+
+
+
+
+2090     // Safefetch stubs.
+2091     generate_safefetch("SafeFetch32", sizeof(int),     &amp;StubRoutines::_safefetch32_entry,
+2092                                                        &amp;StubRoutines::_safefetch32_fault_pc,
+2093                                                        &amp;StubRoutines::_safefetch32_continuation_pc);
+2094     generate_safefetch("SafeFetchN", sizeof(intptr_t), &amp;StubRoutines::_safefetchN_entry,
+2095                                                        &amp;StubRoutines::_safefetchN_fault_pc,
+2096                                                        &amp;StubRoutines::_safefetchN_continuation_pc);
+2097   }
+2098 
+2099  public:
+2100   StubGenerator(CodeBuffer* code, bool all) : StubCodeGenerator(code) {
+2101     // replace the standard masm with a special one:
+2102     _masm = new MacroAssembler(code);
+2103     if (all) {
+2104       generate_all();
+2105     } else {
+2106       generate_initial();
+2107     }
+2108   }
+2109 };
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+2070 
+2071     // These entry points require SharedInfo::stack0 to be set up in
+2072     // non-core builds
+2073     StubRoutines::_throw_AbstractMethodError_entry         = generate_throw_exception("AbstractMethodError throw_exception",          CAST_FROM_FN_PTR(address, SharedRuntime::throw_AbstractMethodError),  false);
+2074     // Handle IncompatibleClassChangeError in itable stubs.
+2075     StubRoutines::_throw_IncompatibleClassChangeError_entry= generate_throw_exception("IncompatibleClassChangeError throw_exception", CAST_FROM_FN_PTR(address, SharedRuntime::throw_IncompatibleClassChangeError),  false);
+2076     StubRoutines::_throw_NullPointerException_at_call_entry= generate_throw_exception("NullPointerException at call throw_exception", CAST_FROM_FN_PTR(address, SharedRuntime::throw_NullPointerException_at_call), false);
+2077 
+2078     StubRoutines::_handler_for_unsafe_access_entry         = generate_handler_for_unsafe_access();
+2079 
+2080     // support for verify_oop (must happen after universe_init)
+2081     StubRoutines::_verify_oop_subroutine_entry             = generate_verify_oop();
+2082 
+2083     // arraycopy stubs used by compilers
+2084     generate_arraycopy_stubs();
+2085 
+2086     if (UseAESIntrinsics) {
+2087       guarantee(!UseAESIntrinsics, "not yet implemented.");
+2088     }
+2089 
+<span class="new">2090     if (UseObjectLayoutIntrinsics) {</span>
+<span class="new">2091       guarantee(!UseObjectLayoutIntrinsics, "not yet implemented.");</span>
+<span class="new">2092     }</span>
+<span class="new">2093 </span>
+2094     // Safefetch stubs.
+2095     generate_safefetch("SafeFetch32", sizeof(int),     &amp;StubRoutines::_safefetch32_entry,
+2096                                                        &amp;StubRoutines::_safefetch32_fault_pc,
+2097                                                        &amp;StubRoutines::_safefetch32_continuation_pc);
+2098     generate_safefetch("SafeFetchN", sizeof(intptr_t), &amp;StubRoutines::_safefetchN_entry,
+2099                                                        &amp;StubRoutines::_safefetchN_fault_pc,
+2100                                                        &amp;StubRoutines::_safefetchN_continuation_pc);
+2101   }
+2102 
+2103  public:
+2104   StubGenerator(CodeBuffer* code, bool all) : StubCodeGenerator(code) {
+2105     // replace the standard masm with a special one:
+2106     _masm = new MacroAssembler(code);
+2107     if (all) {
+2108       generate_all();
+2109     } else {
+2110       generate_initial();
+2111     }
+2112   }
+2113 };
+</pre></td>
+</tr></table>
+</body></html>

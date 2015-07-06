@@ -1,0 +1,10 @@
+--- old/src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp	2015-06-16 10:25:42.286486135 -0700
++++ new/src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp	2015-06-16 10:25:42.214487854 -0700
+@@ -48,6 +48,7 @@
+ 
+   bool insert_deadspace(size_t& allowed_deadspace_words, HeapWord* q,
+                         size_t word_len);
++  void forward_container(address src, address dst, uint nesting_level);
+ 
+  public:
+   PSMarkSweepDecorator(MutableSpace* space, ObjectStartArray* start_array,

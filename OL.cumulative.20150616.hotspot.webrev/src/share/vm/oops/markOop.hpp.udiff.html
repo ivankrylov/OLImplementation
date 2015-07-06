@@ -1,0 +1,452 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/oops/markOop.hpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/oops/markOop.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -51,10 +51,29 @@</span>
+ //  unused:25 hash:31 --&gt;| cms_free:1 age:4    biased_lock:1 lock:2 (COOPs &amp;&amp; normal object)
+ //  JavaThread*:54 epoch:2 cms_free:1 age:4    biased_lock:1 lock:2 (COOPs &amp;&amp; biased object)
+ //  narrowOop:32 unused:24 cms_free:1 unused:4 promo_bits:3 -----&gt;| (COOPs &amp;&amp; CMS promoted object)
+ //  unused:21 size:35 --&gt;| cms_free:1 unused:7 ------------------&gt;| (COOPs &amp;&amp; CMS free block)
+ //
+<span class="new">+//</span>
+<span class="new">+//  * SPECIAL NOTE ON THE CURRENT IMPLEMENTATION OF STRUCTURED ARRAYS AND OBJECTLAYOUT *</span>
+<span class="new">+//</span>
+<span class="new">+//  Structured arrays ares only implemented for 64-bit VM without Compressed OOPs</span>
+<span class="new">+//  At this moment biased locking is not supported</span>
+<span class="new">+//</span>
+<span class="new">+//  Here is the bit encoding of the mark word</span>
+<span class="new">+//</span>
+<span class="new">+//  64 bits:</span>
+<span class="new">+//  --------</span>
+<span class="new">+//  unused:25 hash:31 --&gt;| unused:1 | container:1 | contained:1 | age:2 |biased_lock:1 lock:2 (normal object)</span>
+<span class="new">+//</span>
+<span class="new">+//  There is a TODO item to investigate and to relocate container and </span>
+<span class="new">+//  contained bits to bits 62 and 63 and restore 4 bits for age description.</span>
+<span class="new">+//</span>
+<span class="new">+//  * END OF SPECIAL NOTE ON THE CURRENT IMPLEMENTATION OF STRUCTURED ARRAYS AND OBJECTLAYOUT *</span>
+<span class="new">+//</span>
+<span class="new">+//</span>
+<span class="new">+//</span>
+ //  - hash contains the identity hash value: largest value is
+ //    31 bits, see os::random().  Also, 64-bit vm's require
+ //    a hash value no bigger than 32 bits because they will not
+ //    properly generate a mask larger than that: see library_call.cpp
+ //    and c1_CodePatterns_sparc.cpp.
+</pre><hr /><pre>
+<span class="newmarker">@@ -99,131 +118,150 @@</span>
+ 
+ class BasicLock;
+ class ObjectMonitor;
+ class JavaThread;
+ 
+<span class="removed">-class markOopDesc: public oopDesc {</span>
+<span class="removed">- private:</span>
+<span class="new">+class markOopDesc : public oopDesc {</span>
+<span class="new">+private:</span>
+   // Conversion
+<span class="removed">-  uintptr_t value() const { return (uintptr_t) this; }</span>
+<span class="new">+  uintptr_t value() const {</span>
+<span class="new">+    return (uintptr_t) this;</span>
+<span class="new">+  }</span>
+ 
+<span class="removed">- public:</span>
+<span class="new">+public:</span>
+   // Constants
+<span class="removed">-  enum { age_bits                 = 4,</span>
+<span class="removed">-         lock_bits                = 2,</span>
+<span class="new">+  enum { lock_bits                = 2,</span>
+          biased_lock_bits         = 1,
+<span class="removed">-         max_hash_bits            = BitsPerWord - age_bits - lock_bits - biased_lock_bits,</span>
+<span class="removed">-         hash_bits                = max_hash_bits &gt; 31 ? 31 : max_hash_bits,</span>
+<span class="new">+         age_bits                 = 2,</span>
+<span class="new">+         contained_bits           = 1,</span>
+<span class="new">+         container_bits           = 1,</span>
+          cms_bits                 = LP64_ONLY(1) NOT_LP64(0),
+<span class="new">+         max_hash_bits            = BitsPerWord - lock_bits - biased_lock_bits -</span>
+<span class="new">+                                    age_bits - contained_bits - container_bits -</span>
+<span class="new">+                                    cms_bits,</span>
+<span class="new">+         hash_bits                = max_hash_bits &gt; 31 ? 31 : max_hash_bits,</span>
+          epoch_bits               = 2
+   };
+ 
+   // The biased locking code currently requires that the age bits be
+   // contiguous to the lock bits.
+   enum { lock_shift               = 0,
+          biased_lock_shift        = lock_bits,
+<span class="removed">-         age_shift                = lock_bits + biased_lock_bits,</span>
+<span class="removed">-         cms_shift                = age_shift + age_bits,</span>
+<span class="new">+         age_shift                = biased_lock_shift + biased_lock_bits,</span>
+<span class="new">+         contained_shift          = age_shift + age_bits,</span>
+<span class="new">+         container_shift          = contained_shift + contained_bits,</span>
+<span class="new">+         cms_shift                = container_shift + container_bits,</span>
+          hash_shift               = cms_shift + cms_bits,
+          epoch_shift              = hash_shift
+   };
+ 
+   enum { lock_mask                = right_n_bits(lock_bits),
+          lock_mask_in_place       = lock_mask &lt;&lt; lock_shift,
+          biased_lock_mask         = right_n_bits(lock_bits + biased_lock_bits),
+<span class="removed">-         biased_lock_mask_in_place= biased_lock_mask &lt;&lt; lock_shift,</span>
+<span class="removed">-         biased_lock_bit_in_place = 1 &lt;&lt; biased_lock_shift,</span>
+<span class="new">+         biased_lock_mask_in_place = biased_lock_mask &lt;&lt; lock_shift,</span>
+<span class="new">+         biased_lock_bit_in_place = nth_bit(biased_lock_shift),</span>
+          age_mask                 = right_n_bits(age_bits),
+          age_mask_in_place        = age_mask &lt;&lt; age_shift,
+<span class="removed">-         epoch_mask               = right_n_bits(epoch_bits),</span>
+<span class="removed">-         epoch_mask_in_place      = epoch_mask &lt;&lt; epoch_shift,</span>
+<span class="new">+         contained_mask           = right_n_bits(contained_bits),</span>
+<span class="new">+         contained_mask_in_place  = contained_mask &lt;&lt; contained_shift,</span>
+<span class="new">+         container_mask           = right_n_bits(container_bits),</span>
+<span class="new">+         container_mask_in_place  = container_mask &lt;&lt; container_shift,</span>
+          cms_mask                 = right_n_bits(cms_bits),
+<span class="removed">-         cms_mask_in_place        = cms_mask &lt;&lt; cms_shift</span>
+<span class="new">+         cms_mask_in_place        = cms_mask &lt;&lt; cms_shift,</span>
+ #ifndef _WIN64
+<span class="removed">-         ,hash_mask               = right_n_bits(hash_bits),</span>
+<span class="removed">-         hash_mask_in_place       = (address_word)hash_mask &lt;&lt; hash_shift</span>
+<span class="removed">-#endif</span>
+<span class="removed">-  };</span>
+<span class="removed">-</span>
+<span class="removed">-  // Alignment of JavaThread pointers encoded in object header required by biased locking</span>
+<span class="removed">-  enum { biased_lock_alignment    = 2 &lt;&lt; (epoch_shift + epoch_bits)</span>
+<span class="new">+         hash_mask                = right_n_bits(hash_bits),</span>
+<span class="new">+         hash_mask_in_place       = (address_word) hash_mask &lt;&lt; hash_shift,</span>
+<span class="new">+#endif // _WIN64</span>
+<span class="new">+         epoch_mask               = right_n_bits(epoch_bits),</span>
+<span class="new">+         epoch_mask_in_place      = epoch_mask &lt;&lt; epoch_shift</span>
+   };
+ 
+ #ifdef _WIN64
+<span class="removed">-    // These values are too big for Win64</span>
+<span class="new">+  // These values are too big for Win64.</span>
+     const static uintptr_t hash_mask = right_n_bits(hash_bits);
+     const static uintptr_t hash_mask_in_place  =
+<span class="removed">-                            (address_word)hash_mask &lt;&lt; hash_shift;</span>
+<span class="removed">-#endif</span>
+<span class="new">+      (address_word) hash_mask &lt;&lt; hash_shift;</span>
+<span class="new">+#endif // _WIN64</span>
+<span class="new">+</span>
+<span class="new">+  enum { contained_mask_in_place_when_forwarded = nth_bit(2) };</span>
+<span class="new">+</span>
+<span class="new">+  // Alignment of JavaThread pointers encoded in object header required by</span>
+<span class="new">+  // biased locking</span>
+<span class="new">+  enum { biased_lock_alignment    = 2 &lt;&lt; (epoch_shift + epoch_bits) };</span>
+ 
+   enum { locked_value             = 0,
+          unlocked_value           = 1,
+          monitor_value            = 2,
+          marked_value             = 3,
+          biased_lock_pattern      = 5
+   };
+ 
+<span class="removed">-  enum { no_hash                  = 0 };  // no hash value assigned</span>
+<span class="new">+  enum { no_hash                  = 0 }; // No hash value assigned</span>
+ 
+<span class="removed">-  enum { no_hash_in_place         = (address_word)no_hash &lt;&lt; hash_shift,</span>
+<span class="new">+  enum { no_hash_in_place         = (address_word) no_hash &lt;&lt; hash_shift,</span>
+          no_lock_in_place         = unlocked_value
+   };
+ 
+   enum { max_age                  = age_mask };
+ 
+   enum { max_bias_epoch           = epoch_mask };
+ 
+<span class="removed">-  // Biased Locking accessors.</span>
+<span class="removed">-  // These must be checked by all code which calls into the</span>
+<span class="removed">-  // ObjectSynchronizer and other code. The biasing is not understood</span>
+<span class="removed">-  // by the lower-level CAS-based locking code, although the runtime</span>
+<span class="removed">-  // fixes up biased locks to be compatible with it when a bias is</span>
+<span class="removed">-  // revoked.</span>
+<span class="new">+  // Lock accessors (note that these assume lock_shift == 0)</span>
+<span class="new">+  bool is_locked() const {</span>
+<span class="new">+    return mask_bits(value(), lock_mask_in_place) != unlocked_value;</span>
+<span class="new">+  }</span>
+<span class="new">+  bool is_unlocked() const {</span>
+<span class="new">+    return mask_bits(value(), biased_lock_mask_in_place) == unlocked_value;</span>
+<span class="new">+  }</span>
+<span class="new">+  bool is_marked() const {</span>
+<span class="new">+    return mask_bits(value(), lock_mask_in_place) == marked_value;</span>
+<span class="new">+  }</span>
+<span class="new">+  bool is_neutral() const {</span>
+<span class="new">+    return mask_bits(value(), biased_lock_mask_in_place) == unlocked_value;</span>
+<span class="new">+  }</span>
+<span class="new">+</span>
+<span class="new">+  // Biased locking accessors</span>
+<span class="new">+  // These must be checked by all code which calls into the ObjectSynchronizer</span>
+<span class="new">+  // and other code. The biasing is not understood by the lower-level CAS-based</span>
+<span class="new">+  // locking code, although the runtime fixes up biased locks to be compatible</span>
+<span class="new">+  // with it when a bias is revoked.</span>
+   bool has_bias_pattern() const {
+<span class="removed">-    return (mask_bits(value(), biased_lock_mask_in_place) == biased_lock_pattern);</span>
+<span class="new">+    return mask_bits(value(), biased_lock_mask_in_place) == biased_lock_pattern;</span>
+   }
+   JavaThread* biased_locker() const {
+     assert(has_bias_pattern(), "should not call this otherwise");
+<span class="removed">-    return (JavaThread*) ((intptr_t) (mask_bits(value(), ~(biased_lock_mask_in_place | age_mask_in_place | epoch_mask_in_place))));</span>
+<span class="new">+    return (JavaThread*) ((intptr_t) mask_bits(value(),</span>
+<span class="new">+        ~(biased_lock_mask_in_place | age_mask_in_place |</span>
+<span class="new">+        contained_mask_in_place | container_mask_in_place |</span>
+<span class="new">+        epoch_mask_in_place)));</span>
+   }
+   // Indicates that the mark has the bias bit set but that it has not
+   // yet been biased toward a particular thread
+   bool is_biased_anonymously() const {
+<span class="removed">-    return (has_bias_pattern() &amp;&amp; (biased_locker() == NULL));</span>
+<span class="new">+    return has_bias_pattern() &amp;&amp; (biased_locker() == NULL);</span>
+   }
+   // Indicates epoch in which this bias was acquired. If the epoch
+   // changes due to too many bias revocations occurring, the biases
+   // from the previous epochs are all considered invalid.
+   int bias_epoch() const {
+     assert(has_bias_pattern(), "should not call this otherwise");
+<span class="removed">-    return (mask_bits(value(), epoch_mask_in_place) &gt;&gt; epoch_shift);</span>
+<span class="new">+    return mask_bits(value(), epoch_mask_in_place) &gt;&gt; epoch_shift;</span>
+   }
+<span class="removed">-  markOop set_bias_epoch(int epoch) {</span>
+<span class="new">+  markOop set_bias_epoch(int epoch) const {</span>
+     assert(has_bias_pattern(), "should not call this otherwise");
+<span class="removed">-    assert((epoch &amp; (~epoch_mask)) == 0, "epoch overflow");</span>
+<span class="removed">-    return markOop(mask_bits(value(), ~epoch_mask_in_place) | (epoch &lt;&lt; epoch_shift));</span>
+<span class="new">+    assert((epoch &amp; ~epoch_mask) == 0, "epoch overflow");</span>
+<span class="new">+    return markOop(mask_bits(value(), ~epoch_mask_in_place) |</span>
+<span class="new">+        (epoch &lt;&lt; epoch_shift));</span>
+   }
+<span class="removed">-  markOop incr_bias_epoch() {</span>
+<span class="removed">-    return set_bias_epoch((1 + bias_epoch()) &amp; epoch_mask);</span>
+<span class="new">+  markOop incr_bias_epoch() const {</span>
+<span class="new">+    return set_bias_epoch((bias_epoch() + 1) &amp; epoch_mask);</span>
+   }
+   // Prototype mark for initialization
+   static markOop biased_locking_prototype() {
+<span class="removed">-    return markOop( biased_lock_pattern );</span>
+<span class="new">+    return markOop(biased_lock_pattern);</span>
+   }
+ 
+<span class="removed">-  // lock accessors (note that these assume lock_shift == 0)</span>
+<span class="removed">-  bool is_locked()   const {</span>
+<span class="removed">-    return (mask_bits(value(), lock_mask_in_place) != unlocked_value);</span>
+<span class="removed">-  }</span>
+<span class="removed">-  bool is_unlocked() const {</span>
+<span class="removed">-    return (mask_bits(value(), biased_lock_mask_in_place) == unlocked_value);</span>
+<span class="removed">-  }</span>
+<span class="removed">-  bool is_marked()   const {</span>
+<span class="removed">-    return (mask_bits(value(), lock_mask_in_place) == marked_value);</span>
+<span class="removed">-  }</span>
+<span class="removed">-  bool is_neutral()  const { return (mask_bits(value(), biased_lock_mask_in_place) == unlocked_value); }</span>
+<span class="removed">-</span>
+   // Special temporary state of the markOop while being inflated.
+   // Code that looks at mark outside a lock need to take this into account.
+   bool is_being_inflated() const { return (value() == 0); }
+ 
+   // Distinguished markword value - used when inflating over
+</pre><hr /><pre>
+<span class="newmarker">@@ -324,49 +362,99 @@</span>
+     assert(age &lt;= max_age, "age too large");
+     assert(bias_epoch &lt;= max_bias_epoch, "bias epoch too large");
+     return (markOop) (tmp | (bias_epoch &lt;&lt; epoch_shift) | (age &lt;&lt; age_shift) | biased_lock_pattern);
+   }
+ 
+<span class="removed">-  // used to encode pointers during GC</span>
+<span class="removed">-  markOop clear_lock_bits() { return markOop(value() &amp; ~lock_mask_in_place); }</span>
+<span class="new">+  markOop set_marked() const {</span>
+<span class="new">+    return markOop((value() &amp; ~lock_mask_in_place) | marked_value);</span>
+<span class="new">+  }</span>
+<span class="new">+  markOop set_unmarked() const {</span>
+<span class="new">+    return markOop((value() &amp; ~lock_mask_in_place) | unlocked_value);</span>
+<span class="new">+  }</span>
+<span class="new">+  markOop clear_lock_and_contained_bits() const {</span>
+<span class="new">+    return markOop(value() &amp; ~(lock_mask_in_place |</span>
+<span class="new">+        contained_mask_in_place_when_forwarded));</span>
+<span class="new">+  }</span>
+ 
+<span class="removed">-  // age operations</span>
+<span class="removed">-  markOop set_marked()   { return markOop((value() &amp; ~lock_mask_in_place) | marked_value); }</span>
+<span class="removed">-  markOop set_unmarked() { return markOop((value() &amp; ~lock_mask_in_place) | unlocked_value); }</span>
+<span class="new">+  // Age operations</span>
+<span class="new">+  uint age() const {</span>
+<span class="new">+    return mask_bits(value(), age_mask_in_place) &gt;&gt; age_shift;</span>
+<span class="new">+  }</span>
+<span class="new">+  markOop set_age(uint age) const {</span>
+<span class="new">+    assert((age &amp; ~age_mask) == 0, "age overflow");</span>
+<span class="new">+    return markOop(mask_bits(value(), ~age_mask_in_place) |</span>
+<span class="new">+        (age &lt;&lt; age_shift));</span>
+<span class="new">+  }</span>
+<span class="new">+  markOop incr_age() const {</span>
+<span class="new">+    return age() == max_age ? markOop(this) : set_age(age() + 1);</span>
+<span class="new">+  }</span>
+ 
+<span class="removed">-  uint    age()               const { return mask_bits(value() &gt;&gt; age_shift, age_mask); }</span>
+<span class="removed">-  markOop set_age(uint v) const {</span>
+<span class="removed">-    assert((v &amp; ~age_mask) == 0, "shouldn't overflow age field");</span>
+<span class="removed">-    return markOop((value() &amp; ~age_mask_in_place) | (((uintptr_t)v &amp; age_mask) &lt;&lt; age_shift));</span>
+<span class="new">+  // Containment bits operations</span>
+<span class="new">+  bool is_contained() const {</span>
+<span class="new">+    return mask_bits(value(), contained_mask_in_place) != 0;</span>
+<span class="new">+  }</span>
+<span class="new">+  markOop set_contained() const {</span>
+<span class="new">+    return markOop(value() | contained_mask_in_place);</span>
+<span class="new">+  }</span>
+<span class="new">+  markOop clear_contained() const {</span>
+<span class="new">+    return markOop(value() &amp; ~contained_mask_in_place);</span>
+<span class="new">+  }</span>
+<span class="new">+  bool is_container() const {</span>
+<span class="new">+    return mask_bits(value(), container_mask_in_place) != 0;</span>
+<span class="new">+  }</span>
+<span class="new">+  markOop set_container() const {</span>
+<span class="new">+    return markOop(value() | container_mask_in_place);</span>
+<span class="new">+  }</span>
+<span class="new">+  markOop clear_container() const {</span>
+<span class="new">+    return markOop(value() &amp; ~container_mask_in_place);</span>
+<span class="new">+  }</span>
+<span class="new">+  bool is_contained_when_forwarded() const {</span>
+<span class="new">+    return mask_bits(value(), contained_mask_in_place_when_forwarded) != 0;</span>
+<span class="new">+  }</span>
+<span class="new">+  markOop set_contained_when_forwarded() const {</span>
+<span class="new">+    return markOop(value() | contained_mask_in_place_when_forwarded);</span>
+<span class="new">+  }</span>
+<span class="new">+  markOop clear_contained_when_forwarded() const {</span>
+<span class="new">+    return markOop(value() &amp; ~contained_mask_in_place_when_forwarded);</span>
+   }
+<span class="removed">-  markOop incr_age()          const { return age() == max_age ? markOop(this) : set_age(age() + 1); }</span>
+ 
+<span class="removed">-  // hash operations</span>
+<span class="new">+  // Hash operations</span>
+   intptr_t hash() const {
+     return mask_bits(value() &gt;&gt; hash_shift, hash_mask);
+   }
+<span class="removed">-</span>
+   bool has_no_hash() const {
+     return hash() == no_hash;
+   }
+ 
+   // Prototype mark for initialization
+   static markOop prototype() {
+<span class="removed">-    return markOop( no_hash_in_place | no_lock_in_place );</span>
+<span class="new">+    return markOop(no_hash_in_place | no_lock_in_place);</span>
+   }
+ 
+<span class="removed">-  // Helper function for restoration of unmarked mark oops during GC</span>
+<span class="removed">-  static inline markOop prototype_for_object(oop obj);</span>
+<span class="new">+  // Helper function for restoration of unmarked markOop's during GC</span>
+<span class="new">+  static markOop prototype_for_object(oop obj);</span>
+ 
+   // Debugging
+   void print_on(outputStream* st) const;
+ 
+   // Prepare address of oop for placement into mark
+<span class="removed">-  inline static markOop encode_pointer_as_mark(void* p) { return markOop(p)-&gt;set_marked(); }</span>
+<span class="new">+  static markOop encode_pointer_as_mark(void* p, bool is_contained) {</span>
+<span class="new">+    assert(!markOop(p)-&gt;is_contained_when_forwarded(), "encoding will fail");</span>
+<span class="new">+    markOop m = markOop(p)-&gt;set_marked();</span>
+<span class="new">+    if (is_contained) {</span>
+<span class="new">+      m = m-&gt;set_contained_when_forwarded();</span>
+<span class="new">+    }</span>
+<span class="new">+    return m;</span>
+<span class="new">+  }</span>
+ 
+   // Recover address of oop from encoded form used in mark
+<span class="removed">-  inline void* decode_pointer() { if (UseBiasedLocking &amp;&amp; has_bias_pattern()) return NULL; return clear_lock_bits(); }</span>
+<span class="new">+  void* decode_pointer() {</span>
+<span class="new">+    if (UseBiasedLocking &amp;&amp; has_bias_pattern()) {</span>
+<span class="new">+      return NULL;</span>
+<span class="new">+    }</span>
+<span class="new">+    return clear_lock_and_contained_bits();</span>
+<span class="new">+  }</span>
+ 
+   // These markOops indicate cms free chunk blocks and not objects.
+   // In 64 bit, the markOop is set to distinguish them from oops.
+   // These are defined in 32 bit mode for vmStructs.
+   const static uintptr_t cms_free_chunk_pattern  = 0x1;
+</pre></body></html>
+

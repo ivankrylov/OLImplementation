@@ -1,0 +1,170 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Cdiff src/share/vm/opto/connode.hpp</title>
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/opto/connode.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+<hr /><span class="oldmarker">*** 264,279 ****</span>
+  
+  //------------------------------CastPPNode-------------------------------------
+  // cast pointer to pointer (different type)
+  class CastPPNode: public ConstraintCastNode {
+  public:
+<span class="changed">!   CastPPNode (Node *n, const Type *t ): ConstraintCastNode(n, t) {}</span>
+    virtual int Opcode() const;
+    virtual uint ideal_reg() const { return Op_RegP; }
+    virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+  };
+  
+  //------------------------------CheckCastPPNode--------------------------------
+  // for _checkcast, cast pointer to pointer (different type), without JOIN,
+  class CheckCastPPNode: public TypeNode {
+  public:
+    CheckCastPPNode( Node *c, Node *n, const Type *t ) : TypeNode(t,2) {
+<span class="newmarker">--- 264,290 ----</span>
+  
+  //------------------------------CastPPNode-------------------------------------
+  // cast pointer to pointer (different type)
+  class CastPPNode: public ConstraintCastNode {
+  public:
+<span class="changed">!   CastPPNode (Node *n, const Type *t ): ConstraintCastNode(n, t) { init_class_id(Class_CastPP); }</span>
+    virtual int Opcode() const;
+    virtual uint ideal_reg() const { return Op_RegP; }
+    virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+  };
+  
+<span class="new">+ //------------------------------CastDerivedNode-------------------------------------</span>
+<span class="new">+ // cast pointer of a container object with offset to a pointer of a contained object</span>
+<span class="new">+ class CastDerivedNode: public CastPPNode {</span>
+<span class="new">+ public:</span>
+<span class="new">+   CastDerivedNode(Node* n, const Type* t): CastPPNode(n, t) { init_class_id(Class_CastDerived); }</span>
+<span class="new">+   virtual const Type* Value(PhaseTransform* phase) const { return _type; }</span>
+<span class="new">+   virtual Node* Ideal(PhaseGVN* phase, bool can_reshape) { return NULL; } // don't optimize away</span>
+<span class="new">+   virtual int Opcode() const;</span>
+<span class="new">+   virtual Node* Ideal_DU_postCCP(PhaseCCP* ccp) { return this; } // don't optimize away</span>
+<span class="new">+ };</span>
+<span class="new">+ </span>
+  //------------------------------CheckCastPPNode--------------------------------
+  // for _checkcast, cast pointer to pointer (different type), without JOIN,
+  class CheckCastPPNode: public TypeNode {
+  public:
+    CheckCastPPNode( Node *c, Node *n, const Type *t ) : TypeNode(t,2) {
+<hr /><span class="oldmarker">*** 667,701 ****</span>
+    Opaque3Node(Compile* C, Node *n, int opt) : Opaque2Node(C, n), _opt(opt) {}
+    virtual int Opcode() const;
+    bool rtm_opt() const { return (_opt == RTM_OPT); }
+  };
+  
+<span class="removed">- //------------------------------ProfileBooleanNode-------------------------------</span>
+<span class="removed">- // A node represents value profile for a boolean during parsing.</span>
+<span class="removed">- // Once parsing is over, the node goes away (during IGVN).</span>
+<span class="removed">- // It is used to override branch frequencies from MDO (see has_injected_profile in parse2.cpp).</span>
+<span class="removed">- class ProfileBooleanNode : public Node {</span>
+<span class="removed">-   uint _false_cnt;</span>
+<span class="removed">-   uint _true_cnt;</span>
+<span class="removed">-   bool _consumed;</span>
+<span class="removed">-   bool _delay_removal;</span>
+<span class="removed">-   virtual uint hash() const ;                  // { return NO_HASH; }</span>
+<span class="removed">-   virtual uint cmp( const Node &amp;n ) const;</span>
+<span class="removed">-   public:</span>
+<span class="removed">-   ProfileBooleanNode(Node *n, uint false_cnt, uint true_cnt) : Node(0, n),</span>
+<span class="removed">-           _false_cnt(false_cnt), _true_cnt(true_cnt), _delay_removal(true), _consumed(false) {}</span>
+<span class="removed">- </span>
+<span class="removed">-   uint false_count() const { return _false_cnt; }</span>
+<span class="removed">-   uint  true_count() const { return  _true_cnt; }</span>
+<span class="removed">- </span>
+<span class="removed">-   void consume() { _consumed = true;  }</span>
+<span class="removed">- </span>
+<span class="removed">-   virtual int Opcode() const;</span>
+<span class="removed">-   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);</span>
+<span class="removed">-   virtual Node *Identity(PhaseTransform *phase);</span>
+<span class="removed">-   virtual const Type *bottom_type() const { return TypeInt::BOOL; }</span>
+<span class="removed">- };</span>
+  
+  //----------------------PartialSubtypeCheckNode--------------------------------
+  // The 2nd slow-half of a subtype check.  Scan the subklass's 2ndary superklass
+  // array for an instance of the superklass.  Set a hidden internal cache on a
+  // hit (cache is checked with exposed code in gen_subtype_check()).  Return
+<span class="newmarker">--- 678,687 ----</span>
+</pre></body></html>
+

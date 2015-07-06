@@ -1,0 +1,124 @@
+--- old/src/share/classes/sun/misc/Unsafe.java	2015-06-16 10:24:48.927683336 -0700
++++ new/src/share/classes/sun/misc/Unsafe.java	2015-06-16 10:24:48.791686661 -0700
+@@ -23,15 +23,20 @@
+  * questions.
+  */
+ 
++/*
++ * This file has been modified by Azul Systems, Inc. in 2014. These
++ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
++ * available on the same license terms set forth above.
++ */
++
+ package sun.misc;
+ 
+-import java.security.*;
+ import java.lang.reflect.*;
++import java.security.*;
+ 
+ import sun.reflect.CallerSensitive;
+ import sun.reflect.Reflection;
+ 
+-
+ /**
+  * A collection of methods for performing low-level, unsafe operations.
+  * Although the class and all methods are public, use of this class is
+@@ -846,14 +851,12 @@
+         throws InstantiationException;
+ 
+     /** Lock the object.  It must get unlocked via {@link #monitorExit}. */
+-    @Deprecated
+     public native void monitorEnter(Object o);
+ 
+     /**
+      * Unlock the object.  It must have been locked via {@link
+      * #monitorEnter}.
+      */
+-    @Deprecated
+     public native void monitorExit(Object o);
+ 
+     /**
+@@ -861,7 +864,6 @@
+      * whether the lock succeeded.  If it did, the object must be
+      * unlocked via {@link #monitorExit}.
+      */
+-    @Deprecated
+     public native boolean tryMonitorEnter(Object o);
+ 
+     /** Throw the exception without telling the verifier. */
+@@ -1142,4 +1144,75 @@
+        throw new IllegalAccessError();
+     }
+ 
++    /**
++     * Return the size of a JVM-level object representing an instance
++     * of the given class.
++     */
++    public native long getInstanceSize(Class instanceClass);
++
++    /**
++     * Return the footprint of a JVM-level representation of an instance
++     * of the given class when it is located inside a container (includes
++     * an object representing the instance itself, prepadding before
++     * the object, and padding after the object, whatever is applicable).
++     */
++    public native long getInstanceFootprintWhenContained(Class instanceClass);
++
++    /**
++     * Return the footprint of a JVM-level representation of a container
++     * (includes an object representing an instance of the given container
++     * class and representations of the given number of contained elements,
++     * each having the given size).
++     */
++    public native long getContainingObjectFootprint(Class containerClass,
++            long containedElementSize, long numberOfElements);
++
++    /**
++     * Return the footprint of a JVM-level representation of a container
++     * when it is located inside another container (includes a representation
++     * of the inner container having the given parameters, prepadding before
++     * the container, and padding after the container, whatever is applicable).
++     */
++    public native long getContainingObjectFootprintWhenContained(
++            Class containerClass, long containedElementSize,
++            long numberOfElements);
++
++    /**
++     * Return the size of prepadding in the given object footprint.
++     */
++    public native long getPrePaddingInObjectFootprint(long objectFootprint);
++
++    /**
++     * Allocate in the Java heap a memory region for an instance of the given
++     * container class and all its contents, which is described by the given
++     * specification. The elements of the container should be either plain
++     * Java objects or nested containers. The specification consists of two
++     * parallel arrays determining counts of the elements and their classes
++     * for all nesting levels, starting from the outermost one. The method
++     * does not construct any objects. The method returns the reference to
++     * the allocated memory region.
++     */
++    public native Object allocateHeapForElementArrayClass(Class instanceClass,
++            long[] elementCounts, Class[] elementClasses);
++
++    /**
++     * Construct an object starting at the given offset from the beginning
++     * of the given containing object, using the supplied constructor and
++     * arguments. The object is constructed in place in a previously allocated
++     * memory region.
++     */
++    public native void constructObjectAtOffset(
++            Object containingObject, long offset,
++            long objectPrePadding, boolean isContained,
++            boolean isContainer, long objectFootprint,
++            Constructor constructor, Object[] constructorArgs)
++            throws InstantiationException, IllegalAccessException,
++            InvocationTargetException;
++
++    /**
++     * Return an object starting at the given offset from the beginning
++     * of the given containing object.
++     */
++    public native Object deriveContainedObjectAtOffset(Object containingObject,
++            long offset);
+ }

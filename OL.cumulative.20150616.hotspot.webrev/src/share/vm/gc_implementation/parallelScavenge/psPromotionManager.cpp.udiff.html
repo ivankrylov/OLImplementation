@@ -1,0 +1,199 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.cpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -303,42 +303,80 @@</span>
+     process_array_chunk_work&lt;oop&gt;(obj, start, end);
+   }
+ }
+ 
+ oop PSPromotionManager::oop_promotion_failed(oop obj, markOop obj_mark) {
+<span class="removed">-  assert(_old_gen_is_full || PromotionFailureALot, "Sanity");</span>
+<span class="new">+  assert(_old_gen_is_full || PromotionFailureALot, "sanity");</span>
+ 
+<span class="removed">-  // Attempt to CAS in the header.</span>
+<span class="removed">-  // This tests if the header is still the same as when</span>
+<span class="removed">-  // this started.  If it is the same (i.e., no forwarding</span>
+<span class="removed">-  // pointer has been installed), then this thread owns</span>
+<span class="removed">-  // it.</span>
+<span class="new">+  // This attempt to CAS in the header tests if the header is still the same as</span>
+<span class="new">+  // when this started. If it is the same (i.e., no forwarding pointer has been</span>
+<span class="new">+  // installed), then this thread owns it.</span>
+   if (obj-&gt;cas_forward_to(obj, obj_mark)) {
+     // We won any races, we "own" this object.
+<span class="removed">-    assert(obj == obj-&gt;forwardee(), "Sanity");</span>
+<span class="removed">-</span>
+<span class="removed">-    _promotion_failed_info.register_copy_failure(obj-&gt;size());</span>
+<span class="removed">-</span>
+<span class="removed">-    obj-&gt;push_contents(this);</span>
+<span class="new">+    assert(obj == obj-&gt;forwardee(), "sanity");</span>
+ 
+     // Save the mark if needed
+     PSScavenge::oop_promotion_failed(obj, obj_mark);
+<span class="removed">-  }  else {</span>
+<span class="removed">-    // We lost, someone else "owns" this object</span>
+<span class="removed">-    guarantee(obj-&gt;is_forwarded(), "Object must be forwarded if the cas failed.");</span>
+ 
+<span class="removed">-    // No unallocation to worry about.</span>
+<span class="removed">-    obj = obj-&gt;forwardee();</span>
+<span class="new">+#ifndef PRODUCT</span>
+<span class="new">+    if (TraceScavenge) {</span>
+<span class="new">+      ResourceMark rm;</span>
+<span class="new">+      gclog_or_tty-&gt;print_cr("{%s %s 0x%p (%d)}", "promotion-failure",</span>
+<span class="new">+          obj-&gt;klass()-&gt;internal_name(), (void*) obj, obj-&gt;size());</span>
+   }
+<span class="new">+#endif // PRODUCT</span>
+<span class="new">+</span>
+<span class="new">+    size_t obj_size = obj-&gt;size();</span>
+<span class="new">+</span>
+<span class="new">+    if (oopDesc::is_container(obj_mark, obj-&gt;klass())) {</span>
+<span class="new">+      // At this point obj is always an outermost container.</span>
+<span class="new">+      assert(!oopDesc::is_contained(obj_mark),</span>
+<span class="new">+          "object must be an outermost container");</span>
+<span class="new">+</span>
+<span class="new">+      obj_size = org_ObjectLayout_AbstractStructuredArray::</span>
+<span class="new">+          footprint_with_contained_objects(obj) &gt;&gt; LogHeapWordSize;</span>
+<span class="new">+</span>
+<span class="new">+      // The thread that "owns" a container also "owns" all its contained</span>
+<span class="new">+      // objects. We need to forward all of them to themselves. For this</span>
+<span class="new">+      // we simply need to iterate through all Java objects between</span>
+<span class="new">+      // ((HeapWord*) obj) + obj-&gt;size() and ((HeapWord*) obj) + obj_size</span>
+<span class="new">+      // and forward every object to the corresponding new location.</span>
+<span class="new">+      // (See PSPromotionManager::copy_to_survivor_space() for a detailed</span>
+<span class="new">+      // explanation.) For installing forwarding pointers we can use</span>
+<span class="new">+      // the non MT safe oopDesc::forward_to(), since no other thread can</span>
+<span class="new">+      // interfere with us.</span>
+<span class="new">+      HeapWord* src = ((HeapWord*) obj) + obj-&gt;size();</span>
+<span class="new">+      HeapWord* src_end = ((HeapWord*) obj) + obj_size;</span>
+<span class="new">+      while (src &lt; src_end) {</span>
+<span class="new">+        markOop src_mark = ((oop) src)-&gt;mark();</span>
+<span class="new">+        ((oop) src)-&gt;forward_to((oop) src);</span>
+<span class="new">+</span>
+<span class="new">+        // Save the mark if needed</span>
+<span class="new">+        PSScavenge::oop_promotion_failed(((oop) src), src_mark);</span>
+ 
+ #ifndef PRODUCT
+   if (TraceScavenge) {
+<span class="removed">-    gclog_or_tty-&gt;print_cr("{%s %s 0x%x (%d)}",</span>
+<span class="removed">-                           "promotion-failure",</span>
+<span class="removed">-                           obj-&gt;klass()-&gt;internal_name(),</span>
+<span class="removed">-                           (void *)obj, obj-&gt;size());</span>
+<span class="new">+          ResourceMark rm;</span>
+<span class="new">+          oop o = (oop) src;</span>
+<span class="new">+          gclog_or_tty-&gt;print_cr("{%s %s 0x%p (%d)}", "promotion-failure",</span>
+<span class="new">+              o-&gt;klass()-&gt;internal_name(), (void*) src, o-&gt;size());</span>
+<span class="new">+        }</span>
+<span class="new">+#endif // PRODUCT</span>
+<span class="new">+</span>
+<span class="new">+        src += ((oop) src)-&gt;size();</span>
+<span class="new">+      }</span>
+<span class="new">+      assert(src == src_end, "sanity");</span>
+<span class="new">+    }</span>
+ 
+<span class="new">+    _promotion_failed_info.register_copy_failure(obj_size);</span>
+<span class="new">+</span>
+<span class="new">+    obj-&gt;push_contents(this);</span>
+<span class="new">+  } else {</span>
+<span class="new">+    // We lost, someone else "owns" this object.</span>
+<span class="new">+    guarantee(obj-&gt;is_forwarded(), "object must be forwarded if CAS failed");</span>
+<span class="new">+</span>
+<span class="new">+    // There is no unallocation to worry about.</span>
+<span class="new">+    obj = obj-&gt;forwardee();</span>
+   }
+<span class="removed">-#endif</span>
+ 
+   return obj;
+ }
+</pre></body></html>
+

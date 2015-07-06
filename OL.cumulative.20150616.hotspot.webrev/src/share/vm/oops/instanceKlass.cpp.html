@@ -1,0 +1,4092 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>New src/share/vm/oops/instanceKlass.cpp</title>
+<body id="SUNWwebrev">
+<pre>
+   1 /*
+   2  * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #include "precompiled.hpp"
+  26 #include "classfile/javaClasses.hpp"
+  27 #include "classfile/systemDictionary.hpp"
+  28 #include "classfile/verifier.hpp"
+  29 #include "classfile/vmSymbols.hpp"
+  30 #include "compiler/compileBroker.hpp"
+  31 #include "gc_implementation/shared/markSweep.inline.hpp"
+  32 #include "gc_interface/collectedHeap.inline.hpp"
+  33 #include "interpreter/oopMapCache.hpp"
+  34 #include "interpreter/rewriter.hpp"
+  35 #include "jvmtifiles/jvmti.h"
+  36 #include "memory/genOopClosures.inline.hpp"
+  37 #include "memory/heapInspection.hpp"
+  38 #include "memory/iterator.inline.hpp"
+  39 #include "memory/metadataFactory.hpp"
+  40 #include "memory/oopFactory.hpp"
+  41 #include "oops/fieldStreams.hpp"
+  42 #include "oops/instanceClassLoaderKlass.hpp"
+  43 #include "oops/instanceKlass.hpp"
+  44 #include "oops/instanceMirrorKlass.hpp"
+  45 #include "oops/instanceOop.hpp"
+  46 #include "oops/klass.inline.hpp"
+  47 #include "oops/method.hpp"
+  48 #include "oops/oop.inline.hpp"
+  49 #include "oops/symbol.hpp"
+  50 #include "prims/jvmtiExport.hpp"
+  51 #include "prims/jvmtiRedefineClassesTrace.hpp"
+  52 #include "prims/jvmtiRedefineClasses.hpp"
+  53 #include "prims/methodComparator.hpp"
+  54 #include "runtime/fieldDescriptor.hpp"
+  55 #include "runtime/handles.inline.hpp"
+  56 #include "runtime/javaCalls.hpp"
+  57 #include "runtime/mutexLocker.hpp"
+  58 #include "runtime/orderAccess.inline.hpp"
+  59 #include "runtime/thread.inline.hpp"
+  60 #include "services/classLoadingService.hpp"
+  61 #include "services/threadService.hpp"
+  62 #include "utilities/dtrace.hpp"
+  63 #include "utilities/macros.hpp"
+  64 #if INCLUDE_ALL_GCS
+  65 #include "gc_implementation/concurrentMarkSweep/cmsOopClosures.inline.hpp"
+  66 #include "gc_implementation/g1/g1CollectedHeap.inline.hpp"
+  67 #include "gc_implementation/g1/g1OopClosures.inline.hpp"
+  68 #include "gc_implementation/g1/g1RemSet.inline.hpp"
+  69 #include "gc_implementation/g1/heapRegionManager.inline.hpp"
+  70 #include "gc_implementation/parNew/parOopClosures.inline.hpp"
+  71 #include "gc_implementation/parallelScavenge/parallelScavengeHeap.inline.hpp"
+  72 #include "gc_implementation/parallelScavenge/psPromotionManager.inline.hpp"
+  73 #include "gc_implementation/parallelScavenge/psScavenge.inline.hpp"
+  74 #include "oops/oop.pcgc.inline.hpp"
+  75 #endif // INCLUDE_ALL_GCS
+  76 #ifdef COMPILER1
+  77 #include "c1/c1_Compiler.hpp"
+  78 #endif
+  79 
+  80 PRAGMA_FORMAT_MUTE_WARNINGS_FOR_GCC
+  81 
+  82 #ifdef DTRACE_ENABLED
+  83 
+  84 #ifndef USDT2
+  85 
+  86 HS_DTRACE_PROBE_DECL4(hotspot, class__initialization__required,
+  87   char*, intptr_t, oop, intptr_t);
+  88 HS_DTRACE_PROBE_DECL5(hotspot, class__initialization__recursive,
+  89   char*, intptr_t, oop, intptr_t, int);
+  90 HS_DTRACE_PROBE_DECL5(hotspot, class__initialization__concurrent,
+  91   char*, intptr_t, oop, intptr_t, int);
+  92 HS_DTRACE_PROBE_DECL5(hotspot, class__initialization__erroneous,
+  93   char*, intptr_t, oop, intptr_t, int);
+  94 HS_DTRACE_PROBE_DECL5(hotspot, class__initialization__super__failed,
+  95   char*, intptr_t, oop, intptr_t, int);
+  96 HS_DTRACE_PROBE_DECL5(hotspot, class__initialization__clinit,
+  97   char*, intptr_t, oop, intptr_t, int);
+  98 HS_DTRACE_PROBE_DECL5(hotspot, class__initialization__error,
+  99   char*, intptr_t, oop, intptr_t, int);
+ 100 HS_DTRACE_PROBE_DECL5(hotspot, class__initialization__end,
+ 101   char*, intptr_t, oop, intptr_t, int);
+ 102 
+ 103 #define DTRACE_CLASSINIT_PROBE(type, clss, thread_type)          \
+ 104   {                                                              \
+ 105     char* data = NULL;                                           \
+ 106     int len = 0;                                                 \
+ 107     Symbol* name = (clss)-&gt;name();                               \
+ 108     if (name != NULL) {                                          \
+ 109       data = (char*)name-&gt;bytes();                               \
+ 110       len = name-&gt;utf8_length();                                 \
+ 111     }                                                            \
+ 112     HS_DTRACE_PROBE4(hotspot, class__initialization__##type,     \
+ 113       data, len, SOLARIS_ONLY((void *))(clss)-&gt;class_loader(), thread_type);           \
+ 114   }
+ 115 
+ 116 #define DTRACE_CLASSINIT_PROBE_WAIT(type, clss, thread_type, wait) \
+ 117   {                                                              \
+ 118     char* data = NULL;                                           \
+ 119     int len = 0;                                                 \
+ 120     Symbol* name = (clss)-&gt;name();                               \
+ 121     if (name != NULL) {                                          \
+ 122       data = (char*)name-&gt;bytes();                               \
+ 123       len = name-&gt;utf8_length();                                 \
+ 124     }                                                            \
+ 125     HS_DTRACE_PROBE5(hotspot, class__initialization__##type,     \
+ 126       data, len, SOLARIS_ONLY((void *))(clss)-&gt;class_loader(), thread_type, wait);     \
+ 127   }
+ 128 #else /* USDT2 */
+ 129 
+ 130 #define HOTSPOT_CLASS_INITIALIZATION_required HOTSPOT_CLASS_INITIALIZATION_REQUIRED
+ 131 #define HOTSPOT_CLASS_INITIALIZATION_recursive HOTSPOT_CLASS_INITIALIZATION_RECURSIVE
+ 132 #define HOTSPOT_CLASS_INITIALIZATION_concurrent HOTSPOT_CLASS_INITIALIZATION_CONCURRENT
+ 133 #define HOTSPOT_CLASS_INITIALIZATION_erroneous HOTSPOT_CLASS_INITIALIZATION_ERRONEOUS
+ 134 #define HOTSPOT_CLASS_INITIALIZATION_super__failed HOTSPOT_CLASS_INITIALIZATION_SUPER_FAILED
+ 135 #define HOTSPOT_CLASS_INITIALIZATION_clinit HOTSPOT_CLASS_INITIALIZATION_CLINIT
+ 136 #define HOTSPOT_CLASS_INITIALIZATION_error HOTSPOT_CLASS_INITIALIZATION_ERROR
+ 137 #define HOTSPOT_CLASS_INITIALIZATION_end HOTSPOT_CLASS_INITIALIZATION_END
+ 138 #define DTRACE_CLASSINIT_PROBE(type, clss, thread_type)          \
+ 139   {                                                              \
+ 140     char* data = NULL;                                           \
+ 141     int len = 0;                                                 \
+ 142     Symbol* name = (clss)-&gt;name();                               \
+ 143     if (name != NULL) {                                          \
+ 144       data = (char*)name-&gt;bytes();                               \
+ 145       len = name-&gt;utf8_length();                                 \
+ 146     }                                                            \
+ 147     HOTSPOT_CLASS_INITIALIZATION_##type(                         \
+ 148       data, len, (clss)-&gt;class_loader(), thread_type);           \
+ 149   }
+ 150 
+ 151 #define DTRACE_CLASSINIT_PROBE_WAIT(type, clss, thread_type, wait) \
+ 152   {                                                              \
+ 153     char* data = NULL;                                           \
+ 154     int len = 0;                                                 \
+ 155     Symbol* name = (clss)-&gt;name();                               \
+ 156     if (name != NULL) {                                          \
+ 157       data = (char*)name-&gt;bytes();                               \
+ 158       len = name-&gt;utf8_length();                                 \
+ 159     }                                                            \
+ 160     HOTSPOT_CLASS_INITIALIZATION_##type(                         \
+ 161       data, len, (clss)-&gt;class_loader(), thread_type, wait);     \
+ 162   }
+ 163 #endif /* USDT2 */
+ 164 
+ 165 #else //  ndef DTRACE_ENABLED
+ 166 
+ 167 #define DTRACE_CLASSINIT_PROBE(type, clss, thread_type)
+ 168 #define DTRACE_CLASSINIT_PROBE_WAIT(type, clss, thread_type, wait)
+ 169 
+ 170 #endif //  ndef DTRACE_ENABLED
+ 171 
+ 172 volatile int InstanceKlass::_total_instanceKlass_count = 0;
+ 173 
+ 174 InstanceKlass* InstanceKlass::allocate_instance_klass(
+ 175                                               ClassLoaderData* loader_data,
+ 176                                               int vtable_len,
+ 177                                               int itable_len,
+ 178                                               int static_field_size,
+ 179                                               int nonstatic_oop_map_size,
+ 180                                               ReferenceType rt,
+ 181                                               AccessFlags access_flags,
+ 182                                               Symbol* name,
+ 183                                               Klass* super_klass,
+ 184                                               bool is_anonymous,
+ 185                                               TRAPS) {
+ 186 
+ 187   int size = InstanceKlass::size(vtable_len, itable_len, nonstatic_oop_map_size,
+ 188                                  access_flags.is_interface(), is_anonymous);
+ 189 
+ 190   // Allocation
+ 191   InstanceKlass* ik;
+ 192   if (rt == REF_NONE) {
+ 193     if (name == vmSymbols::java_lang_Class()) {
+ 194       ik = new (loader_data, size, THREAD) InstanceMirrorKlass(
+ 195         vtable_len, itable_len, static_field_size, nonstatic_oop_map_size, rt,
+ 196         access_flags, is_anonymous);
+ 197     } else if (name == vmSymbols::java_lang_ClassLoader() ||
+ 198           (SystemDictionary::ClassLoader_klass_loaded() &amp;&amp;
+ 199           super_klass != NULL &amp;&amp;
+ 200           super_klass-&gt;is_subtype_of(SystemDictionary::ClassLoader_klass()))) {
+ 201       ik = new (loader_data, size, THREAD) InstanceClassLoaderKlass(
+ 202         vtable_len, itable_len, static_field_size, nonstatic_oop_map_size, rt,
+ 203         access_flags, is_anonymous);
+ 204     } else {
+ 205       // normal class
+ 206       ik = new (loader_data, size, THREAD) InstanceKlass(
+ 207         vtable_len, itable_len, static_field_size, nonstatic_oop_map_size, rt,
+ 208         access_flags, is_anonymous);
+ 209     }
+ 210   } else {
+ 211     // reference klass
+ 212     ik = new (loader_data, size, THREAD) InstanceRefKlass(
+ 213         vtable_len, itable_len, static_field_size, nonstatic_oop_map_size, rt,
+ 214         access_flags, is_anonymous);
+ 215   }
+ 216 
+ 217   // Check for pending exception before adding to the loader data and incrementing
+ 218   // class count.  Can get OOM here.
+ 219   if (HAS_PENDING_EXCEPTION) {
+ 220     return NULL;
+ 221   }
+ 222 
+ 223   // Add all classes to our internal class loader list here,
+ 224   // including classes in the bootstrap (NULL) class loader.
+ 225   loader_data-&gt;add_class(ik);
+ 226 
+ 227   Atomic::inc(&amp;_total_instanceKlass_count);
+ 228   return ik;
+ 229 }
+ 230 
+ 231 
+ 232 // copy method ordering from resource area to Metaspace
+ 233 void InstanceKlass::copy_method_ordering(intArray* m, TRAPS) {
+ 234   if (m != NULL) {
+ 235     // allocate a new array and copy contents (memcpy?)
+ 236     _method_ordering = MetadataFactory::new_array&lt;int&gt;(class_loader_data(), m-&gt;length(), CHECK);
+ 237     for (int i = 0; i &lt; m-&gt;length(); i++) {
+ 238       _method_ordering-&gt;at_put(i, m-&gt;at(i));
+ 239     }
+ 240   } else {
+ 241     _method_ordering = Universe::the_empty_int_array();
+ 242   }
+ 243 }
+ 244 
+ 245 // create a new array of vtable_indices for default methods
+ 246 Array&lt;int&gt;* InstanceKlass::create_new_default_vtable_indices(int len, TRAPS) {
+ 247   Array&lt;int&gt;* vtable_indices = MetadataFactory::new_array&lt;int&gt;(class_loader_data(), len, CHECK_NULL);
+ 248   assert(default_vtable_indices() == NULL, "only create once");
+ 249   set_default_vtable_indices(vtable_indices);
+ 250   return vtable_indices;
+ 251 }
+ 252 
+ 253 InstanceKlass::InstanceKlass(int vtable_len,
+ 254                              int itable_len,
+ 255                              int static_field_size,
+ 256                              int nonstatic_oop_map_size,
+ 257                              ReferenceType rt,
+ 258                              AccessFlags access_flags,
+ 259                              bool is_anonymous) {
+ 260   No_Safepoint_Verifier no_safepoint; // until k becomes parsable
+ 261 
+ 262   int iksize = InstanceKlass::size(vtable_len, itable_len, nonstatic_oop_map_size,
+ 263                                    access_flags.is_interface(), is_anonymous);
+ 264 
+ 265   set_vtable_length(vtable_len);
+ 266   set_itable_length(itable_len);
+ 267   set_static_field_size(static_field_size);
+ 268   set_nonstatic_oop_map_size(nonstatic_oop_map_size);
+ 269   set_access_flags(access_flags);
+ 270   _misc_flags = 0;  // initialize to zero
+ 271   set_is_anonymous(is_anonymous);
+ 272   assert(size() == iksize, "wrong size for object");
+ 273 
+ 274   set_array_klasses(NULL);
+ 275   set_methods(NULL);
+ 276   set_method_ordering(NULL);
+ 277   set_default_methods(NULL);
+ 278   set_default_vtable_indices(NULL);
+ 279   set_local_interfaces(NULL);
+ 280   set_transitive_interfaces(NULL);
+ 281   init_implementor();
+ 282   set_fields(NULL, 0);
+ 283   set_constants(NULL);
+ 284   set_class_loader_data(NULL);
+ 285   set_source_file_name_index(0);
+ 286   set_source_debug_extension(NULL, 0);
+ 287   set_array_name(NULL);
+ 288   set_inner_classes(NULL);
+ 289   set_static_oop_field_count(0);
+ 290   set_nonstatic_field_size(0);
+ 291   set_is_marked_dependent(false);
+ 292   set_has_unloaded_dependent(false);
+ 293   set_init_state(InstanceKlass::allocated);
+ 294   set_init_thread(NULL);
+ 295   set_reference_type(rt);
+ 296   set_oop_map_cache(NULL);
+ 297   set_jni_ids(NULL);
+ 298   set_osr_nmethods_head(NULL);
+ 299   set_breakpoints(NULL);
+ 300   init_previous_versions();
+ 301   set_generic_signature_index(0);
+ 302   release_set_methods_jmethod_ids(NULL);
+ 303   set_annotations(NULL);
+ 304   set_jvmti_cached_class_field_map(NULL);
+ 305   set_initial_method_idnum(0);
+ 306   _dependencies = NULL;
+ 307   set_jvmti_cached_class_field_map(NULL);
+ 308   set_cached_class_file(NULL);
+ 309   set_initial_method_idnum(0);
+ 310   set_minor_version(0);
+ 311   set_major_version(0);
+ 312   NOT_PRODUCT(_verify_count = 0;)
+ 313 
+ 314   // initialize the non-header words to zero
+ 315   intptr_t* p = (intptr_t*)this;
+ 316   for (int index = InstanceKlass::header_size(); index &lt; iksize; index++) {
+ 317     p[index] = NULL_WORD;
+ 318   }
+ 319 
+ 320   // Set temporary value until parseClassFile updates it with the real instance
+ 321   // size.
+ 322   set_layout_helper(Klass::instance_layout_helper(0, true));
+ 323 }
+ 324 
+ 325 
+ 326 void InstanceKlass::deallocate_methods(ClassLoaderData* loader_data,
+ 327                                        Array&lt;Method*&gt;* methods) {
+ 328   if (methods != NULL &amp;&amp; methods != Universe::the_empty_method_array() &amp;&amp;
+ 329       !methods-&gt;is_shared()) {
+ 330     for (int i = 0; i &lt; methods-&gt;length(); i++) {
+ 331       Method* method = methods-&gt;at(i);
+ 332       if (method == NULL) continue;  // maybe null if error processing
+ 333       // Only want to delete methods that are not executing for RedefineClasses.
+ 334       // The previous version will point to them so they're not totally dangling
+ 335       assert (!method-&gt;on_stack(), "shouldn't be called with methods on stack");
+ 336       MetadataFactory::free_metadata(loader_data, method);
+ 337     }
+ 338     MetadataFactory::free_array&lt;Method*&gt;(loader_data, methods);
+ 339   }
+ 340 }
+ 341 
+ 342 void InstanceKlass::deallocate_interfaces(ClassLoaderData* loader_data,
+ 343                                           Klass* super_klass,
+ 344                                           Array&lt;Klass*&gt;* local_interfaces,
+ 345                                           Array&lt;Klass*&gt;* transitive_interfaces) {
+ 346   // Only deallocate transitive interfaces if not empty, same as super class
+ 347   // or same as local interfaces.  See code in parseClassFile.
+ 348   Array&lt;Klass*&gt;* ti = transitive_interfaces;
+ 349   if (ti != Universe::the_empty_klass_array() &amp;&amp; ti != local_interfaces) {
+ 350     // check that the interfaces don't come from super class
+ 351     Array&lt;Klass*&gt;* sti = (super_klass == NULL) ? NULL :
+ 352                     InstanceKlass::cast(super_klass)-&gt;transitive_interfaces();
+ 353     if (ti != sti &amp;&amp; ti != NULL &amp;&amp; !ti-&gt;is_shared()) {
+ 354       MetadataFactory::free_array&lt;Klass*&gt;(loader_data, ti);
+ 355     }
+ 356   }
+ 357 
+ 358   // local interfaces can be empty
+ 359   if (local_interfaces != Universe::the_empty_klass_array() &amp;&amp;
+ 360       local_interfaces != NULL &amp;&amp; !local_interfaces-&gt;is_shared()) {
+ 361     MetadataFactory::free_array&lt;Klass*&gt;(loader_data, local_interfaces);
+ 362   }
+ 363 }
+ 364 
+ 365 // This function deallocates the metadata and C heap pointers that the
+ 366 // InstanceKlass points to.
+ 367 void InstanceKlass::deallocate_contents(ClassLoaderData* loader_data) {
+ 368 
+ 369   // Orphan the mirror first, CMS thinks it's still live.
+ 370   if (java_mirror() != NULL) {
+ 371     java_lang_Class::set_klass(java_mirror(), NULL);
+ 372   }
+ 373 
+ 374   // Need to take this class off the class loader data list.
+ 375   loader_data-&gt;remove_class(this);
+ 376 
+ 377   // The array_klass for this class is created later, after error handling.
+ 378   // For class redefinition, we keep the original class so this scratch class
+ 379   // doesn't have an array class.  Either way, assert that there is nothing
+ 380   // to deallocate.
+ 381   assert(array_klasses() == NULL, "array classes shouldn't be created for this class yet");
+ 382 
+ 383   // Release C heap allocated data that this might point to, which includes
+ 384   // reference counting symbol names.
+ 385   release_C_heap_structures();
+ 386 
+ 387   deallocate_methods(loader_data, methods());
+ 388   set_methods(NULL);
+ 389 
+ 390   if (method_ordering() != NULL &amp;&amp;
+ 391       method_ordering() != Universe::the_empty_int_array() &amp;&amp;
+ 392       !method_ordering()-&gt;is_shared()) {
+ 393     MetadataFactory::free_array&lt;int&gt;(loader_data, method_ordering());
+ 394   }
+ 395   set_method_ordering(NULL);
+ 396 
+ 397   // default methods can be empty
+ 398   if (default_methods() != NULL &amp;&amp;
+ 399       default_methods() != Universe::the_empty_method_array() &amp;&amp;
+ 400       !default_methods()-&gt;is_shared()) {
+ 401     MetadataFactory::free_array&lt;Method*&gt;(loader_data, default_methods());
+ 402   }
+ 403   // Do NOT deallocate the default methods, they are owned by superinterfaces.
+ 404   set_default_methods(NULL);
+ 405 
+ 406   // default methods vtable indices can be empty
+ 407   if (default_vtable_indices() != NULL &amp;&amp;
+ 408       !default_vtable_indices()-&gt;is_shared()) {
+ 409     MetadataFactory::free_array&lt;int&gt;(loader_data, default_vtable_indices());
+ 410   }
+ 411   set_default_vtable_indices(NULL);
+ 412 
+ 413 
+ 414   // This array is in Klass, but remove it with the InstanceKlass since
+ 415   // this place would be the only caller and it can share memory with transitive
+ 416   // interfaces.
+ 417   if (secondary_supers() != NULL &amp;&amp;
+ 418       secondary_supers() != Universe::the_empty_klass_array() &amp;&amp;
+ 419       secondary_supers() != transitive_interfaces() &amp;&amp;
+ 420       !secondary_supers()-&gt;is_shared()) {
+ 421     MetadataFactory::free_array&lt;Klass*&gt;(loader_data, secondary_supers());
+ 422   }
+ 423   set_secondary_supers(NULL);
+ 424 
+ 425   deallocate_interfaces(loader_data, super(), local_interfaces(), transitive_interfaces());
+ 426   set_transitive_interfaces(NULL);
+ 427   set_local_interfaces(NULL);
+ 428 
+ 429   if (fields() != NULL &amp;&amp; !fields()-&gt;is_shared()) {
+ 430     MetadataFactory::free_array&lt;jushort&gt;(loader_data, fields());
+ 431   }
+ 432   set_fields(NULL, 0);
+ 433 
+ 434   // If a method from a redefined class is using this constant pool, don't
+ 435   // delete it, yet.  The new class's previous version will point to this.
+ 436   if (constants() != NULL) {
+ 437     assert (!constants()-&gt;on_stack(), "shouldn't be called if anything is onstack");
+ 438     if (!constants()-&gt;is_shared()) {
+ 439       MetadataFactory::free_metadata(loader_data, constants());
+ 440     }
+ 441     set_constants(NULL);
+ 442   }
+ 443 
+ 444   if (inner_classes() != NULL &amp;&amp;
+ 445       inner_classes() != Universe::the_empty_short_array() &amp;&amp;
+ 446       !inner_classes()-&gt;is_shared()) {
+ 447     MetadataFactory::free_array&lt;jushort&gt;(loader_data, inner_classes());
+ 448   }
+ 449   set_inner_classes(NULL);
+ 450 
+ 451   // We should deallocate the Annotations instance if it's not in shared spaces.
+ 452   if (annotations() != NULL &amp;&amp; !annotations()-&gt;is_shared()) {
+ 453     MetadataFactory::free_metadata(loader_data, annotations());
+ 454   }
+ 455   set_annotations(NULL);
+ 456 }
+ 457 
+ 458 bool InstanceKlass::should_be_initialized() const {
+ 459   return !is_initialized();
+ 460 }
+ 461 
+ 462 klassVtable* InstanceKlass::vtable() const {
+ 463   return new klassVtable(this, start_of_vtable(), vtable_length() / vtableEntry::size());
+ 464 }
+ 465 
+ 466 klassItable* InstanceKlass::itable() const {
+ 467   return new klassItable(instanceKlassHandle(this));
+ 468 }
+ 469 
+ 470 void InstanceKlass::eager_initialize(Thread *thread) {
+ 471   if (!EagerInitialization) return;
+ 472 
+ 473   if (this-&gt;is_not_initialized()) {
+ 474     // abort if the the class has a class initializer
+ 475     if (this-&gt;class_initializer() != NULL) return;
+ 476 
+ 477     // abort if it is java.lang.Object (initialization is handled in genesis)
+ 478     Klass* super = this-&gt;super();
+ 479     if (super == NULL) return;
+ 480 
+ 481     // abort if the super class should be initialized
+ 482     if (!InstanceKlass::cast(super)-&gt;is_initialized()) return;
+ 483 
+ 484     // call body to expose the this pointer
+ 485     instanceKlassHandle this_oop(thread, this);
+ 486     eager_initialize_impl(this_oop);
+ 487   }
+ 488 }
+ 489 
+ 490 // JVMTI spec thinks there are signers and protection domain in the
+ 491 // instanceKlass.  These accessors pretend these fields are there.
+ 492 // The hprof specification also thinks these fields are in InstanceKlass.
+ 493 oop InstanceKlass::protection_domain() const {
+ 494   // return the protection_domain from the mirror
+ 495   return java_lang_Class::protection_domain(java_mirror());
+ 496 }
+ 497 
+ 498 // To remove these from requires an incompatible change and CCC request.
+ 499 objArrayOop InstanceKlass::signers() const {
+ 500   // return the signers from the mirror
+ 501   return java_lang_Class::signers(java_mirror());
+ 502 }
+ 503 
+ 504 oop InstanceKlass::init_lock() const {
+ 505   // return the init lock from the mirror
+ 506   oop lock = java_lang_Class::init_lock(java_mirror());
+ 507   // Prevent reordering with any access of initialization state
+ 508   OrderAccess::loadload();
+ 509   assert((oop)lock != NULL || !is_not_initialized(), // initialized or in_error state
+ 510          "only fully initialized state can have a null lock");
+ 511   return lock;
+ 512 }
+ 513 
+ 514 // Set the initialization lock to null so the object can be GC'ed.  Any racing
+ 515 // threads to get this lock will see a null lock and will not lock.
+ 516 // That's okay because they all check for initialized state after getting
+ 517 // the lock and return.
+ 518 void InstanceKlass::fence_and_clear_init_lock() {
+ 519   // make sure previous stores are all done, notably the init_state.
+ 520   OrderAccess::storestore();
+ 521   java_lang_Class::set_init_lock(java_mirror(), NULL);
+ 522   assert(!is_not_initialized(), "class must be initialized now");
+ 523 }
+ 524 
+ 525 void InstanceKlass::eager_initialize_impl(instanceKlassHandle this_oop) {
+ 526   EXCEPTION_MARK;
+ 527   oop init_lock = this_oop-&gt;init_lock();
+ 528   ObjectLocker ol(init_lock, THREAD, init_lock != NULL);
+ 529 
+ 530   // abort if someone beat us to the initialization
+ 531   if (!this_oop-&gt;is_not_initialized()) return;  // note: not equivalent to is_initialized()
+ 532 
+ 533   ClassState old_state = this_oop-&gt;init_state();
+ 534   link_class_impl(this_oop, true, THREAD);
+ 535   if (HAS_PENDING_EXCEPTION) {
+ 536     CLEAR_PENDING_EXCEPTION;
+ 537     // Abort if linking the class throws an exception.
+ 538 
+ 539     // Use a test to avoid redundantly resetting the state if there's
+ 540     // no change.  Set_init_state() asserts that state changes make
+ 541     // progress, whereas here we might just be spinning in place.
+ 542     if( old_state != this_oop-&gt;_init_state )
+ 543       this_oop-&gt;set_init_state (old_state);
+ 544   } else {
+ 545     // linking successfull, mark class as initialized
+ 546     this_oop-&gt;set_init_state (fully_initialized);
+ 547     this_oop-&gt;fence_and_clear_init_lock();
+ 548     // trace
+ 549     if (TraceClassInitialization) {
+ 550       ResourceMark rm(THREAD);
+ 551       tty-&gt;print_cr("[Initialized %s without side effects]", this_oop-&gt;external_name());
+ 552     }
+ 553   }
+ 554 }
+ 555 
+ 556 
+ 557 // See "The Virtual Machine Specification" section 2.16.5 for a detailed explanation of the class initialization
+ 558 // process. The step comments refers to the procedure described in that section.
+ 559 // Note: implementation moved to static method to expose the this pointer.
+ 560 void InstanceKlass::initialize(TRAPS) {
+ 561   if (this-&gt;should_be_initialized()) {
+ 562     HandleMark hm(THREAD);
+ 563     instanceKlassHandle this_oop(THREAD, this);
+ 564     initialize_impl(this_oop, CHECK);
+ 565     // Note: at this point the class may be initialized
+ 566     //       OR it may be in the state of being initialized
+ 567     //       in case of recursive initialization!
+ 568   } else {
+ 569     assert(is_initialized(), "sanity check");
+ 570   }
+ 571 }
+ 572 
+ 573 
+ 574 bool InstanceKlass::verify_code(
+ 575     instanceKlassHandle this_oop, bool throw_verifyerror, TRAPS) {
+ 576   // 1) Verify the bytecodes
+ 577   Verifier::Mode mode =
+ 578     throw_verifyerror ? Verifier::ThrowException : Verifier::NoException;
+ 579   return Verifier::verify(this_oop, mode, this_oop-&gt;should_verify_class(), CHECK_false);
+ 580 }
+ 581 
+ 582 
+ 583 // Used exclusively by the shared spaces dump mechanism to prevent
+ 584 // classes mapped into the shared regions in new VMs from appearing linked.
+ 585 
+ 586 void InstanceKlass::unlink_class() {
+ 587   assert(is_linked(), "must be linked");
+ 588   _init_state = loaded;
+ 589 }
+ 590 
+ 591 void InstanceKlass::link_class(TRAPS) {
+ 592   assert(is_loaded(), "must be loaded");
+ 593   if (!is_linked()) {
+ 594     HandleMark hm(THREAD);
+ 595     instanceKlassHandle this_oop(THREAD, this);
+ 596     link_class_impl(this_oop, true, CHECK);
+ 597   }
+ 598 }
+ 599 
+ 600 // Called to verify that a class can link during initialization, without
+ 601 // throwing a VerifyError.
+ 602 bool InstanceKlass::link_class_or_fail(TRAPS) {
+ 603   assert(is_loaded(), "must be loaded");
+ 604   if (!is_linked()) {
+ 605     HandleMark hm(THREAD);
+ 606     instanceKlassHandle this_oop(THREAD, this);
+ 607     link_class_impl(this_oop, false, CHECK_false);
+ 608   }
+ 609   return is_linked();
+ 610 }
+ 611 
+ 612 bool InstanceKlass::link_class_impl(
+ 613     instanceKlassHandle this_oop, bool throw_verifyerror, TRAPS) {
+ 614   // check for error state
+ 615   if (this_oop-&gt;is_in_error_state()) {
+ 616     ResourceMark rm(THREAD);
+ 617     THROW_MSG_(vmSymbols::java_lang_NoClassDefFoundError(),
+ 618                this_oop-&gt;external_name(), false);
+ 619   }
+ 620   // return if already verified
+ 621   if (this_oop-&gt;is_linked()) {
+ 622     return true;
+ 623   }
+ 624 
+ 625   // Timing
+ 626   // timer handles recursion
+ 627   assert(THREAD-&gt;is_Java_thread(), "non-JavaThread in link_class_impl");
+ 628   JavaThread* jt = (JavaThread*)THREAD;
+ 629 
+ 630   // link super class before linking this class
+ 631   instanceKlassHandle super(THREAD, this_oop-&gt;super());
+ 632   if (super.not_null()) {
+ 633     if (super-&gt;is_interface()) {  // check if super class is an interface
+ 634       ResourceMark rm(THREAD);
+ 635       Exceptions::fthrow(
+ 636         THREAD_AND_LOCATION,
+ 637         vmSymbols::java_lang_IncompatibleClassChangeError(),
+ 638         "class %s has interface %s as super class",
+ 639         this_oop-&gt;external_name(),
+ 640         super-&gt;external_name()
+ 641       );
+ 642       return false;
+ 643     }
+ 644 
+ 645     link_class_impl(super, throw_verifyerror, CHECK_false);
+ 646   }
+ 647 
+ 648   // link all interfaces implemented by this class before linking this class
+ 649   Array&lt;Klass*&gt;* interfaces = this_oop-&gt;local_interfaces();
+ 650   int num_interfaces = interfaces-&gt;length();
+ 651   for (int index = 0; index &lt; num_interfaces; index++) {
+ 652     HandleMark hm(THREAD);
+ 653     instanceKlassHandle ih(THREAD, interfaces-&gt;at(index));
+ 654     link_class_impl(ih, throw_verifyerror, CHECK_false);
+ 655   }
+ 656 
+ 657   // in case the class is linked in the process of linking its superclasses
+ 658   if (this_oop-&gt;is_linked()) {
+ 659     return true;
+ 660   }
+ 661 
+ 662   // trace only the link time for this klass that includes
+ 663   // the verification time
+ 664   PerfClassTraceTime vmtimer(ClassLoader::perf_class_link_time(),
+ 665                              ClassLoader::perf_class_link_selftime(),
+ 666                              ClassLoader::perf_classes_linked(),
+ 667                              jt-&gt;get_thread_stat()-&gt;perf_recursion_counts_addr(),
+ 668                              jt-&gt;get_thread_stat()-&gt;perf_timers_addr(),
+ 669                              PerfClassTraceTime::CLASS_LINK);
+ 670 
+ 671   // verification &amp; rewriting
+ 672   {
+ 673     oop init_lock = this_oop-&gt;init_lock();
+ 674     ObjectLocker ol(init_lock, THREAD, init_lock != NULL);
+ 675     // rewritten will have been set if loader constraint error found
+ 676     // on an earlier link attempt
+ 677     // don't verify or rewrite if already rewritten
+ 678 
+ 679     if (!this_oop-&gt;is_linked()) {
+ 680       if (!this_oop-&gt;is_rewritten()) {
+ 681         {
+ 682           // Timer includes any side effects of class verification (resolution,
+ 683           // etc), but not recursive entry into verify_code().
+ 684           PerfClassTraceTime timer(ClassLoader::perf_class_verify_time(),
+ 685                                    ClassLoader::perf_class_verify_selftime(),
+ 686                                    ClassLoader::perf_classes_verified(),
+ 687                                    jt-&gt;get_thread_stat()-&gt;perf_recursion_counts_addr(),
+ 688                                    jt-&gt;get_thread_stat()-&gt;perf_timers_addr(),
+ 689                                    PerfClassTraceTime::CLASS_VERIFY);
+ 690           bool verify_ok = verify_code(this_oop, throw_verifyerror, THREAD);
+ 691           if (!verify_ok) {
+ 692             return false;
+ 693           }
+ 694         }
+ 695 
+ 696         // Just in case a side-effect of verify linked this class already
+ 697         // (which can sometimes happen since the verifier loads classes
+ 698         // using custom class loaders, which are free to initialize things)
+ 699         if (this_oop-&gt;is_linked()) {
+ 700           return true;
+ 701         }
+ 702 
+ 703         // also sets rewritten
+ 704         this_oop-&gt;rewrite_class(CHECK_false);
+ 705       }
+ 706 
+ 707       // relocate jsrs and link methods after they are all rewritten
+ 708       this_oop-&gt;link_methods(CHECK_false);
+ 709 
+ 710       // Initialize the vtable and interface table after
+ 711       // methods have been rewritten since rewrite may
+ 712       // fabricate new Method*s.
+ 713       // also does loader constraint checking
+ 714       if (!this_oop()-&gt;is_shared()) {
+ 715         ResourceMark rm(THREAD);
+ 716         this_oop-&gt;vtable()-&gt;initialize_vtable(true, CHECK_false);
+ 717         this_oop-&gt;itable()-&gt;initialize_itable(true, CHECK_false);
+ 718       }
+ 719 #ifdef ASSERT
+ 720       else {
+ 721         ResourceMark rm(THREAD);
+ 722         this_oop-&gt;vtable()-&gt;verify(tty, true);
+ 723         // In case itable verification is ever added.
+ 724         // this_oop-&gt;itable()-&gt;verify(tty, true);
+ 725       }
+ 726 #endif
+ 727       this_oop-&gt;set_init_state(linked);
+ 728       if (JvmtiExport::should_post_class_prepare()) {
+ 729         Thread *thread = THREAD;
+ 730         assert(thread-&gt;is_Java_thread(), "thread-&gt;is_Java_thread()");
+ 731         JvmtiExport::post_class_prepare((JavaThread *) thread, this_oop());
+ 732       }
+ 733     }
+ 734   }
+ 735   return true;
+ 736 }
+ 737 
+ 738 
+ 739 // Rewrite the byte codes of all of the methods of a class.
+ 740 // The rewriter must be called exactly once. Rewriting must happen after
+ 741 // verification but before the first method of the class is executed.
+ 742 void InstanceKlass::rewrite_class(TRAPS) {
+ 743   assert(is_loaded(), "must be loaded");
+ 744   instanceKlassHandle this_oop(THREAD, this);
+ 745   if (this_oop-&gt;is_rewritten()) {
+ 746     assert(this_oop()-&gt;is_shared(), "rewriting an unshared class?");
+ 747     return;
+ 748   }
+ 749   Rewriter::rewrite(this_oop, CHECK);
+ 750   this_oop-&gt;set_rewritten();
+ 751 }
+ 752 
+ 753 // Now relocate and link method entry points after class is rewritten.
+ 754 // This is outside is_rewritten flag. In case of an exception, it can be
+ 755 // executed more than once.
+ 756 void InstanceKlass::link_methods(TRAPS) {
+ 757   int len = methods()-&gt;length();
+ 758   for (int i = len-1; i &gt;= 0; i--) {
+ 759     methodHandle m(THREAD, methods()-&gt;at(i));
+ 760 
+ 761     // Set up method entry points for compiler and interpreter    .
+ 762     m-&gt;link_method(m, CHECK);
+ 763 
+ 764     // This is for JVMTI and unrelated to relocator but the last thing we do
+ 765 #ifdef ASSERT
+ 766     if (StressMethodComparator) {
+ 767       ResourceMark rm(THREAD);
+ 768       static int nmc = 0;
+ 769       for (int j = i; j &gt;= 0 &amp;&amp; j &gt;= i-4; j--) {
+ 770         if ((++nmc % 1000) == 0)  tty-&gt;print_cr("Have run MethodComparator %d times...", nmc);
+ 771         bool z = MethodComparator::methods_EMCP(m(),
+ 772                    methods()-&gt;at(j));
+ 773         if (j == i &amp;&amp; !z) {
+ 774           tty-&gt;print("MethodComparator FAIL: "); m-&gt;print(); m-&gt;print_codes();
+ 775           assert(z, "method must compare equal to itself");
+ 776         }
+ 777       }
+ 778     }
+ 779 #endif //ASSERT
+ 780   }
+ 781 }
+ 782 
+ 783 // Eagerly initialize superinterfaces that declare default methods (concrete instance: any access)
+ 784 void InstanceKlass::initialize_super_interfaces(instanceKlassHandle this_oop, TRAPS) {
+ 785   if (this_oop-&gt;has_default_methods()) {
+ 786     for (int i = 0; i &lt; this_oop-&gt;local_interfaces()-&gt;length(); ++i) {
+ 787       Klass* iface = this_oop-&gt;local_interfaces()-&gt;at(i);
+ 788       InstanceKlass* ik = InstanceKlass::cast(iface);
+ 789       if (ik-&gt;should_be_initialized()) {
+ 790         if (ik-&gt;has_default_methods()) {
+ 791           ik-&gt;initialize_super_interfaces(ik, THREAD);
+ 792         }
+ 793         // Only initialize() interfaces that "declare" concrete methods.
+ 794         // has_default_methods drives searching superinterfaces since it
+ 795         // means has_default_methods in its superinterface hierarchy
+ 796         if (!HAS_PENDING_EXCEPTION &amp;&amp; ik-&gt;declares_default_methods()) {
+ 797           ik-&gt;initialize(THREAD);
+ 798         }
+ 799         if (HAS_PENDING_EXCEPTION) {
+ 800           Handle e(THREAD, PENDING_EXCEPTION);
+ 801           CLEAR_PENDING_EXCEPTION;
+ 802           {
+ 803             EXCEPTION_MARK;
+ 804             // Locks object, set state, and notify all waiting threads
+ 805             this_oop-&gt;set_initialization_state_and_notify(
+ 806                 initialization_error, THREAD);
+ 807 
+ 808             // ignore any exception thrown, superclass initialization error is
+ 809             // thrown below
+ 810             CLEAR_PENDING_EXCEPTION;
+ 811           }
+ 812           THROW_OOP(e());
+ 813         }
+ 814       }
+ 815     }
+ 816   }
+ 817 }
+ 818 
+ 819 void InstanceKlass::initialize_impl(instanceKlassHandle this_oop, TRAPS) {
+ 820   // Make sure klass is linked (verified) before initialization
+ 821   // A class could already be verified, since it has been reflected upon.
+ 822   this_oop-&gt;link_class(CHECK);
+ 823 
+ 824   DTRACE_CLASSINIT_PROBE(required, InstanceKlass::cast(this_oop()), -1);
+ 825 
+ 826   bool wait = false;
+ 827 
+ 828   // refer to the JVM book page 47 for description of steps
+ 829   // Step 1
+ 830   {
+ 831     oop init_lock = this_oop-&gt;init_lock();
+ 832     ObjectLocker ol(init_lock, THREAD, init_lock != NULL);
+ 833 
+ 834     Thread *self = THREAD; // it's passed the current thread
+ 835 
+ 836     // Step 2
+ 837     // If we were to use wait() instead of waitInterruptibly() then
+ 838     // we might end up throwing IE from link/symbol resolution sites
+ 839     // that aren't expected to throw.  This would wreak havoc.  See 6320309.
+ 840     while(this_oop-&gt;is_being_initialized() &amp;&amp; !this_oop-&gt;is_reentrant_initialization(self)) {
+ 841         wait = true;
+ 842       ol.waitUninterruptibly(CHECK);
+ 843     }
+ 844 
+ 845     // Step 3
+ 846     if (this_oop-&gt;is_being_initialized() &amp;&amp; this_oop-&gt;is_reentrant_initialization(self)) {
+ 847       DTRACE_CLASSINIT_PROBE_WAIT(recursive, InstanceKlass::cast(this_oop()), -1,wait);
+ 848       return;
+ 849     }
+ 850 
+ 851     // Step 4
+ 852     if (this_oop-&gt;is_initialized()) {
+ 853       DTRACE_CLASSINIT_PROBE_WAIT(concurrent, InstanceKlass::cast(this_oop()), -1,wait);
+ 854       return;
+ 855     }
+ 856 
+ 857     // Step 5
+ 858     if (this_oop-&gt;is_in_error_state()) {
+ 859       DTRACE_CLASSINIT_PROBE_WAIT(erroneous, InstanceKlass::cast(this_oop()), -1,wait);
+ 860       ResourceMark rm(THREAD);
+ 861       const char* desc = "Could not initialize class ";
+ 862       const char* className = this_oop-&gt;external_name();
+ 863       size_t msglen = strlen(desc) + strlen(className) + 1;
+ 864       char* message = NEW_RESOURCE_ARRAY(char, msglen);
+ 865       if (NULL == message) {
+ 866         // Out of memory: can't create detailed error message
+ 867         THROW_MSG(vmSymbols::java_lang_NoClassDefFoundError(), className);
+ 868       } else {
+ 869         jio_snprintf(message, msglen, "%s%s", desc, className);
+ 870         THROW_MSG(vmSymbols::java_lang_NoClassDefFoundError(), message);
+ 871       }
+ 872     }
+ 873 
+ 874     // Step 6
+ 875     this_oop-&gt;set_init_state(being_initialized);
+ 876     this_oop-&gt;set_init_thread(self);
+ 877   }
+ 878 
+ 879   // Step 7
+ 880   Klass* super_klass = this_oop-&gt;super();
+ 881   if (super_klass != NULL &amp;&amp; !this_oop-&gt;is_interface() &amp;&amp; super_klass-&gt;should_be_initialized()) {
+ 882     super_klass-&gt;initialize(THREAD);
+ 883 
+ 884     if (HAS_PENDING_EXCEPTION) {
+ 885       Handle e(THREAD, PENDING_EXCEPTION);
+ 886       CLEAR_PENDING_EXCEPTION;
+ 887       {
+ 888         EXCEPTION_MARK;
+ 889         this_oop-&gt;set_initialization_state_and_notify(initialization_error, THREAD); // Locks object, set state, and notify all waiting threads
+ 890         CLEAR_PENDING_EXCEPTION;   // ignore any exception thrown, superclass initialization error is thrown below
+ 891       }
+ 892       DTRACE_CLASSINIT_PROBE_WAIT(super__failed, InstanceKlass::cast(this_oop()), -1,wait);
+ 893       THROW_OOP(e());
+ 894     }
+ 895   }
+ 896 
+ 897   // Recursively initialize any superinterfaces that declare default methods
+ 898   // Only need to recurse if has_default_methods which includes declaring and
+ 899   // inheriting default methods
+ 900   if (this_oop-&gt;has_default_methods()) {
+ 901     this_oop-&gt;initialize_super_interfaces(this_oop, CHECK);
+ 902   }
+ 903 
+ 904   // Step 8
+ 905   {
+ 906     assert(THREAD-&gt;is_Java_thread(), "non-JavaThread in initialize_impl");
+ 907     JavaThread* jt = (JavaThread*)THREAD;
+ 908     DTRACE_CLASSINIT_PROBE_WAIT(clinit, InstanceKlass::cast(this_oop()), -1,wait);
+ 909     // Timer includes any side effects of class initialization (resolution,
+ 910     // etc), but not recursive entry into call_class_initializer().
+ 911     PerfClassTraceTime timer(ClassLoader::perf_class_init_time(),
+ 912                              ClassLoader::perf_class_init_selftime(),
+ 913                              ClassLoader::perf_classes_inited(),
+ 914                              jt-&gt;get_thread_stat()-&gt;perf_recursion_counts_addr(),
+ 915                              jt-&gt;get_thread_stat()-&gt;perf_timers_addr(),
+ 916                              PerfClassTraceTime::CLASS_CLINIT);
+ 917     this_oop-&gt;call_class_initializer(THREAD);
+ 918   }
+ 919 
+ 920   // Step 9
+ 921   if (!HAS_PENDING_EXCEPTION) {
+ 922     this_oop-&gt;set_initialization_state_and_notify(fully_initialized, CHECK);
+ 923     { ResourceMark rm(THREAD);
+ 924       debug_only(this_oop-&gt;vtable()-&gt;verify(tty, true);)
+ 925     }
+ 926   }
+ 927   else {
+ 928     // Step 10 and 11
+ 929     Handle e(THREAD, PENDING_EXCEPTION);
+ 930     CLEAR_PENDING_EXCEPTION;
+ 931     {
+ 932       EXCEPTION_MARK;
+ 933       this_oop-&gt;set_initialization_state_and_notify(initialization_error, THREAD);
+ 934       CLEAR_PENDING_EXCEPTION;   // ignore any exception thrown, class initialization error is thrown below
+ 935     }
+ 936     DTRACE_CLASSINIT_PROBE_WAIT(error, InstanceKlass::cast(this_oop()), -1,wait);
+ 937     if (e-&gt;is_a(SystemDictionary::Error_klass())) {
+ 938       THROW_OOP(e());
+ 939     } else {
+ 940       JavaCallArguments args(e);
+ 941       THROW_ARG(vmSymbols::java_lang_ExceptionInInitializerError(),
+ 942                 vmSymbols::throwable_void_signature(),
+ 943                 &amp;args);
+ 944     }
+ 945   }
+ 946   DTRACE_CLASSINIT_PROBE_WAIT(end, InstanceKlass::cast(this_oop()), -1,wait);
+ 947 }
+ 948 
+ 949 
+ 950 // Note: implementation moved to static method to expose the this pointer.
+ 951 void InstanceKlass::set_initialization_state_and_notify(ClassState state, TRAPS) {
+ 952   instanceKlassHandle kh(THREAD, this);
+ 953   set_initialization_state_and_notify_impl(kh, state, CHECK);
+ 954 }
+ 955 
+ 956 void InstanceKlass::set_initialization_state_and_notify_impl(instanceKlassHandle this_oop, ClassState state, TRAPS) {
+ 957   oop init_lock = this_oop-&gt;init_lock();
+ 958   ObjectLocker ol(init_lock, THREAD, init_lock != NULL);
+ 959   this_oop-&gt;set_init_state(state);
+ 960   this_oop-&gt;fence_and_clear_init_lock();
+ 961   ol.notify_all(CHECK);
+ 962 }
+ 963 
+ 964 // The embedded _implementor field can only record one implementor.
+ 965 // When there are more than one implementors, the _implementor field
+ 966 // is set to the interface Klass* itself. Following are the possible
+ 967 // values for the _implementor field:
+ 968 //   NULL                  - no implementor
+ 969 //   implementor Klass*    - one implementor
+ 970 //   self                  - more than one implementor
+ 971 //
+ 972 // The _implementor field only exists for interfaces.
+ 973 void InstanceKlass::add_implementor(Klass* k) {
+ 974   assert(Compile_lock-&gt;owned_by_self(), "");
+ 975   assert(is_interface(), "not interface");
+ 976   // Filter out my subinterfaces.
+ 977   // (Note: Interfaces are never on the subklass list.)
+ 978   if (InstanceKlass::cast(k)-&gt;is_interface()) return;
+ 979 
+ 980   // Filter out subclasses whose supers already implement me.
+ 981   // (Note: CHA must walk subclasses of direct implementors
+ 982   // in order to locate indirect implementors.)
+ 983   Klass* sk = InstanceKlass::cast(k)-&gt;super();
+ 984   if (sk != NULL &amp;&amp; InstanceKlass::cast(sk)-&gt;implements_interface(this))
+ 985     // We only need to check one immediate superclass, since the
+ 986     // implements_interface query looks at transitive_interfaces.
+ 987     // Any supers of the super have the same (or fewer) transitive_interfaces.
+ 988     return;
+ 989 
+ 990   Klass* ik = implementor();
+ 991   if (ik == NULL) {
+ 992     set_implementor(k);
+ 993   } else if (ik != this) {
+ 994     // There is already an implementor. Use itself as an indicator of
+ 995     // more than one implementors.
+ 996     set_implementor(this);
+ 997   }
+ 998 
+ 999   // The implementor also implements the transitive_interfaces
+1000   for (int index = 0; index &lt; local_interfaces()-&gt;length(); index++) {
+1001     InstanceKlass::cast(local_interfaces()-&gt;at(index))-&gt;add_implementor(k);
+1002   }
+1003 }
+1004 
+1005 void InstanceKlass::init_implementor() {
+1006   if (is_interface()) {
+1007     set_implementor(NULL);
+1008   }
+1009 }
+1010 
+1011 
+1012 void InstanceKlass::process_interfaces(Thread *thread) {
+1013   // link this class into the implementors list of every interface it implements
+1014   Klass* this_as_klass_oop = this;
+1015   for (int i = local_interfaces()-&gt;length() - 1; i &gt;= 0; i--) {
+1016     assert(local_interfaces()-&gt;at(i)-&gt;is_klass(), "must be a klass");
+1017     InstanceKlass* interf = InstanceKlass::cast(local_interfaces()-&gt;at(i));
+1018     assert(interf-&gt;is_interface(), "expected interface");
+1019     interf-&gt;add_implementor(this_as_klass_oop);
+1020   }
+1021 }
+1022 
+1023 bool InstanceKlass::can_be_primary_super_slow() const {
+1024   if (is_interface())
+1025     return false;
+1026   else
+1027     return Klass::can_be_primary_super_slow();
+1028 }
+1029 
+1030 GrowableArray&lt;Klass*&gt;* InstanceKlass::compute_secondary_supers(int num_extra_slots) {
+1031   // The secondaries are the implemented interfaces.
+1032   InstanceKlass* ik = InstanceKlass::cast(this);
+1033   Array&lt;Klass*&gt;* interfaces = ik-&gt;transitive_interfaces();
+1034   int num_secondaries = num_extra_slots + interfaces-&gt;length();
+1035   if (num_secondaries == 0) {
+1036     // Must share this for correct bootstrapping!
+1037     set_secondary_supers(Universe::the_empty_klass_array());
+1038     return NULL;
+1039   } else if (num_extra_slots == 0) {
+1040     // The secondary super list is exactly the same as the transitive interfaces.
+1041     // Redefine classes has to be careful not to delete this!
+1042     set_secondary_supers(interfaces);
+1043     return NULL;
+1044   } else {
+1045     // Copy transitive interfaces to a temporary growable array to be constructed
+1046     // into the secondary super list with extra slots.
+1047     GrowableArray&lt;Klass*&gt;* secondaries = new GrowableArray&lt;Klass*&gt;(interfaces-&gt;length());
+1048     for (int i = 0; i &lt; interfaces-&gt;length(); i++) {
+1049       secondaries-&gt;push(interfaces-&gt;at(i));
+1050     }
+1051     return secondaries;
+1052   }
+1053 }
+1054 
+1055 bool InstanceKlass::compute_is_subtype_of(Klass* k) {
+1056   if (k-&gt;is_interface()) {
+1057     return implements_interface(k);
+1058   } else {
+1059     return Klass::compute_is_subtype_of(k);
+1060   }
+1061 }
+1062 
+1063 bool InstanceKlass::implements_interface(Klass* k) const {
+1064   if (this == k) return true;
+1065   assert(k-&gt;is_interface(), "should be an interface class");
+1066   for (int i = 0; i &lt; transitive_interfaces()-&gt;length(); i++) {
+1067     if (transitive_interfaces()-&gt;at(i) == k) {
+1068       return true;
+1069     }
+1070   }
+1071   return false;
+1072 }
+1073 
+1074 bool InstanceKlass::is_same_or_direct_interface(Klass *k) const {
+1075   // Verify direct super interface
+1076   if (this == k) return true;
+1077   assert(k-&gt;is_interface(), "should be an interface class");
+1078   for (int i = 0; i &lt; local_interfaces()-&gt;length(); i++) {
+1079     if (local_interfaces()-&gt;at(i) == k) {
+1080       return true;
+1081     }
+1082   }
+1083   return false;
+1084 }
+1085 
+1086 objArrayOop InstanceKlass::allocate_objArray(int n, int length, TRAPS) {
+1087   if (length &lt; 0) THROW_0(vmSymbols::java_lang_NegativeArraySizeException());
+1088   if (length &gt; arrayOopDesc::max_array_length(T_OBJECT)) {
+1089     report_java_out_of_memory("Requested array size exceeds VM limit");
+1090     JvmtiExport::post_array_size_exhausted();
+1091     THROW_OOP_0(Universe::out_of_memory_error_array_size());
+1092   }
+1093   int size = objArrayOopDesc::object_size(length);
+1094   Klass* ak = array_klass(n, CHECK_NULL);
+1095   KlassHandle h_ak (THREAD, ak);
+1096   objArrayOop o =
+1097     (objArrayOop)CollectedHeap::array_allocate(h_ak, size, length, CHECK_NULL);
+1098   return o;
+1099 }
+1100 
+1101 instanceOop InstanceKlass::register_finalizer(instanceOop i, TRAPS) {
+1102   if (TraceFinalizerRegistration) {
+1103     tty-&gt;print("Registered ");
+1104     i-&gt;print_value_on(tty);
+1105     tty-&gt;print_cr(" (" INTPTR_FORMAT ") as finalizable", (address)i);
+1106   }
+1107   instanceHandle h_i(THREAD, i);
+1108   // Pass the handle as argument, JavaCalls::call expects oop as jobjects
+1109   JavaValue result(T_VOID);
+1110   JavaCallArguments args(h_i);
+1111   methodHandle mh (THREAD, Universe::finalizer_register_method());
+1112   JavaCalls::call(&amp;result, mh, &amp;args, CHECK_NULL);
+1113   return h_i();
+1114 }
+1115 
+1116 instanceOop InstanceKlass::allocate_instance(TRAPS) {
+1117   bool has_finalizer_flag = has_finalizer(); // Query before possible GC
+1118   int size = size_helper(); // Query before forming handle
+1119 
+1120   KlassHandle h_k(THREAD, this);
+1121   instanceOop i = (instanceOop) CollectedHeap::obj_allocate(h_k, size,
+1122       CHECK_NULL);
+1123   if (has_finalizer_flag &amp;&amp; !RegisterFinalizersAtInit) {
+1124     i = register_finalizer(i, CHECK_NULL);
+1125   }
+1126   return i;
+1127 }
+1128 
+1129 instanceOop InstanceKlass::allocate_instance(int size, TRAPS) {
+1130   if (TraceObjectLayoutIntrinsics) {
+1131     ResourceMark rm;
+1132     tty-&gt;print_cr(
+1133         "InstanceKlass::allocate_instance: type=%s, size=%d",
+1134         signature_name(), size);
+1135   }
+1136 
+1137   assert(size &gt; 0, "invalid size");
+1138 
+1139   bool has_finalizer_flag = has_finalizer(); // Query before possible GC
+1140 
+1141   KlassHandle h_k(THREAD, this);
+1142   instanceOop i = (instanceOop) CollectedHeap::obj_allocate(h_k, size,
+1143       CHECK_NULL);
+1144   if (has_finalizer_flag &amp;&amp; !RegisterFinalizersAtInit) {
+1145     i = register_finalizer(i, CHECK_NULL);
+1146   }
+1147   return i;
+1148 }
+1149 
+1150 instanceOop InstanceKlass::allocate_instance_at(address obj_addr,
+1151     bool is_contained, bool is_container, TRAPS) {
+1152   if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2) {
+1153     ResourceMark rm;
+1154     tty-&gt;print_cr(
+1155         "InstanceKlass::allocate_instance_at: "
+1156         "type=%s, addr=0x%p, %scontained, %scontainer",
+1157         signature_name(), (void*) obj_addr,
+1158         is_contained ? "" : "not ",
+1159         is_container ? "" : "not ");
+1160   }
+1161 
+1162   bool has_finalizer_flag = has_finalizer(); // Query before possible GC
+1163   int size_in_words = size_helper();
+1164 
+1165   assert(!Universe::heap()-&gt;is_gc_active(),
+1166       "initialization during GC not allowed");
+1167   assert(obj_addr != NULL, "cannot initialize NULL object");
+1168   assert(is_ptr_aligned(obj_addr, HeapWordSize), "address not aligned");
+1169   assert(size_in_words &gt; 0, "invalid size");
+1170 
+1171   oop obj = (oop) obj_addr;
+1172   obj-&gt;set_klass_gap(0);
+1173   markOop mark;
+1174   if (UseBiasedLocking) {
+1175     mark = prototype_header();
+1176   } else {
+1177     mark = markOopDesc::prototype();
+1178   }
+1179   if (is_contained) {
+1180     mark = mark-&gt;set_contained();
+1181   }
+1182   if (is_container) {
+1183     mark = mark-&gt;set_container();
+1184   }
+1185   obj-&gt;set_mark(mark);
+1186   obj-&gt;set_klass(this);
+1187 
+1188   // Support for JVMTI VMObjectAlloc event (no-op if not enabled)
+1189   JvmtiExport::vm_object_alloc_event_collector(obj);
+1190 
+1191   if (DTraceAllocProbes) {
+1192     // Support for DTrace object-alloc probe (no-op most of the time)
+1193     if (name() != NULL) {
+1194       SharedRuntime::dtrace_object_alloc(obj, size_in_words);
+1195     }
+1196   }
+1197 
+1198   instanceOop i = (instanceOop) obj;
+1199   if (has_finalizer_flag &amp;&amp; !RegisterFinalizersAtInit) {
+1200     // For SA we need to do register_finalizer
+1201     // in a separate pass. Otherwise we might get inconsistent heap
+1202     // For now we just disallow SAs with finalizers
+1203     // See issue #28 for details.
+1204     guarantee( ((is_contained || is_container) == false), \
+1205             err_msg("SA and finalizers don't work together for now. See issue #28 for details"));
+1206     i = register_finalizer(i, CHECK_NULL);
+1207   }
+1208   return i;
+1209 }
+1210 
+1211 void InstanceKlass::check_valid_for_instantiation(bool throwError, TRAPS) {
+1212   if (is_interface() || is_abstract()) {
+1213     ResourceMark rm(THREAD);
+1214     THROW_MSG(throwError ? vmSymbols::java_lang_InstantiationError()
+1215               : vmSymbols::java_lang_InstantiationException(), external_name());
+1216   }
+1217   if (this == SystemDictionary::Class_klass()) {
+1218     ResourceMark rm(THREAD);
+1219     THROW_MSG(throwError ? vmSymbols::java_lang_IllegalAccessError()
+1220               : vmSymbols::java_lang_IllegalAccessException(), external_name());
+1221   }
+1222 }
+1223 
+1224 Klass* InstanceKlass::array_klass_impl(bool or_null, int n, TRAPS) {
+1225   instanceKlassHandle this_oop(THREAD, this);
+1226   return array_klass_impl(this_oop, or_null, n, THREAD);
+1227 }
+1228 
+1229 Klass* InstanceKlass::array_klass_impl(instanceKlassHandle this_oop, bool or_null, int n, TRAPS) {
+1230   if (this_oop-&gt;array_klasses() == NULL) {
+1231     if (or_null) return NULL;
+1232 
+1233     ResourceMark rm;
+1234     JavaThread *jt = (JavaThread *)THREAD;
+1235     {
+1236       // Atomic creation of array_klasses
+1237       MutexLocker mc(Compile_lock, THREAD);   // for vtables
+1238       MutexLocker ma(MultiArray_lock, THREAD);
+1239 
+1240       // Check if update has already taken place
+1241       if (this_oop-&gt;array_klasses() == NULL) {
+1242         Klass*    k = ObjArrayKlass::allocate_objArray_klass(this_oop-&gt;class_loader_data(), 1, this_oop, CHECK_NULL);
+1243         this_oop-&gt;set_array_klasses(k);
+1244       }
+1245     }
+1246   }
+1247   // _this will always be set at this point
+1248   ObjArrayKlass* oak = (ObjArrayKlass*)this_oop-&gt;array_klasses();
+1249   if (or_null) {
+1250     return oak-&gt;array_klass_or_null(n);
+1251   }
+1252   return oak-&gt;array_klass(n, CHECK_NULL);
+1253 }
+1254 
+1255 Klass* InstanceKlass::array_klass_impl(bool or_null, TRAPS) {
+1256   return array_klass_impl(or_null, 1, THREAD);
+1257 }
+1258 
+1259 void InstanceKlass::call_class_initializer(TRAPS) {
+1260   instanceKlassHandle ik (THREAD, this);
+1261   call_class_initializer_impl(ik, THREAD);
+1262 }
+1263 
+1264 static int call_class_initializer_impl_counter = 0;   // for debugging
+1265 
+1266 Method* InstanceKlass::class_initializer() {
+1267   Method* clinit = find_method(
+1268       vmSymbols::class_initializer_name(), vmSymbols::void_method_signature());
+1269   if (clinit != NULL &amp;&amp; clinit-&gt;has_valid_initializer_flags()) {
+1270     return clinit;
+1271   }
+1272   return NULL;
+1273 }
+1274 
+1275 void InstanceKlass::call_class_initializer_impl(instanceKlassHandle this_oop, TRAPS) {
+1276   if (ReplayCompiles &amp;&amp;
+1277       (ReplaySuppressInitializers == 1 ||
+1278        ReplaySuppressInitializers &gt;= 2 &amp;&amp; this_oop-&gt;class_loader() != NULL)) {
+1279     // Hide the existence of the initializer for the purpose of replaying the compile
+1280     return;
+1281   }
+1282 
+1283   methodHandle h_method(THREAD, this_oop-&gt;class_initializer());
+1284   assert(!this_oop-&gt;is_initialized(), "we cannot initialize twice");
+1285   if (TraceClassInitialization) {
+1286     tty-&gt;print("%d Initializing ", call_class_initializer_impl_counter++);
+1287     this_oop-&gt;name()-&gt;print_value();
+1288     tty-&gt;print_cr("%s (" INTPTR_FORMAT ")", h_method() == NULL ? "(no method)" : "", (address)this_oop());
+1289   }
+1290   if (h_method() != NULL) {
+1291     JavaCallArguments args; // No arguments
+1292     JavaValue result(T_VOID);
+1293     JavaCalls::call(&amp;result, h_method, &amp;args, CHECK); // Static call (no args)
+1294   }
+1295 }
+1296 
+1297 
+1298 void InstanceKlass::mask_for(methodHandle method, int bci,
+1299   InterpreterOopMap* entry_for) {
+1300   // Dirty read, then double-check under a lock.
+1301   if (_oop_map_cache == NULL) {
+1302     // Otherwise, allocate a new one.
+1303     MutexLocker x(OopMapCacheAlloc_lock);
+1304     // First time use. Allocate a cache in C heap
+1305     if (_oop_map_cache == NULL) {
+1306       // Release stores from OopMapCache constructor before assignment
+1307       // to _oop_map_cache. C++ compilers on ppc do not emit the
+1308       // required memory barrier only because of the volatile
+1309       // qualifier of _oop_map_cache.
+1310       OrderAccess::release_store_ptr(&amp;_oop_map_cache, new OopMapCache());
+1311     }
+1312   }
+1313   // _oop_map_cache is constant after init; lookup below does is own locking.
+1314   _oop_map_cache-&gt;lookup(method, bci, entry_for);
+1315 }
+1316 
+1317 
+1318 bool InstanceKlass::find_local_field(Symbol* name, Symbol* sig, fieldDescriptor* fd) const {
+1319   for (JavaFieldStream fs(this); !fs.done(); fs.next()) {
+1320     Symbol* f_name = fs.name();
+1321     Symbol* f_sig  = fs.signature();
+1322     if (f_name == name &amp;&amp; f_sig == sig) {
+1323       fd-&gt;reinitialize(const_cast&lt;InstanceKlass*&gt;(this), fs.index());
+1324       return true;
+1325     }
+1326   }
+1327   return false;
+1328 }
+1329 
+1330 
+1331 Klass* InstanceKlass::find_interface_field(Symbol* name, Symbol* sig, fieldDescriptor* fd) const {
+1332   const int n = local_interfaces()-&gt;length();
+1333   for (int i = 0; i &lt; n; i++) {
+1334     Klass* intf1 = local_interfaces()-&gt;at(i);
+1335     assert(intf1-&gt;is_interface(), "just checking type");
+1336     // search for field in current interface
+1337     if (InstanceKlass::cast(intf1)-&gt;find_local_field(name, sig, fd)) {
+1338       assert(fd-&gt;is_static(), "interface field must be static");
+1339       return intf1;
+1340     }
+1341     // search for field in direct superinterfaces
+1342     Klass* intf2 = InstanceKlass::cast(intf1)-&gt;find_interface_field(name, sig, fd);
+1343     if (intf2 != NULL) return intf2;
+1344   }
+1345   // otherwise field lookup fails
+1346   return NULL;
+1347 }
+1348 
+1349 
+1350 Klass* InstanceKlass::find_field(Symbol* name, Symbol* sig, fieldDescriptor* fd) const {
+1351   // search order according to newest JVM spec (5.4.3.2, p.167).
+1352   // 1) search for field in current klass
+1353   if (find_local_field(name, sig, fd)) {
+1354     return const_cast&lt;InstanceKlass*&gt;(this);
+1355   }
+1356   // 2) search for field recursively in direct superinterfaces
+1357   { Klass* intf = find_interface_field(name, sig, fd);
+1358     if (intf != NULL) return intf;
+1359   }
+1360   // 3) apply field lookup recursively if superclass exists
+1361   { Klass* supr = super();
+1362     if (supr != NULL) return InstanceKlass::cast(supr)-&gt;find_field(name, sig, fd);
+1363   }
+1364   // 4) otherwise field lookup fails
+1365   return NULL;
+1366 }
+1367 
+1368 
+1369 Klass* InstanceKlass::find_field(Symbol* name, Symbol* sig, bool is_static, fieldDescriptor* fd) const {
+1370   // search order according to newest JVM spec (5.4.3.2, p.167).
+1371   // 1) search for field in current klass
+1372   if (find_local_field(name, sig, fd)) {
+1373     if (fd-&gt;is_static() == is_static) return const_cast&lt;InstanceKlass*&gt;(this);
+1374   }
+1375   // 2) search for field recursively in direct superinterfaces
+1376   if (is_static) {
+1377     Klass* intf = find_interface_field(name, sig, fd);
+1378     if (intf != NULL) return intf;
+1379   }
+1380   // 3) apply field lookup recursively if superclass exists
+1381   { Klass* supr = super();
+1382     if (supr != NULL) return InstanceKlass::cast(supr)-&gt;find_field(name, sig, is_static, fd);
+1383   }
+1384   // 4) otherwise field lookup fails
+1385   return NULL;
+1386 }
+1387 
+1388 
+1389 bool InstanceKlass::find_local_field_from_offset(int offset, bool is_static, fieldDescriptor* fd) const {
+1390   for (JavaFieldStream fs(this); !fs.done(); fs.next()) {
+1391     if (fs.offset() == offset) {
+1392       fd-&gt;reinitialize(const_cast&lt;InstanceKlass*&gt;(this), fs.index());
+1393       if (fd-&gt;is_static() == is_static) return true;
+1394     }
+1395   }
+1396   return false;
+1397 }
+1398 
+1399 
+1400 bool InstanceKlass::find_field_from_offset(int offset, bool is_static, fieldDescriptor* fd) const {
+1401   Klass* klass = const_cast&lt;InstanceKlass*&gt;(this);
+1402   while (klass != NULL) {
+1403     if (InstanceKlass::cast(klass)-&gt;find_local_field_from_offset(offset, is_static, fd)) {
+1404       return true;
+1405     }
+1406     klass = klass-&gt;super();
+1407   }
+1408   return false;
+1409 }
+1410 
+1411 
+1412 void InstanceKlass::methods_do(void f(Method* method)) {
+1413   int len = methods()-&gt;length();
+1414   for (int index = 0; index &lt; len; index++) {
+1415     Method* m = methods()-&gt;at(index);
+1416     assert(m-&gt;is_method(), "must be method");
+1417     f(m);
+1418   }
+1419 }
+1420 
+1421 
+1422 void InstanceKlass::do_local_static_fields(FieldClosure* cl) {
+1423   for (JavaFieldStream fs(this); !fs.done(); fs.next()) {
+1424     if (fs.access_flags().is_static()) {
+1425       fieldDescriptor&amp; fd = fs.field_descriptor();
+1426       cl-&gt;do_field(&amp;fd);
+1427     }
+1428   }
+1429 }
+1430 
+1431 
+1432 void InstanceKlass::do_local_static_fields(void f(fieldDescriptor*, Handle, TRAPS), Handle mirror, TRAPS) {
+1433   instanceKlassHandle h_this(THREAD, this);
+1434   do_local_static_fields_impl(h_this, f, mirror, CHECK);
+1435 }
+1436 
+1437 
+1438 void InstanceKlass::do_local_static_fields_impl(instanceKlassHandle this_k,
+1439                              void f(fieldDescriptor* fd, Handle mirror, TRAPS), Handle mirror, TRAPS) {
+1440   for (JavaFieldStream fs(this_k()); !fs.done(); fs.next()) {
+1441     if (fs.access_flags().is_static()) {
+1442       fieldDescriptor&amp; fd = fs.field_descriptor();
+1443       f(&amp;fd, mirror, CHECK);
+1444     }
+1445   }
+1446 }
+1447 
+1448 
+1449 static int compare_fields_by_offset(int* a, int* b) {
+1450   return a[0] - b[0];
+1451 }
+1452 
+1453 void InstanceKlass::do_nonstatic_fields(FieldClosure* cl) {
+1454   InstanceKlass* super = superklass();
+1455   if (super != NULL) {
+1456     super-&gt;do_nonstatic_fields(cl);
+1457   }
+1458   fieldDescriptor fd;
+1459   int length = java_fields_count();
+1460   // In DebugInfo nonstatic fields are sorted by offset.
+1461   int* fields_sorted = NEW_C_HEAP_ARRAY(int, 2*(length+1), mtClass);
+1462   int j = 0;
+1463   for (int i = 0; i &lt; length; i += 1) {
+1464     fd.reinitialize(this, i);
+1465     if (!fd.is_static()) {
+1466       fields_sorted[j + 0] = fd.offset();
+1467       fields_sorted[j + 1] = i;
+1468       j += 2;
+1469     }
+1470   }
+1471   if (j &gt; 0) {
+1472     length = j;
+1473     // _sort_Fn is defined in growableArray.hpp.
+1474     qsort(fields_sorted, length/2, 2*sizeof(int), (_sort_Fn)compare_fields_by_offset);
+1475     for (int i = 0; i &lt; length; i += 2) {
+1476       fd.reinitialize(this, fields_sorted[i + 1]);
+1477       assert(!fd.is_static() &amp;&amp; fd.offset() == fields_sorted[i], "only nonstatic fields");
+1478       cl-&gt;do_field(&amp;fd);
+1479     }
+1480   }
+1481   FREE_C_HEAP_ARRAY(int, fields_sorted, mtClass);
+1482 }
+1483 
+1484 
+1485 void InstanceKlass::array_klasses_do(void f(Klass* k, TRAPS), TRAPS) {
+1486   if (array_klasses() != NULL)
+1487     ArrayKlass::cast(array_klasses())-&gt;array_klasses_do(f, THREAD);
+1488 }
+1489 
+1490 void InstanceKlass::array_klasses_do(void f(Klass* k)) {
+1491   if (array_klasses() != NULL)
+1492     ArrayKlass::cast(array_klasses())-&gt;array_klasses_do(f);
+1493 }
+1494 
+1495 #ifdef ASSERT
+1496 static int linear_search(Array&lt;Method*&gt;* methods, Symbol* name, Symbol* signature) {
+1497   int len = methods-&gt;length();
+1498   for (int index = 0; index &lt; len; index++) {
+1499     Method* m = methods-&gt;at(index);
+1500     assert(m-&gt;is_method(), "must be method");
+1501     if (m-&gt;signature() == signature &amp;&amp; m-&gt;name() == name) {
+1502        return index;
+1503     }
+1504   }
+1505   return -1;
+1506 }
+1507 #endif
+1508 
+1509 static int binary_search(Array&lt;Method*&gt;* methods, Symbol* name) {
+1510   int len = methods-&gt;length();
+1511   // methods are sorted, so do binary search
+1512   int l = 0;
+1513   int h = len - 1;
+1514   while (l &lt;= h) {
+1515     int mid = (l + h) &gt;&gt; 1;
+1516     Method* m = methods-&gt;at(mid);
+1517     assert(m-&gt;is_method(), "must be method");
+1518     int res = m-&gt;name()-&gt;fast_compare(name);
+1519     if (res == 0) {
+1520       return mid;
+1521     } else if (res &lt; 0) {
+1522       l = mid + 1;
+1523     } else {
+1524       h = mid - 1;
+1525     }
+1526   }
+1527   return -1;
+1528 }
+1529 
+1530 // find_method looks up the name/signature in the local methods array
+1531 Method* InstanceKlass::find_method(Symbol* name, Symbol* signature) const {
+1532   return find_method_impl(name, signature, false);
+1533 }
+1534 
+1535 Method* InstanceKlass::find_method_impl(Symbol* name, Symbol* signature, bool skipping_overpass) const {
+1536   return InstanceKlass::find_method_impl(methods(), name, signature, skipping_overpass, false);
+1537 }
+1538 
+1539 // find_instance_method looks up the name/signature in the local methods array
+1540 // and skips over static methods
+1541 Method* InstanceKlass::find_instance_method(
+1542     Array&lt;Method*&gt;* methods, Symbol* name, Symbol* signature) {
+1543   Method* meth = InstanceKlass::find_method_impl(methods, name, signature, false, true);
+1544   return meth;
+1545 }
+1546 
+1547 // find_instance_method looks up the name/signature in the local methods array
+1548 // and skips over static methods
+1549 Method* InstanceKlass::find_instance_method(Symbol* name, Symbol* signature) {
+1550     return InstanceKlass::find_instance_method(methods(), name, signature);
+1551 }
+1552 
+1553 // find_method looks up the name/signature in the local methods array
+1554 Method* InstanceKlass::find_method(
+1555     Array&lt;Method*&gt;* methods, Symbol* name, Symbol* signature) {
+1556   return InstanceKlass::find_method_impl(methods, name, signature, false, false);
+1557 }
+1558 
+1559 Method* InstanceKlass::find_method_impl(
+1560     Array&lt;Method*&gt;* methods, Symbol* name, Symbol* signature, bool skipping_overpass, bool skipping_static) {
+1561   int hit = find_method_index(methods, name, signature, skipping_overpass, skipping_static);
+1562   return hit &gt;= 0 ? methods-&gt;at(hit): NULL;
+1563 }
+1564 
+1565 bool InstanceKlass::method_matches(Method* m, Symbol* signature, bool skipping_overpass, bool skipping_static) {
+1566     return (m-&gt;signature() == signature) &amp;&amp;
+1567             (!skipping_overpass || !m-&gt;is_overpass()) &amp;&amp;
+1568             (!skipping_static || !m-&gt;is_static());
+1569 }
+1570 
+1571 // Used directly for default_methods to find the index into the
+1572 // default_vtable_indices, and indirectly by find_method
+1573 // find_method_index looks in the local methods array to return the index
+1574 // of the matching name/signature. If, overpass methods are being ignored,
+1575 // the search continues to find a potential non-overpass match.  This capability
+1576 // is important during method resolution to prefer a static method, for example,
+1577 // over an overpass method.
+1578 int InstanceKlass::find_method_index(
+1579     Array&lt;Method*&gt;* methods, Symbol* name, Symbol* signature, bool skipping_overpass, bool skipping_static) {
+1580   int hit = binary_search(methods, name);
+1581   if (hit != -1) {
+1582     Method* m = methods-&gt;at(hit);
+1583 
+1584     // Do linear search to find matching signature.  First, quick check
+1585     // for common case, ignoring overpasses if requested.
+1586     if (method_matches(m, signature, skipping_overpass, skipping_static)) return hit;
+1587 
+1588     // search downwards through overloaded methods
+1589     int i;
+1590     for (i = hit - 1; i &gt;= 0; --i) {
+1591         Method* m = methods-&gt;at(i);
+1592         assert(m-&gt;is_method(), "must be method");
+1593         if (m-&gt;name() != name) break;
+1594         if (method_matches(m, signature, skipping_overpass, skipping_static)) return i;
+1595     }
+1596     // search upwards
+1597     for (i = hit + 1; i &lt; methods-&gt;length(); ++i) {
+1598         Method* m = methods-&gt;at(i);
+1599         assert(m-&gt;is_method(), "must be method");
+1600         if (m-&gt;name() != name) break;
+1601         if (method_matches(m, signature, skipping_overpass, skipping_static)) return i;
+1602     }
+1603     // not found
+1604 #ifdef ASSERT
+1605     int index = skipping_overpass || skipping_static ? -1 : linear_search(methods, name, signature);
+1606     assert(index == -1, err_msg("binary search should have found entry %d", index));
+1607 #endif
+1608   }
+1609   return -1;
+1610 }
+1611 int InstanceKlass::find_method_by_name(Symbol* name, int* end) {
+1612   return find_method_by_name(methods(), name, end);
+1613 }
+1614 
+1615 int InstanceKlass::find_method_by_name(
+1616     Array&lt;Method*&gt;* methods, Symbol* name, int* end_ptr) {
+1617   assert(end_ptr != NULL, "just checking");
+1618   int start = binary_search(methods, name);
+1619   int end = start + 1;
+1620   if (start != -1) {
+1621     while (start - 1 &gt;= 0 &amp;&amp; (methods-&gt;at(start - 1))-&gt;name() == name) --start;
+1622     while (end &lt; methods-&gt;length() &amp;&amp; (methods-&gt;at(end))-&gt;name() == name) ++end;
+1623     *end_ptr = end;
+1624     return start;
+1625   }
+1626   return -1;
+1627 }
+1628 
+1629 // uncached_lookup_method searches both the local class methods array and all
+1630 // superclasses methods arrays, skipping any overpass methods in superclasses.
+1631 Method* InstanceKlass::uncached_lookup_method(Symbol* name, Symbol* signature, MethodLookupMode mode) const {
+1632   MethodLookupMode lookup_mode = mode;
+1633   Klass* klass = const_cast&lt;InstanceKlass*&gt;(this);
+1634   while (klass != NULL) {
+1635     Method* method = InstanceKlass::cast(klass)-&gt;find_method_impl(name, signature, (lookup_mode == skip_overpass));
+1636     if (method != NULL) {
+1637       return method;
+1638     }
+1639     klass = InstanceKlass::cast(klass)-&gt;super();
+1640     lookup_mode = skip_overpass;   // Always ignore overpass methods in superclasses
+1641   }
+1642   return NULL;
+1643 }
+1644 
+1645 // lookup a method in the default methods list then in all transitive interfaces
+1646 // Do NOT return private or static methods
+1647 Method* InstanceKlass::lookup_method_in_ordered_interfaces(Symbol* name,
+1648                                                          Symbol* signature) const {
+1649   Method* m = NULL;
+1650   if (default_methods() != NULL) {
+1651     m = find_method(default_methods(), name, signature);
+1652   }
+1653   // Look up interfaces
+1654   if (m == NULL) {
+1655     m = lookup_method_in_all_interfaces(name, signature, normal);
+1656   }
+1657   return m;
+1658 }
+1659 
+1660 // lookup a method in all the interfaces that this class implements
+1661 // Do NOT return private or static methods, new in JDK8 which are not externally visible
+1662 // They should only be found in the initial InterfaceMethodRef
+1663 Method* InstanceKlass::lookup_method_in_all_interfaces(Symbol* name,
+1664                                                        Symbol* signature,
+1665                                                        MethodLookupMode mode) const {
+1666   Array&lt;Klass*&gt;* all_ifs = transitive_interfaces();
+1667   int num_ifs = all_ifs-&gt;length();
+1668   InstanceKlass *ik = NULL;
+1669   for (int i = 0; i &lt; num_ifs; i++) {
+1670     ik = InstanceKlass::cast(all_ifs-&gt;at(i));
+1671     Method* m = ik-&gt;lookup_method(name, signature);
+1672     if (m != NULL &amp;&amp; m-&gt;is_public() &amp;&amp; !m-&gt;is_static() &amp;&amp;
+1673         ((mode != skip_defaults) || !m-&gt;is_default_method())) {
+1674       return m;
+1675     }
+1676   }
+1677   return NULL;
+1678 }
+1679 
+1680 /* jni_id_for_impl for jfieldIds only */
+1681 JNIid* InstanceKlass::jni_id_for_impl(instanceKlassHandle this_oop, int offset) {
+1682   MutexLocker ml(JfieldIdCreation_lock);
+1683   // Retry lookup after we got the lock
+1684   JNIid* probe = this_oop-&gt;jni_ids() == NULL ? NULL : this_oop-&gt;jni_ids()-&gt;find(offset);
+1685   if (probe == NULL) {
+1686     // Slow case, allocate new static field identifier
+1687     probe = new JNIid(this_oop(), offset, this_oop-&gt;jni_ids());
+1688     this_oop-&gt;set_jni_ids(probe);
+1689   }
+1690   return probe;
+1691 }
+1692 
+1693 
+1694 /* jni_id_for for jfieldIds only */
+1695 JNIid* InstanceKlass::jni_id_for(int offset) {
+1696   JNIid* probe = jni_ids() == NULL ? NULL : jni_ids()-&gt;find(offset);
+1697   if (probe == NULL) {
+1698     probe = jni_id_for_impl(this, offset);
+1699   }
+1700   return probe;
+1701 }
+1702 
+1703 u2 InstanceKlass::enclosing_method_data(int offset) {
+1704   Array&lt;jushort&gt;* inner_class_list = inner_classes();
+1705   if (inner_class_list == NULL) {
+1706     return 0;
+1707   }
+1708   int length = inner_class_list-&gt;length();
+1709   if (length % inner_class_next_offset == 0) {
+1710     return 0;
+1711   } else {
+1712     int index = length - enclosing_method_attribute_size;
+1713     assert(offset &lt; enclosing_method_attribute_size, "invalid offset");
+1714     return inner_class_list-&gt;at(index + offset);
+1715   }
+1716 }
+1717 
+1718 void InstanceKlass::set_enclosing_method_indices(u2 class_index,
+1719                                                  u2 method_index) {
+1720   Array&lt;jushort&gt;* inner_class_list = inner_classes();
+1721   assert (inner_class_list != NULL, "_inner_classes list is not set up");
+1722   int length = inner_class_list-&gt;length();
+1723   if (length % inner_class_next_offset == enclosing_method_attribute_size) {
+1724     int index = length - enclosing_method_attribute_size;
+1725     inner_class_list-&gt;at_put(
+1726       index + enclosing_method_class_index_offset, class_index);
+1727     inner_class_list-&gt;at_put(
+1728       index + enclosing_method_method_index_offset, method_index);
+1729   }
+1730 }
+1731 
+1732 // Lookup or create a jmethodID.
+1733 // This code is called by the VMThread and JavaThreads so the
+1734 // locking has to be done very carefully to avoid deadlocks
+1735 // and/or other cache consistency problems.
+1736 //
+1737 jmethodID InstanceKlass::get_jmethod_id(instanceKlassHandle ik_h, methodHandle method_h) {
+1738   size_t idnum = (size_t)method_h-&gt;method_idnum();
+1739   jmethodID* jmeths = ik_h-&gt;methods_jmethod_ids_acquire();
+1740   size_t length = 0;
+1741   jmethodID id = NULL;
+1742 
+1743   // We use a double-check locking idiom here because this cache is
+1744   // performance sensitive. In the normal system, this cache only
+1745   // transitions from NULL to non-NULL which is safe because we use
+1746   // release_set_methods_jmethod_ids() to advertise the new cache.
+1747   // A partially constructed cache should never be seen by a racing
+1748   // thread. We also use release_store_ptr() to save a new jmethodID
+1749   // in the cache so a partially constructed jmethodID should never be
+1750   // seen either. Cache reads of existing jmethodIDs proceed without a
+1751   // lock, but cache writes of a new jmethodID requires uniqueness and
+1752   // creation of the cache itself requires no leaks so a lock is
+1753   // generally acquired in those two cases.
+1754   //
+1755   // If the RedefineClasses() API has been used, then this cache can
+1756   // grow and we'll have transitions from non-NULL to bigger non-NULL.
+1757   // Cache creation requires no leaks and we require safety between all
+1758   // cache accesses and freeing of the old cache so a lock is generally
+1759   // acquired when the RedefineClasses() API has been used.
+1760 
+1761   if (jmeths != NULL) {
+1762     // the cache already exists
+1763     if (!ik_h-&gt;idnum_can_increment()) {
+1764       // the cache can't grow so we can just get the current values
+1765       get_jmethod_id_length_value(jmeths, idnum, &amp;length, &amp;id);
+1766     } else {
+1767       // cache can grow so we have to be more careful
+1768       if (Threads::number_of_threads() == 0 ||
+1769           SafepointSynchronize::is_at_safepoint()) {
+1770         // we're single threaded or at a safepoint - no locking needed
+1771         get_jmethod_id_length_value(jmeths, idnum, &amp;length, &amp;id);
+1772       } else {
+1773         MutexLocker ml(JmethodIdCreation_lock);
+1774         get_jmethod_id_length_value(jmeths, idnum, &amp;length, &amp;id);
+1775       }
+1776     }
+1777   }
+1778   // implied else:
+1779   // we need to allocate a cache so default length and id values are good
+1780 
+1781   if (jmeths == NULL ||   // no cache yet
+1782       length &lt;= idnum ||  // cache is too short
+1783       id == NULL) {       // cache doesn't contain entry
+1784 
+1785     // This function can be called by the VMThread so we have to do all
+1786     // things that might block on a safepoint before grabbing the lock.
+1787     // Otherwise, we can deadlock with the VMThread or have a cache
+1788     // consistency issue. These vars keep track of what we might have
+1789     // to free after the lock is dropped.
+1790     jmethodID  to_dealloc_id     = NULL;
+1791     jmethodID* to_dealloc_jmeths = NULL;
+1792 
+1793     // may not allocate new_jmeths or use it if we allocate it
+1794     jmethodID* new_jmeths = NULL;
+1795     if (length &lt;= idnum) {
+1796       // allocate a new cache that might be used
+1797       size_t size = MAX2(idnum+1, (size_t)ik_h-&gt;idnum_allocated_count());
+1798       new_jmeths = NEW_C_HEAP_ARRAY(jmethodID, size+1, mtClass);
+1799       memset(new_jmeths, 0, (size+1)*sizeof(jmethodID));
+1800       // cache size is stored in element[0], other elements offset by one
+1801       new_jmeths[0] = (jmethodID)size;
+1802     }
+1803 
+1804     // allocate a new jmethodID that might be used
+1805     jmethodID new_id = NULL;
+1806     if (method_h-&gt;is_old() &amp;&amp; !method_h-&gt;is_obsolete()) {
+1807       // The method passed in is old (but not obsolete), we need to use the current version
+1808       Method* current_method = ik_h-&gt;method_with_idnum((int)idnum);
+1809       assert(current_method != NULL, "old and but not obsolete, so should exist");
+1810       new_id = Method::make_jmethod_id(ik_h-&gt;class_loader_data(), current_method);
+1811     } else {
+1812       // It is the current version of the method or an obsolete method,
+1813       // use the version passed in
+1814       new_id = Method::make_jmethod_id(ik_h-&gt;class_loader_data(), method_h());
+1815     }
+1816 
+1817     if (Threads::number_of_threads() == 0 ||
+1818         SafepointSynchronize::is_at_safepoint()) {
+1819       // we're single threaded or at a safepoint - no locking needed
+1820       id = get_jmethod_id_fetch_or_update(ik_h, idnum, new_id, new_jmeths,
+1821                                           &amp;to_dealloc_id, &amp;to_dealloc_jmeths);
+1822     } else {
+1823       MutexLocker ml(JmethodIdCreation_lock);
+1824       id = get_jmethod_id_fetch_or_update(ik_h, idnum, new_id, new_jmeths,
+1825                                           &amp;to_dealloc_id, &amp;to_dealloc_jmeths);
+1826     }
+1827 
+1828     // The lock has been dropped so we can free resources.
+1829     // Free up either the old cache or the new cache if we allocated one.
+1830     if (to_dealloc_jmeths != NULL) {
+1831       FreeHeap(to_dealloc_jmeths);
+1832     }
+1833     // free up the new ID since it wasn't needed
+1834     if (to_dealloc_id != NULL) {
+1835       Method::destroy_jmethod_id(ik_h-&gt;class_loader_data(), to_dealloc_id);
+1836     }
+1837   }
+1838   return id;
+1839 }
+1840 
+1841 
+1842 // Common code to fetch the jmethodID from the cache or update the
+1843 // cache with the new jmethodID. This function should never do anything
+1844 // that causes the caller to go to a safepoint or we can deadlock with
+1845 // the VMThread or have cache consistency issues.
+1846 //
+1847 jmethodID InstanceKlass::get_jmethod_id_fetch_or_update(
+1848             instanceKlassHandle ik_h, size_t idnum, jmethodID new_id,
+1849             jmethodID* new_jmeths, jmethodID* to_dealloc_id_p,
+1850             jmethodID** to_dealloc_jmeths_p) {
+1851   assert(new_id != NULL, "sanity check");
+1852   assert(to_dealloc_id_p != NULL, "sanity check");
+1853   assert(to_dealloc_jmeths_p != NULL, "sanity check");
+1854   assert(Threads::number_of_threads() == 0 ||
+1855          SafepointSynchronize::is_at_safepoint() ||
+1856          JmethodIdCreation_lock-&gt;owned_by_self(), "sanity check");
+1857 
+1858   // reacquire the cache - we are locked, single threaded or at a safepoint
+1859   jmethodID* jmeths = ik_h-&gt;methods_jmethod_ids_acquire();
+1860   jmethodID  id     = NULL;
+1861   size_t     length = 0;
+1862 
+1863   if (jmeths == NULL ||                         // no cache yet
+1864       (length = (size_t)jmeths[0]) &lt;= idnum) {  // cache is too short
+1865     if (jmeths != NULL) {
+1866       // copy any existing entries from the old cache
+1867       for (size_t index = 0; index &lt; length; index++) {
+1868         new_jmeths[index+1] = jmeths[index+1];
+1869       }
+1870       *to_dealloc_jmeths_p = jmeths;  // save old cache for later delete
+1871     }
+1872     ik_h-&gt;release_set_methods_jmethod_ids(jmeths = new_jmeths);
+1873   } else {
+1874     // fetch jmethodID (if any) from the existing cache
+1875     id = jmeths[idnum+1];
+1876     *to_dealloc_jmeths_p = new_jmeths;  // save new cache for later delete
+1877   }
+1878   if (id == NULL) {
+1879     // No matching jmethodID in the existing cache or we have a new
+1880     // cache or we just grew the cache. This cache write is done here
+1881     // by the first thread to win the foot race because a jmethodID
+1882     // needs to be unique once it is generally available.
+1883     id = new_id;
+1884 
+1885     // The jmethodID cache can be read while unlocked so we have to
+1886     // make sure the new jmethodID is complete before installing it
+1887     // in the cache.
+1888     OrderAccess::release_store_ptr(&amp;jmeths[idnum+1], id);
+1889   } else {
+1890     *to_dealloc_id_p = new_id; // save new id for later delete
+1891   }
+1892   return id;
+1893 }
+1894 
+1895 
+1896 // Common code to get the jmethodID cache length and the jmethodID
+1897 // value at index idnum if there is one.
+1898 //
+1899 void InstanceKlass::get_jmethod_id_length_value(jmethodID* cache,
+1900        size_t idnum, size_t *length_p, jmethodID* id_p) {
+1901   assert(cache != NULL, "sanity check");
+1902   assert(length_p != NULL, "sanity check");
+1903   assert(id_p != NULL, "sanity check");
+1904 
+1905   // cache size is stored in element[0], other elements offset by one
+1906   *length_p = (size_t)cache[0];
+1907   if (*length_p &lt;= idnum) {  // cache is too short
+1908     *id_p = NULL;
+1909   } else {
+1910     *id_p = cache[idnum+1];  // fetch jmethodID (if any)
+1911   }
+1912 }
+1913 
+1914 
+1915 // Lookup a jmethodID, NULL if not found.  Do no blocking, no allocations, no handles
+1916 jmethodID InstanceKlass::jmethod_id_or_null(Method* method) {
+1917   size_t idnum = (size_t)method-&gt;method_idnum();
+1918   jmethodID* jmeths = methods_jmethod_ids_acquire();
+1919   size_t length;                                // length assigned as debugging crumb
+1920   jmethodID id = NULL;
+1921   if (jmeths != NULL &amp;&amp;                         // If there is a cache
+1922       (length = (size_t)jmeths[0]) &gt; idnum) {   // and if it is long enough,
+1923     id = jmeths[idnum+1];                       // Look up the id (may be NULL)
+1924   }
+1925   return id;
+1926 }
+1927 
+1928 int nmethodBucket::decrement() {
+1929   return Atomic::add(-1, (volatile int *)&amp;_count);
+1930 }
+1931 
+1932 //
+1933 // Walk the list of dependent nmethods searching for nmethods which
+1934 // are dependent on the changes that were passed in and mark them for
+1935 // deoptimization.  Returns the number of nmethods found.
+1936 //
+1937 int InstanceKlass::mark_dependent_nmethods(DepChange&amp; changes) {
+1938   assert_locked_or_safepoint(CodeCache_lock);
+1939   int found = 0;
+1940   nmethodBucket* b = _dependencies;
+1941   while (b != NULL) {
+1942     nmethod* nm = b-&gt;get_nmethod();
+1943     // since dependencies aren't removed until an nmethod becomes a zombie,
+1944     // the dependency list may contain nmethods which aren't alive.
+1945     if (b-&gt;count() &gt; 0 &amp;&amp; nm-&gt;is_alive() &amp;&amp; !nm-&gt;is_marked_for_deoptimization() &amp;&amp; nm-&gt;check_dependency_on(changes)) {
+1946       if (TraceDependencies) {
+1947         ResourceMark rm;
+1948         tty-&gt;print_cr("Marked for deoptimization");
+1949         tty-&gt;print_cr("  context = %s", this-&gt;external_name());
+1950         changes.print();
+1951         nm-&gt;print();
+1952         nm-&gt;print_dependencies();
+1953       }
+1954       nm-&gt;mark_for_deoptimization();
+1955       found++;
+1956     }
+1957     b = b-&gt;next();
+1958   }
+1959   return found;
+1960 }
+1961 
+1962 void InstanceKlass::clean_dependent_nmethods() {
+1963   assert_locked_or_safepoint(CodeCache_lock);
+1964 
+1965   if (has_unloaded_dependent()) {
+1966     nmethodBucket* b = _dependencies;
+1967     nmethodBucket* last = NULL;
+1968     while (b != NULL) {
+1969       assert(b-&gt;count() &gt;= 0, err_msg("bucket count: %d", b-&gt;count()));
+1970 
+1971       nmethodBucket* next = b-&gt;next();
+1972 
+1973       if (b-&gt;count() == 0) {
+1974         if (last == NULL) {
+1975           _dependencies = next;
+1976         } else {
+1977           last-&gt;set_next(next);
+1978         }
+1979         delete b;
+1980         // last stays the same.
+1981       } else {
+1982         last = b;
+1983       }
+1984 
+1985       b = next;
+1986     }
+1987     set_has_unloaded_dependent(false);
+1988   }
+1989 #ifdef ASSERT
+1990   else {
+1991     // Verification
+1992     for (nmethodBucket* b = _dependencies; b != NULL; b = b-&gt;next()) {
+1993       assert(b-&gt;count() &gt;= 0, err_msg("bucket count: %d", b-&gt;count()));
+1994       assert(b-&gt;count() != 0, "empty buckets need to be cleaned");
+1995     }
+1996   }
+1997 #endif
+1998 }
+1999 
+2000 //
+2001 // Add an nmethodBucket to the list of dependencies for this nmethod.
+2002 // It's possible that an nmethod has multiple dependencies on this klass
+2003 // so a count is kept for each bucket to guarantee that creation and
+2004 // deletion of dependencies is consistent.
+2005 //
+2006 void InstanceKlass::add_dependent_nmethod(nmethod* nm) {
+2007   assert_locked_or_safepoint(CodeCache_lock);
+2008   nmethodBucket* b = _dependencies;
+2009   nmethodBucket* last = NULL;
+2010   while (b != NULL) {
+2011     if (nm == b-&gt;get_nmethod()) {
+2012       b-&gt;increment();
+2013       return;
+2014     }
+2015     b = b-&gt;next();
+2016   }
+2017   _dependencies = new nmethodBucket(nm, _dependencies);
+2018 }
+2019 
+2020 
+2021 //
+2022 // Decrement count of the nmethod in the dependency list and remove
+2023 // the bucket competely when the count goes to 0.  This method must
+2024 // find a corresponding bucket otherwise there's a bug in the
+2025 // recording of dependecies.
+2026 //
+2027 void InstanceKlass::remove_dependent_nmethod(nmethod* nm) {
+2028   assert_locked_or_safepoint(CodeCache_lock);
+2029   nmethodBucket* b = _dependencies;
+2030   nmethodBucket* last = NULL;
+2031   while (b != NULL) {
+2032     if (nm == b-&gt;get_nmethod()) {
+2033       int val = b-&gt;decrement();
+2034       guarantee(val &gt;= 0, err_msg("Underflow: %d", val));
+2035       if (val == 0) {
+2036         set_has_unloaded_dependent(true);
+2037       }
+2038       return;
+2039     }
+2040     last = b;
+2041     b = b-&gt;next();
+2042   }
+2043 #ifdef ASSERT
+2044   tty-&gt;print_cr("### %s can't find dependent nmethod:", this-&gt;external_name());
+2045   nm-&gt;print();
+2046 #endif // ASSERT
+2047   ShouldNotReachHere();
+2048 }
+2049 
+2050 
+2051 #ifndef PRODUCT
+2052 void InstanceKlass::print_dependent_nmethods(bool verbose) {
+2053   nmethodBucket* b = _dependencies;
+2054   int idx = 0;
+2055   while (b != NULL) {
+2056     nmethod* nm = b-&gt;get_nmethod();
+2057     tty-&gt;print("[%d] count=%d { ", idx++, b-&gt;count());
+2058     if (!verbose) {
+2059       nm-&gt;print_on(tty, "nmethod");
+2060       tty-&gt;print_cr(" } ");
+2061     } else {
+2062       nm-&gt;print();
+2063       nm-&gt;print_dependencies();
+2064       tty-&gt;print_cr("--- } ");
+2065     }
+2066     b = b-&gt;next();
+2067   }
+2068 }
+2069 
+2070 
+2071 bool InstanceKlass::is_dependent_nmethod(nmethod* nm) {
+2072   nmethodBucket* b = _dependencies;
+2073   while (b != NULL) {
+2074     if (nm == b-&gt;get_nmethod()) {
+2075 #ifdef ASSERT
+2076       int count = b-&gt;count();
+2077       assert(count &gt;= 0, err_msg("count shouldn't be negative: %d", count));
+2078 #endif
+2079       return true;
+2080     }
+2081     b = b-&gt;next();
+2082   }
+2083   return false;
+2084 }
+2085 #endif //PRODUCT
+2086 
+2087 
+2088 // Garbage collection
+2089 
+2090 #ifdef ASSERT
+2091 template &lt;class T&gt; void assert_is_in(T *p) {
+2092   T heap_oop = oopDesc::load_heap_oop(p);
+2093   if (!oopDesc::is_null(heap_oop)) {
+2094     oop o = oopDesc::decode_heap_oop_not_null(heap_oop);
+2095     assert(Universe::heap()-&gt;is_in(o), "should be in heap");
+2096   }
+2097 }
+2098 template &lt;class T&gt; void assert_is_in_closed_subset(T *p) {
+2099   T heap_oop = oopDesc::load_heap_oop(p);
+2100   if (!oopDesc::is_null(heap_oop)) {
+2101     oop o = oopDesc::decode_heap_oop_not_null(heap_oop);
+2102     assert(Universe::heap()-&gt;is_in_closed_subset(o),
+2103            err_msg("should be in closed *p " INTPTR_FORMAT " " INTPTR_FORMAT, (address)p, (address)o));
+2104   }
+2105 }
+2106 template &lt;class T&gt; void assert_is_in_reserved(T *p) {
+2107   T heap_oop = oopDesc::load_heap_oop(p);
+2108   if (!oopDesc::is_null(heap_oop)) {
+2109     oop o = oopDesc::decode_heap_oop_not_null(heap_oop);
+2110     assert(Universe::heap()-&gt;is_in_reserved(o), "should be in reserved");
+2111   }
+2112 }
+2113 template &lt;class T&gt; void assert_nothing(T *p) {}
+2114 
+2115 #else
+2116 template &lt;class T&gt; void assert_is_in(T *p) {}
+2117 template &lt;class T&gt; void assert_is_in_closed_subset(T *p) {}
+2118 template &lt;class T&gt; void assert_is_in_reserved(T *p) {}
+2119 template &lt;class T&gt; void assert_nothing(T *p) {}
+2120 #endif // ASSERT
+2121 
+2122 //
+2123 // Macros that iterate over areas of oops which are specialized on type of
+2124 // oop pointer either narrow or wide, depending on UseCompressedOops
+2125 //
+2126 // Parameters are:
+2127 //   T         - type of oop to point to (either oop or narrowOop)
+2128 //   start_p   - starting pointer for region to iterate over
+2129 //   count     - number of oops or narrowOops to iterate over
+2130 //   do_oop    - action to perform on each oop (it's arbitrary C code which
+2131 //               makes it more efficient to put in a macro rather than making
+2132 //               it a template function)
+2133 //   assert_fn - assert function which is template function because performance
+2134 //               doesn't matter when enabled.
+2135 #define InstanceKlass_SPECIALIZED_OOP_ITERATE( \
+2136   T, start_p, count, do_oop,                \
+2137   assert_fn)                                \
+2138 {                                           \
+2139   T* p         = (T*)(start_p);             \
+2140   T* const end = p + (count);               \
+2141   while (p &lt; end) {                         \
+2142     (assert_fn)(p);                         \
+2143     do_oop;                                 \
+2144     ++p;                                    \
+2145   }                                         \
+2146 }
+2147 
+2148 #define InstanceKlass_SPECIALIZED_OOP_REVERSE_ITERATE( \
+2149   T, start_p, count, do_oop,                \
+2150   assert_fn)                                \
+2151 {                                           \
+2152   T* const start = (T*)(start_p);           \
+2153   T*       p     = start + (count);         \
+2154   while (start &lt; p) {                       \
+2155     --p;                                    \
+2156     (assert_fn)(p);                         \
+2157     do_oop;                                 \
+2158   }                                         \
+2159 }
+2160 
+2161 #define InstanceKlass_SPECIALIZED_BOUNDED_OOP_ITERATE( \
+2162   T, start_p, count, low, high,             \
+2163   do_oop, assert_fn)                        \
+2164 {                                           \
+2165   T* const l = (T*)(low);                   \
+2166   T* const h = (T*)(high);                  \
+2167   assert(mask_bits((intptr_t)l, sizeof(T)-1) == 0 &amp;&amp; \
+2168          mask_bits((intptr_t)h, sizeof(T)-1) == 0,   \
+2169          "bounded region must be properly aligned"); \
+2170   T* p       = (T*)(start_p);               \
+2171   T* end     = p + (count);                 \
+2172   if (p &lt; l) p = l;                         \
+2173   if (end &gt; h) end = h;                     \
+2174   while (p &lt; end) {                         \
+2175     (assert_fn)(p);                         \
+2176     do_oop;                                 \
+2177     ++p;                                    \
+2178   }                                         \
+2179 }
+2180 
+2181 
+2182 // The following macros call specialized macros, passing either oop or
+2183 // narrowOop as the specialization type.  These test the UseCompressedOops
+2184 // flag.
+2185 #define InstanceKlass_OOP_MAP_ITERATE(obj, do_oop, assert_fn)            \
+2186 {                                                                        \
+2187   /* Compute oopmap block range. The common case                         \
+2188      is nonstatic_oop_map_size == 1. */                                  \
+2189   OopMapBlock* map           = start_of_nonstatic_oop_maps();            \
+2190   OopMapBlock* const end_map = map + nonstatic_oop_map_count();          \
+2191   if (UseCompressedOops) {                                               \
+2192     while (map &lt; end_map) {                                              \
+2193       InstanceKlass_SPECIALIZED_OOP_ITERATE(narrowOop,                   \
+2194         obj-&gt;obj_field_addr&lt;narrowOop&gt;(map-&gt;offset()), map-&gt;count(),     \
+2195         do_oop, assert_fn)                                               \
+2196       ++map;                                                             \
+2197     }                                                                    \
+2198   } else {                                                               \
+2199     while (map &lt; end_map) {                                              \
+2200       InstanceKlass_SPECIALIZED_OOP_ITERATE(oop,                         \
+2201         obj-&gt;obj_field_addr&lt;oop&gt;(map-&gt;offset()), map-&gt;count(),           \
+2202         do_oop, assert_fn)                                               \
+2203       ++map;                                                             \
+2204     }                                                                    \
+2205   }                                                                      \
+2206 }
+2207 
+2208 #define InstanceKlass_OOP_MAP_REVERSE_ITERATE(obj, do_oop, assert_fn)    \
+2209 {                                                                        \
+2210   OopMapBlock* const start_map = start_of_nonstatic_oop_maps();          \
+2211   OopMapBlock* map             = start_map + nonstatic_oop_map_count();  \
+2212   if (UseCompressedOops) {                                               \
+2213     while (start_map &lt; map) {                                            \
+2214       --map;                                                             \
+2215       InstanceKlass_SPECIALIZED_OOP_REVERSE_ITERATE(narrowOop,           \
+2216         obj-&gt;obj_field_addr&lt;narrowOop&gt;(map-&gt;offset()), map-&gt;count(),     \
+2217         do_oop, assert_fn)                                               \
+2218     }                                                                    \
+2219   } else {                                                               \
+2220     while (start_map &lt; map) {                                            \
+2221       --map;                                                             \
+2222       InstanceKlass_SPECIALIZED_OOP_REVERSE_ITERATE(oop,                 \
+2223         obj-&gt;obj_field_addr&lt;oop&gt;(map-&gt;offset()), map-&gt;count(),           \
+2224         do_oop, assert_fn)                                               \
+2225     }                                                                    \
+2226   }                                                                      \
+2227 }
+2228 
+2229 #define InstanceKlass_BOUNDED_OOP_MAP_ITERATE(obj, low, high, do_oop,    \
+2230                                               assert_fn)                 \
+2231 {                                                                        \
+2232   /* Compute oopmap block range. The common case is                      \
+2233      nonstatic_oop_map_size == 1, so we accept the                       \
+2234      usually non-existent extra overhead of examining                    \
+2235      all the maps. */                                                    \
+2236   OopMapBlock* map           = start_of_nonstatic_oop_maps();            \
+2237   OopMapBlock* const end_map = map + nonstatic_oop_map_count();          \
+2238   if (UseCompressedOops) {                                               \
+2239     while (map &lt; end_map) {                                              \
+2240       InstanceKlass_SPECIALIZED_BOUNDED_OOP_ITERATE(narrowOop,           \
+2241         obj-&gt;obj_field_addr&lt;narrowOop&gt;(map-&gt;offset()), map-&gt;count(),     \
+2242         low, high,                                                       \
+2243         do_oop, assert_fn)                                               \
+2244       ++map;                                                             \
+2245     }                                                                    \
+2246   } else {                                                               \
+2247     while (map &lt; end_map) {                                              \
+2248       InstanceKlass_SPECIALIZED_BOUNDED_OOP_ITERATE(oop,                 \
+2249         obj-&gt;obj_field_addr&lt;oop&gt;(map-&gt;offset()), map-&gt;count(),           \
+2250         low, high,                                                       \
+2251         do_oop, assert_fn)                                               \
+2252       ++map;                                                             \
+2253     }                                                                    \
+2254   }                                                                      \
+2255 }
+2256 
+2257 #define InstanceKlass_CONTAINER_ITERATE_INCL_RCO(container, do_oop)         \
+2258 {                                                                           \
+2259   address addr = ((address) container) +                                    \
+2260       org_ObjectLayout_AbstractStructuredArray::bodySize(container);        \
+2261   jlong length =                                                            \
+2262       org_ObjectLayout_AbstractStructuredArray::length(container);          \
+2263   jlong element_size =                                                      \
+2264       org_ObjectLayout_AbstractStructuredArray::elementSize(container);     \
+2265   jlong padding_size =                                                      \
+2266       org_ObjectLayout_AbstractStructuredArray::paddingSize(container);     \
+2267                                                                             \
+2268   oop* p;                                                                   \
+2269   for (jlong i = 0; i &lt; length; i++) {                                      \
+2270     oop rco = (oop) addr;                                                   \
+2271     p = &amp;rco;                                                               \
+2272     do_oop;                                                                 \
+2273     oop obj = (oop) (addr + padding_size);                                  \
+2274     p = &amp;obj;                                                               \
+2275     do_oop;                                                                 \
+2276     addr += element_size;                                                   \
+2277   }                                                                         \
+2278 }
+2279 
+2280 #define InstanceKlass_CONTAINER_ITERATE_EXCL_RCO(container, do_oop)         \
+2281 {                                                                           \
+2282   address addr = ((address) container) +                                    \
+2283       org_ObjectLayout_AbstractStructuredArray::bodySize(container);        \
+2284   jlong length =                                                            \
+2285       org_ObjectLayout_AbstractStructuredArray::length(container);          \
+2286   jlong element_size =                                                      \
+2287       org_ObjectLayout_AbstractStructuredArray::elementSize(container);     \
+2288   jlong padding_size =                                                      \
+2289       org_ObjectLayout_AbstractStructuredArray::paddingSize(container);     \
+2290                                                                             \
+2291   oop* p;                                                                   \
+2292   for (jlong i = 0; i &lt; length; i++) {                                      \
+2293     oop obj = (oop) (addr + padding_size);                                  \
+2294     p = &amp;obj;                                                               \
+2295     do_oop;                                                                 \
+2296     addr += element_size;                                                   \
+2297   }                                                                         \
+2298 }
+2299 
+2300 #define InstanceKlass_CONTAINER_REVERSE_ITERATE_INCL_RCO(container, do_oop) \
+2301 {                                                                           \
+2302   address addr = ((address) container) +                                    \
+2303       org_ObjectLayout_AbstractStructuredArray::bodySize(container);        \
+2304   jlong length =                                                            \
+2305       org_ObjectLayout_AbstractStructuredArray::length(container);          \
+2306   jlong element_size =                                                      \
+2307       org_ObjectLayout_AbstractStructuredArray::elementSize(container);     \
+2308   jlong padding_size =                                                      \
+2309       org_ObjectLayout_AbstractStructuredArray::paddingSize(container);     \
+2310                                                                             \
+2311   addr += (length - 1) * element_size;                                      \
+2312   oop* p;                                                                   \
+2313   for (jlong i = length - 1; i &gt;= 0; i--) {                                 \
+2314     oop obj = (oop) (addr + padding_size);                                  \
+2315     p = &amp;obj;                                                               \
+2316     do_oop;                                                                 \
+2317     oop rco = (oop) addr;                                                   \
+2318     p = &amp;rco;                                                               \
+2319     do_oop;                                                                 \
+2320     addr -= element_size;                                                   \
+2321   }                                                                         \
+2322 }
+2323 
+2324 #define InstanceKlass_CONTAINER_REVERSE_ITERATE_EXCL_RCO(container, do_oop) \
+2325 {                                                                           \
+2326   address addr = ((address) container) +                                    \
+2327       org_ObjectLayout_AbstractStructuredArray::bodySize(container);        \
+2328   jlong length =                                                            \
+2329       org_ObjectLayout_AbstractStructuredArray::length(container);          \
+2330   jlong element_size =                                                      \
+2331       org_ObjectLayout_AbstractStructuredArray::elementSize(container);     \
+2332   jlong padding_size =                                                      \
+2333       org_ObjectLayout_AbstractStructuredArray::paddingSize(container);     \
+2334                                                                             \
+2335   addr += (length - 1) * element_size;                                      \
+2336   oop* p;                                                                   \
+2337   for (jlong i = length - 1; i &gt;= 0; i--) {                                 \
+2338     oop obj = (oop) (addr + padding_size);                                  \
+2339     p = &amp;obj;                                                               \
+2340     do_oop;                                                                 \
+2341     addr -= element_size;                                                   \
+2342   }                                                                         \
+2343 }
+2344 
+2345 void InstanceKlass::oop_follow_contents(oop obj) {
+2346   assert(obj != NULL, "can't follow the contents of NULL object");
+2347   MarkSweep::follow_klass(obj-&gt;klass());
+2348   InstanceKlass_OOP_MAP_ITERATE(   \
+2349       obj,                         \
+2350       MarkSweep::mark_and_push(p), \
+2351       assert_is_in_closed_subset)
+2352 
+2353   if (obj-&gt;is_container()) {
+2354     InstanceKlass_CONTAINER_ITERATE_INCL_RCO( \
+2355         obj,                                  \
+2356         MarkSweep::mark_and_push(p))
+2357   }
+2358 }
+2359 
+2360 int InstanceKlass::oop_adjust_pointers(oop obj) {
+2361   int size = size_helper();
+2362   InstanceKlass_OOP_MAP_ITERATE(    \
+2363       obj,                          \
+2364       MarkSweep::adjust_pointer(p), \
+2365       assert_is_in)
+2366 
+2367   // There is no need in special handling of containers here. The caller
+2368   // sequentially scans a space from its bottom to the end. Contained objects
+2369   // (and their corresponding RCO objects) will be processed one-by-one just
+2370   // after their containers. To the caller they look like standard Java objects.
+2371 
+2372   return size;
+2373 }
+2374 
+2375 #if INCLUDE_ALL_GCS
+2376 void InstanceKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
+2377   if (obj-&gt;is_container()) {
+2378     InstanceKlass_CONTAINER_REVERSE_ITERATE_EXCL_RCO( \
+2379         obj,                                          \
+2380         (*p)-&gt;push_contents(pm))
+2381   }
+2382 
+2383   InstanceKlass_OOP_MAP_REVERSE_ITERATE(    \
+2384       obj,                                  \
+2385       if (PSScavenge::should_scavenge(p)) { \
+2386         pm-&gt;claim_or_forward_depth(p);      \
+2387       },                                    \
+2388       assert_nothing)
+2389 }
+2390 
+2391 void InstanceKlass::oop_follow_contents(ParCompactionManager* cm, oop obj) {
+2392   assert(obj != NULL, "can't follow the contents of NULL object");
+2393   PSParallelCompact::follow_klass(cm, obj-&gt;klass());
+2394   InstanceKlass_OOP_MAP_ITERATE(               \
+2395       obj,                                     \
+2396       PSParallelCompact::mark_and_push(cm, p), \
+2397       assert_is_in)
+2398 }
+2399 
+2400 int InstanceKlass::oop_update_pointers(ParCompactionManager* cm, oop obj) {
+2401   int size = size_helper();
+2402   InstanceKlass_OOP_MAP_ITERATE(            \
+2403       obj,                                  \
+2404       PSParallelCompact::adjust_pointer(p), \
+2405       assert_is_in)
+2406   return size;
+2407 }
+2408 #endif // INCLUDE_ALL_GCS
+2409 
+2410 // closure's do_metadata() method dictates whether the given closure should be
+2411 // applied to the klass ptr in the object header.
+2412 
+2413 #define InstanceKlass_OOP_OOP_ITERATE_DEFN(OopClosureType, nv_suffix)        \
+2414                                                                              \
+2415 int InstanceKlass::oop_oop_iterate##nv_suffix(oop obj, OopClosureType* closure) { \
+2416   SpecializationStats::record_iterate_call##nv_suffix(SpecializationStats::ik);\
+2417   /* header */                                                          \
+2418   if_do_metadata_checked(closure, nv_suffix) {                          \
+2419     closure-&gt;do_klass##nv_suffix(obj-&gt;klass());                         \
+2420   }                                                                     \
+2421   InstanceKlass_OOP_MAP_ITERATE(                                        \
+2422     obj,                                                                \
+2423     SpecializationStats::                                               \
+2424       record_do_oop_call##nv_suffix(SpecializationStats::ik);           \
+2425     (closure)-&gt;do_oop##nv_suffix(p),                                    \
+2426     assert_is_in_closed_subset)                                         \
+2427   return size_helper();                                                 \
+2428 }
+2429 
+2430 #if INCLUDE_ALL_GCS
+2431 #define InstanceKlass_OOP_OOP_ITERATE_BACKWARDS_DEFN(OopClosureType, nv_suffix) \
+2432                                                                                 \
+2433 int InstanceKlass::oop_oop_iterate_backwards##nv_suffix(oop obj,                \
+2434                                               OopClosureType* closure) {        \
+2435   SpecializationStats::record_iterate_call##nv_suffix(SpecializationStats::ik); \
+2436                                                                                 \
+2437   assert_should_ignore_metadata(closure, nv_suffix);                            \
+2438                                                                                 \
+2439   /* instance variables */                                                      \
+2440   InstanceKlass_OOP_MAP_REVERSE_ITERATE(                                        \
+2441     obj,                                                                        \
+2442     SpecializationStats::record_do_oop_call##nv_suffix(SpecializationStats::ik);\
+2443     (closure)-&gt;do_oop##nv_suffix(p),                                            \
+2444     assert_is_in_closed_subset)                                                 \
+2445    return size_helper();                                                        \
+2446 }
+2447 #endif // INCLUDE_ALL_GCS
+2448 
+2449 #define InstanceKlass_OOP_OOP_ITERATE_DEFN_m(OopClosureType, nv_suffix) \
+2450                                                                         \
+2451 int InstanceKlass::oop_oop_iterate##nv_suffix##_m(oop obj,              \
+2452                                                   OopClosureType* closure, \
+2453                                                   MemRegion mr) {          \
+2454   SpecializationStats::record_iterate_call##nv_suffix(SpecializationStats::ik);\
+2455   if_do_metadata_checked(closure, nv_suffix) {                           \
+2456     if (mr.contains(obj)) {                                              \
+2457       closure-&gt;do_klass##nv_suffix(obj-&gt;klass());                        \
+2458     }                                                                    \
+2459   }                                                                      \
+2460   InstanceKlass_BOUNDED_OOP_MAP_ITERATE(                                 \
+2461     obj, mr.start(), mr.end(),                                           \
+2462     (closure)-&gt;do_oop##nv_suffix(p),                                     \
+2463     assert_is_in_closed_subset)                                          \
+2464   return size_helper();                                                  \
+2465 }
+2466 
+2467 ALL_OOP_OOP_ITERATE_CLOSURES_1(InstanceKlass_OOP_OOP_ITERATE_DEFN)
+2468 ALL_OOP_OOP_ITERATE_CLOSURES_2(InstanceKlass_OOP_OOP_ITERATE_DEFN)
+2469 ALL_OOP_OOP_ITERATE_CLOSURES_1(InstanceKlass_OOP_OOP_ITERATE_DEFN_m)
+2470 ALL_OOP_OOP_ITERATE_CLOSURES_2(InstanceKlass_OOP_OOP_ITERATE_DEFN_m)
+2471 #if INCLUDE_ALL_GCS
+2472 ALL_OOP_OOP_ITERATE_CLOSURES_1(InstanceKlass_OOP_OOP_ITERATE_BACKWARDS_DEFN)
+2473 ALL_OOP_OOP_ITERATE_CLOSURES_2(InstanceKlass_OOP_OOP_ITERATE_BACKWARDS_DEFN)
+2474 #endif // INCLUDE_ALL_GCS
+2475 
+2476 void InstanceKlass::clean_implementors_list(BoolObjectClosure* is_alive) {
+2477   assert(class_loader_data()-&gt;is_alive(is_alive), "this klass should be live");
+2478   if (is_interface()) {
+2479     if (ClassUnloading) {
+2480       Klass* impl = implementor();
+2481       if (impl != NULL) {
+2482         if (!impl-&gt;is_loader_alive(is_alive)) {
+2483           // remove this guy
+2484           Klass** klass = adr_implementor();
+2485           assert(klass != NULL, "null klass");
+2486           if (klass != NULL) {
+2487             *klass = NULL;
+2488           }
+2489         }
+2490       }
+2491     }
+2492   }
+2493 }
+2494 
+2495 void InstanceKlass::clean_method_data(BoolObjectClosure* is_alive) {
+2496   for (int m = 0; m &lt; methods()-&gt;length(); m++) {
+2497     MethodData* mdo = methods()-&gt;at(m)-&gt;method_data();
+2498     if (mdo != NULL) {
+2499       mdo-&gt;clean_method_data(is_alive);
+2500     }
+2501   }
+2502 }
+2503 
+2504 
+2505 static void remove_unshareable_in_class(Klass* k) {
+2506   // remove klass's unshareable info
+2507   k-&gt;remove_unshareable_info();
+2508 }
+2509 
+2510 void InstanceKlass::remove_unshareable_info() {
+2511   Klass::remove_unshareable_info();
+2512   // Unlink the class
+2513   if (is_linked()) {
+2514     unlink_class();
+2515   }
+2516   init_implementor();
+2517 
+2518   constants()-&gt;remove_unshareable_info();
+2519 
+2520   for (int i = 0; i &lt; methods()-&gt;length(); i++) {
+2521     Method* m = methods()-&gt;at(i);
+2522     m-&gt;remove_unshareable_info();
+2523   }
+2524 
+2525   // do array classes also.
+2526   array_klasses_do(remove_unshareable_in_class);
+2527 }
+2528 
+2529 static void restore_unshareable_in_class(Klass* k, TRAPS) {
+2530   // Array classes have null protection domain.
+2531   // --&gt; see ArrayKlass::complete_create_array_klass()
+2532   k-&gt;restore_unshareable_info(ClassLoaderData::the_null_class_loader_data(), Handle(), CHECK);
+2533 }
+2534 
+2535 void InstanceKlass::restore_unshareable_info(ClassLoaderData* loader_data, Handle protection_domain, TRAPS) {
+2536   Klass::restore_unshareable_info(loader_data, protection_domain, CHECK);
+2537   instanceKlassHandle ik(THREAD, this);
+2538 
+2539   Array&lt;Method*&gt;* methods = ik-&gt;methods();
+2540   int num_methods = methods-&gt;length();
+2541   for (int index2 = 0; index2 &lt; num_methods; ++index2) {
+2542     methodHandle m(THREAD, methods-&gt;at(index2));
+2543     m-&gt;restore_unshareable_info(CHECK);
+2544   }
+2545   if (JvmtiExport::has_redefined_a_class()) {
+2546     // Reinitialize vtable because RedefineClasses may have changed some
+2547     // entries in this vtable for super classes so the CDS vtable might
+2548     // point to old or obsolete entries.  RedefineClasses doesn't fix up
+2549     // vtables in the shared system dictionary, only the main one.
+2550     // It also redefines the itable too so fix that too.
+2551     ResourceMark rm(THREAD);
+2552     ik-&gt;vtable()-&gt;initialize_vtable(false, CHECK);
+2553     ik-&gt;itable()-&gt;initialize_itable(false, CHECK);
+2554   }
+2555 
+2556   // restore constant pool resolved references
+2557   ik-&gt;constants()-&gt;restore_unshareable_info(CHECK);
+2558 
+2559   ik-&gt;array_klasses_do(restore_unshareable_in_class, CHECK);
+2560 }
+2561 
+2562 // returns true IFF is_in_error_state() has been changed as a result of this call.
+2563 bool InstanceKlass::check_sharing_error_state() {
+2564   assert(DumpSharedSpaces, "should only be called during dumping");
+2565   bool old_state = is_in_error_state();
+2566 
+2567   if (!is_in_error_state()) {
+2568     bool bad = false;
+2569     for (InstanceKlass* sup = java_super(); sup; sup = sup-&gt;java_super()) {
+2570       if (sup-&gt;is_in_error_state()) {
+2571         bad = true;
+2572         break;
+2573       }
+2574     }
+2575     if (!bad) {
+2576       Array&lt;Klass*&gt;* interfaces = transitive_interfaces();
+2577       for (int i = 0; i &lt; interfaces-&gt;length(); i++) {
+2578         Klass* iface = interfaces-&gt;at(i);
+2579         if (InstanceKlass::cast(iface)-&gt;is_in_error_state()) {
+2580           bad = true;
+2581           break;
+2582         }
+2583       }
+2584     }
+2585 
+2586     if (bad) {
+2587       set_in_error_state();
+2588     }
+2589   }
+2590 
+2591   return (old_state != is_in_error_state());
+2592 }
+2593 
+2594 static void clear_all_breakpoints(Method* m) {
+2595   m-&gt;clear_all_breakpoints();
+2596 }
+2597 
+2598 
+2599 void InstanceKlass::notify_unload_class(InstanceKlass* ik) {
+2600   // notify the debugger
+2601   if (JvmtiExport::should_post_class_unload()) {
+2602     JvmtiExport::post_class_unload(ik);
+2603   }
+2604 
+2605   // notify ClassLoadingService of class unload
+2606   ClassLoadingService::notify_class_unloaded(ik);
+2607 }
+2608 
+2609 void InstanceKlass::release_C_heap_structures(InstanceKlass* ik) {
+2610   // Clean up C heap
+2611   ik-&gt;release_C_heap_structures();
+2612   ik-&gt;constants()-&gt;release_C_heap_structures();
+2613 }
+2614 
+2615 void InstanceKlass::release_C_heap_structures() {
+2616 
+2617   // Can't release the constant pool here because the constant pool can be
+2618   // deallocated separately from the InstanceKlass for default methods and
+2619   // redefine classes.
+2620 
+2621   // Deallocate oop map cache
+2622   if (_oop_map_cache != NULL) {
+2623     delete _oop_map_cache;
+2624     _oop_map_cache = NULL;
+2625   }
+2626 
+2627   // Deallocate JNI identifiers for jfieldIDs
+2628   JNIid::deallocate(jni_ids());
+2629   set_jni_ids(NULL);
+2630 
+2631   jmethodID* jmeths = methods_jmethod_ids_acquire();
+2632   if (jmeths != (jmethodID*)NULL) {
+2633     release_set_methods_jmethod_ids(NULL);
+2634     FreeHeap(jmeths);
+2635   }
+2636 
+2637   // Deallocate MemberNameTable
+2638   {
+2639     Mutex* lock_or_null = SafepointSynchronize::is_at_safepoint() ? NULL : MemberNameTable_lock;
+2640     MutexLockerEx ml(lock_or_null, Mutex::_no_safepoint_check_flag);
+2641     MemberNameTable* mnt = member_names();
+2642     if (mnt != NULL) {
+2643       delete mnt;
+2644       set_member_names(NULL);
+2645     }
+2646   }
+2647 
+2648   // release dependencies
+2649   nmethodBucket* b = _dependencies;
+2650   _dependencies = NULL;
+2651   while (b != NULL) {
+2652     nmethodBucket* next = b-&gt;next();
+2653     delete b;
+2654     b = next;
+2655   }
+2656 
+2657   // Deallocate breakpoint records
+2658   if (breakpoints() != 0x0) {
+2659     methods_do(clear_all_breakpoints);
+2660     assert(breakpoints() == 0x0, "should have cleared breakpoints");
+2661   }
+2662 
+2663   // deallocate information about previous versions
+2664   if (_previous_versions != NULL) {
+2665     for (int i = _previous_versions-&gt;length() - 1; i &gt;= 0; i--) {
+2666       PreviousVersionNode * pv_node = _previous_versions-&gt;at(i);
+2667       delete pv_node;
+2668     }
+2669     delete _previous_versions;
+2670     _previous_versions = NULL;
+2671   }
+2672 
+2673   // deallocate the cached class file
+2674   if (_cached_class_file != NULL) {
+2675     os::free(_cached_class_file, mtClass);
+2676     _cached_class_file = NULL;
+2677   }
+2678 
+2679   // Decrement symbol reference counts associated with the unloaded class.
+2680   if (_name != NULL) _name-&gt;decrement_refcount();
+2681   // unreference array name derived from this class name (arrays of an unloaded
+2682   // class can't be referenced anymore).
+2683   if (_array_name != NULL)  _array_name-&gt;decrement_refcount();
+2684   if (_source_debug_extension != NULL) FREE_C_HEAP_ARRAY(char, _source_debug_extension, mtClass);
+2685 
+2686   assert(_total_instanceKlass_count &gt;= 1, "Sanity check");
+2687   Atomic::dec(&amp;_total_instanceKlass_count);
+2688 }
+2689 
+2690 void InstanceKlass::set_source_debug_extension(char* array, int length) {
+2691   if (array == NULL) {
+2692     _source_debug_extension = NULL;
+2693   } else {
+2694     // Adding one to the attribute length in order to store a null terminator
+2695     // character could cause an overflow because the attribute length is
+2696     // already coded with an u4 in the classfile, but in practice, it's
+2697     // unlikely to happen.
+2698     assert((length+1) &gt; length, "Overflow checking");
+2699     char* sde = NEW_C_HEAP_ARRAY(char, (length + 1), mtClass);
+2700     for (int i = 0; i &lt; length; i++) {
+2701       sde[i] = array[i];
+2702     }
+2703     sde[length] = '\0';
+2704     _source_debug_extension = sde;
+2705   }
+2706 }
+2707 
+2708 address InstanceKlass::static_field_addr(int offset) {
+2709   return (address)(offset + InstanceMirrorKlass::offset_of_static_fields() + cast_from_oop&lt;intptr_t&gt;(java_mirror()));
+2710 }
+2711 
+2712 
+2713 const char* InstanceKlass::signature_name() const {
+2714   int hash_len = 0;
+2715   char hash_buf[40];
+2716 
+2717   // If this is an anonymous class, append a hash to make the name unique
+2718   if (is_anonymous()) {
+2719     assert(EnableInvokeDynamic, "EnableInvokeDynamic was not set.");
+2720     intptr_t hash = (java_mirror() != NULL) ? java_mirror()-&gt;identity_hash() : 0;
+2721     sprintf(hash_buf, "/" UINTX_FORMAT, (uintx)hash);
+2722     hash_len = (int)strlen(hash_buf);
+2723   }
+2724 
+2725   // Get the internal name as a c string
+2726   const char* src = (const char*) (name()-&gt;as_C_string());
+2727   const int src_length = (int)strlen(src);
+2728 
+2729   char* dest = NEW_RESOURCE_ARRAY(char, src_length + hash_len + 3);
+2730 
+2731   // Add L as type indicator
+2732   int dest_index = 0;
+2733   dest[dest_index++] = 'L';
+2734 
+2735   // Add the actual class name
+2736   for (int src_index = 0; src_index &lt; src_length; ) {
+2737     dest[dest_index++] = src[src_index++];
+2738   }
+2739 
+2740   // If we have a hash, append it
+2741   for (int hash_index = 0; hash_index &lt; hash_len; ) {
+2742     dest[dest_index++] = hash_buf[hash_index++];
+2743   }
+2744 
+2745   // Add the semicolon and the NULL
+2746   dest[dest_index++] = ';';
+2747   dest[dest_index] = '\0';
+2748   return dest;
+2749 }
+2750 
+2751 // different verisons of is_same_class_package
+2752 bool InstanceKlass::is_same_class_package(Klass* class2) {
+2753   Klass* class1 = this;
+2754   oop classloader1 = InstanceKlass::cast(class1)-&gt;class_loader();
+2755   Symbol* classname1 = class1-&gt;name();
+2756 
+2757   if (class2-&gt;oop_is_objArray()) {
+2758     class2 = ObjArrayKlass::cast(class2)-&gt;bottom_klass();
+2759   }
+2760   oop classloader2;
+2761   if (class2-&gt;oop_is_instance()) {
+2762     classloader2 = InstanceKlass::cast(class2)-&gt;class_loader();
+2763   } else {
+2764     assert(class2-&gt;oop_is_typeArray(), "should be type array");
+2765     classloader2 = NULL;
+2766   }
+2767   Symbol* classname2 = class2-&gt;name();
+2768 
+2769   return InstanceKlass::is_same_class_package(classloader1, classname1,
+2770                                               classloader2, classname2);
+2771 }
+2772 
+2773 bool InstanceKlass::is_same_class_package(oop classloader2, Symbol* classname2) {
+2774   Klass* class1 = this;
+2775   oop classloader1 = InstanceKlass::cast(class1)-&gt;class_loader();
+2776   Symbol* classname1 = class1-&gt;name();
+2777 
+2778   return InstanceKlass::is_same_class_package(classloader1, classname1,
+2779                                               classloader2, classname2);
+2780 }
+2781 
+2782 // return true if two classes are in the same package, classloader
+2783 // and classname information is enough to determine a class's package
+2784 bool InstanceKlass::is_same_class_package(oop class_loader1, Symbol* class_name1,
+2785                                           oop class_loader2, Symbol* class_name2) {
+2786   if (class_loader1 != class_loader2) {
+2787     return false;
+2788   } else if (class_name1 == class_name2) {
+2789     return true;                // skip painful bytewise comparison
+2790   } else {
+2791     ResourceMark rm;
+2792 
+2793     // The Symbol*'s are in UTF8 encoding. Since we only need to check explicitly
+2794     // for ASCII characters ('/', 'L', '['), we can keep them in UTF8 encoding.
+2795     // Otherwise, we just compare jbyte values between the strings.
+2796     const jbyte *name1 = class_name1-&gt;base();
+2797     const jbyte *name2 = class_name2-&gt;base();
+2798 
+2799     const jbyte *last_slash1 = UTF8::strrchr(name1, class_name1-&gt;utf8_length(), '/');
+2800     const jbyte *last_slash2 = UTF8::strrchr(name2, class_name2-&gt;utf8_length(), '/');
+2801 
+2802     if ((last_slash1 == NULL) || (last_slash2 == NULL)) {
+2803       // One of the two doesn't have a package.  Only return true
+2804       // if the other one also doesn't have a package.
+2805       return last_slash1 == last_slash2;
+2806     } else {
+2807       // Skip over '['s
+2808       if (*name1 == '[') {
+2809         do {
+2810           name1++;
+2811         } while (*name1 == '[');
+2812         if (*name1 != 'L') {
+2813           // Something is terribly wrong.  Shouldn't be here.
+2814           return false;
+2815         }
+2816       }
+2817       if (*name2 == '[') {
+2818         do {
+2819           name2++;
+2820         } while (*name2 == '[');
+2821         if (*name2 != 'L') {
+2822           // Something is terribly wrong.  Shouldn't be here.
+2823           return false;
+2824         }
+2825       }
+2826 
+2827       // Check that package part is identical
+2828       int length1 = last_slash1 - name1;
+2829       int length2 = last_slash2 - name2;
+2830 
+2831       return UTF8::equal(name1, length1, name2, length2);
+2832     }
+2833   }
+2834 }
+2835 
+2836 // Returns true iff super_method can be overridden by a method in targetclassname
+2837 // See JSL 3rd edition 8.4.6.1
+2838 // Assumes name-signature match
+2839 // "this" is InstanceKlass of super_method which must exist
+2840 // note that the InstanceKlass of the method in the targetclassname has not always been created yet
+2841 bool InstanceKlass::is_override(methodHandle super_method, Handle targetclassloader, Symbol* targetclassname, TRAPS) {
+2842    // Private methods can not be overridden
+2843    if (super_method-&gt;is_private()) {
+2844      return false;
+2845    }
+2846    // If super method is accessible, then override
+2847    if ((super_method-&gt;is_protected()) ||
+2848        (super_method-&gt;is_public())) {
+2849      return true;
+2850    }
+2851    // Package-private methods are not inherited outside of package
+2852    assert(super_method-&gt;is_package_private(), "must be package private");
+2853    return(is_same_class_package(targetclassloader(), targetclassname));
+2854 }
+2855 
+2856 /* defined for now in jvm.cpp, for historical reasons *--
+2857 Klass* InstanceKlass::compute_enclosing_class_impl(instanceKlassHandle self,
+2858                                                      Symbol*&amp; simple_name_result, TRAPS) {
+2859   ...
+2860 }
+2861 */
+2862 
+2863 // tell if two classes have the same enclosing class (at package level)
+2864 bool InstanceKlass::is_same_package_member_impl(instanceKlassHandle class1,
+2865                                                 Klass* class2_oop, TRAPS) {
+2866   if (class2_oop == class1())                       return true;
+2867   if (!class2_oop-&gt;oop_is_instance())  return false;
+2868   instanceKlassHandle class2(THREAD, class2_oop);
+2869 
+2870   // must be in same package before we try anything else
+2871   if (!class1-&gt;is_same_class_package(class2-&gt;class_loader(), class2-&gt;name()))
+2872     return false;
+2873 
+2874   // As long as there is an outer1.getEnclosingClass,
+2875   // shift the search outward.
+2876   instanceKlassHandle outer1 = class1;
+2877   for (;;) {
+2878     // As we walk along, look for equalities between outer1 and class2.
+2879     // Eventually, the walks will terminate as outer1 stops
+2880     // at the top-level class around the original class.
+2881     bool ignore_inner_is_member;
+2882     Klass* next = outer1-&gt;compute_enclosing_class(&amp;ignore_inner_is_member,
+2883                                                     CHECK_false);
+2884     if (next == NULL)  break;
+2885     if (next == class2())  return true;
+2886     outer1 = instanceKlassHandle(THREAD, next);
+2887   }
+2888 
+2889   // Now do the same for class2.
+2890   instanceKlassHandle outer2 = class2;
+2891   for (;;) {
+2892     bool ignore_inner_is_member;
+2893     Klass* next = outer2-&gt;compute_enclosing_class(&amp;ignore_inner_is_member,
+2894                                                     CHECK_false);
+2895     if (next == NULL)  break;
+2896     // Might as well check the new outer against all available values.
+2897     if (next == class1())  return true;
+2898     if (next == outer1())  return true;
+2899     outer2 = instanceKlassHandle(THREAD, next);
+2900   }
+2901 
+2902   // If by this point we have not found an equality between the
+2903   // two classes, we know they are in separate package members.
+2904   return false;
+2905 }
+2906 
+2907 
+2908 jint InstanceKlass::compute_modifier_flags(TRAPS) const {
+2909   jint access = access_flags().as_int();
+2910 
+2911   // But check if it happens to be member class.
+2912   instanceKlassHandle ik(THREAD, this);
+2913   InnerClassesIterator iter(ik);
+2914   for (; !iter.done(); iter.next()) {
+2915     int ioff = iter.inner_class_info_index();
+2916     // Inner class attribute can be zero, skip it.
+2917     // Strange but true:  JVM spec. allows null inner class refs.
+2918     if (ioff == 0) continue;
+2919 
+2920     // only look at classes that are already loaded
+2921     // since we are looking for the flags for our self.
+2922     Symbol* inner_name = ik-&gt;constants()-&gt;klass_name_at(ioff);
+2923     if ((ik-&gt;name() == inner_name)) {
+2924       // This is really a member class.
+2925       access = iter.inner_access_flags();
+2926       break;
+2927     }
+2928   }
+2929   // Remember to strip ACC_SUPER bit
+2930   return (access &amp; (~JVM_ACC_SUPER)) &amp; JVM_ACC_WRITTEN_FLAGS;
+2931 }
+2932 
+2933 jint InstanceKlass::jvmti_class_status() const {
+2934   jint result = 0;
+2935 
+2936   if (is_linked()) {
+2937     result |= JVMTI_CLASS_STATUS_VERIFIED | JVMTI_CLASS_STATUS_PREPARED;
+2938   }
+2939 
+2940   if (is_initialized()) {
+2941     assert(is_linked(), "Class status is not consistent");
+2942     result |= JVMTI_CLASS_STATUS_INITIALIZED;
+2943   }
+2944   if (is_in_error_state()) {
+2945     result |= JVMTI_CLASS_STATUS_ERROR;
+2946   }
+2947   return result;
+2948 }
+2949 
+2950 Method* InstanceKlass::method_at_itable(Klass* holder, int index, TRAPS) {
+2951   itableOffsetEntry* ioe = (itableOffsetEntry*)start_of_itable();
+2952   int method_table_offset_in_words = ioe-&gt;offset()/wordSize;
+2953   int nof_interfaces = (method_table_offset_in_words - itable_offset_in_words())
+2954                        / itableOffsetEntry::size();
+2955 
+2956   for (int cnt = 0 ; ; cnt ++, ioe ++) {
+2957     // If the interface isn't implemented by the receiver class,
+2958     // the VM should throw IncompatibleClassChangeError.
+2959     if (cnt &gt;= nof_interfaces) {
+2960       THROW_NULL(vmSymbols::java_lang_IncompatibleClassChangeError());
+2961     }
+2962 
+2963     Klass* ik = ioe-&gt;interface_klass();
+2964     if (ik == holder) break;
+2965   }
+2966 
+2967   itableMethodEntry* ime = ioe-&gt;first_method_entry(this);
+2968   Method* m = ime[index].method();
+2969   if (m == NULL) {
+2970     THROW_NULL(vmSymbols::java_lang_AbstractMethodError());
+2971   }
+2972   return m;
+2973 }
+2974 
+2975 
+2976 #if INCLUDE_JVMTI
+2977 // update default_methods for redefineclasses for methods that are
+2978 // not yet in the vtable due to concurrent subclass define and superinterface
+2979 // redefinition
+2980 // Note: those in the vtable, should have been updated via adjust_method_entries
+2981 void InstanceKlass::adjust_default_methods(Method** old_methods, Method** new_methods,
+2982                                            int methods_length, bool* trace_name_printed) {
+2983   // search the default_methods for uses of either obsolete or EMCP methods
+2984   if (default_methods() != NULL) {
+2985     for (int j = 0; j &lt; methods_length; j++) {
+2986       Method* old_method = old_methods[j];
+2987       Method* new_method = new_methods[j];
+2988 
+2989       for (int index = 0; index &lt; default_methods()-&gt;length(); index ++) {
+2990         if (default_methods()-&gt;at(index) == old_method) {
+2991           default_methods()-&gt;at_put(index, new_method);
+2992           if (RC_TRACE_IN_RANGE(0x00100000, 0x00400000)) {
+2993             if (!(*trace_name_printed)) {
+2994               // RC_TRACE_MESG macro has an embedded ResourceMark
+2995               RC_TRACE_MESG(("adjust: klassname=%s default methods from name=%s",
+2996                              external_name(),
+2997                              old_method-&gt;method_holder()-&gt;external_name()));
+2998               *trace_name_printed = true;
+2999             }
+3000             RC_TRACE(0x00100000, ("default method update: %s(%s) ",
+3001                                   new_method-&gt;name()-&gt;as_C_string(),
+3002                                   new_method-&gt;signature()-&gt;as_C_string()));
+3003           }
+3004         }
+3005       }
+3006     }
+3007   }
+3008 }
+3009 #endif // INCLUDE_JVMTI
+3010 
+3011 // On-stack replacement stuff
+3012 void InstanceKlass::add_osr_nmethod(nmethod* n) {
+3013   // only one compilation can be active
+3014   NEEDS_CLEANUP
+3015   // This is a short non-blocking critical region, so the no safepoint check is ok.
+3016   OsrList_lock-&gt;lock_without_safepoint_check();
+3017   assert(n-&gt;is_osr_method(), "wrong kind of nmethod");
+3018   n-&gt;set_osr_link(osr_nmethods_head());
+3019   set_osr_nmethods_head(n);
+3020   // Raise the highest osr level if necessary
+3021   if (TieredCompilation) {
+3022     Method* m = n-&gt;method();
+3023     m-&gt;set_highest_osr_comp_level(MAX2(m-&gt;highest_osr_comp_level(), n-&gt;comp_level()));
+3024   }
+3025   // Remember to unlock again
+3026   OsrList_lock-&gt;unlock();
+3027 
+3028   // Get rid of the osr methods for the same bci that have lower levels.
+3029   if (TieredCompilation) {
+3030     for (int l = CompLevel_limited_profile; l &lt; n-&gt;comp_level(); l++) {
+3031       nmethod *inv = lookup_osr_nmethod(n-&gt;method(), n-&gt;osr_entry_bci(), l, true);
+3032       if (inv != NULL &amp;&amp; inv-&gt;is_in_use()) {
+3033         inv-&gt;make_not_entrant();
+3034       }
+3035     }
+3036   }
+3037 }
+3038 
+3039 
+3040 void InstanceKlass::remove_osr_nmethod(nmethod* n) {
+3041   // This is a short non-blocking critical region, so the no safepoint check is ok.
+3042   OsrList_lock-&gt;lock_without_safepoint_check();
+3043   assert(n-&gt;is_osr_method(), "wrong kind of nmethod");
+3044   nmethod* last = NULL;
+3045   nmethod* cur  = osr_nmethods_head();
+3046   int max_level = CompLevel_none;  // Find the max comp level excluding n
+3047   Method* m = n-&gt;method();
+3048   // Search for match
+3049   while(cur != NULL &amp;&amp; cur != n) {
+3050     if (TieredCompilation &amp;&amp; m == cur-&gt;method()) {
+3051       // Find max level before n
+3052       max_level = MAX2(max_level, cur-&gt;comp_level());
+3053     }
+3054     last = cur;
+3055     cur = cur-&gt;osr_link();
+3056   }
+3057   nmethod* next = NULL;
+3058   if (cur == n) {
+3059     next = cur-&gt;osr_link();
+3060     if (last == NULL) {
+3061       // Remove first element
+3062       set_osr_nmethods_head(next);
+3063     } else {
+3064       last-&gt;set_osr_link(next);
+3065     }
+3066   }
+3067   n-&gt;set_osr_link(NULL);
+3068   if (TieredCompilation) {
+3069     cur = next;
+3070     while (cur != NULL) {
+3071       // Find max level after n
+3072       if (m == cur-&gt;method()) {
+3073         max_level = MAX2(max_level, cur-&gt;comp_level());
+3074       }
+3075       cur = cur-&gt;osr_link();
+3076     }
+3077     m-&gt;set_highest_osr_comp_level(max_level);
+3078   }
+3079   // Remember to unlock again
+3080   OsrList_lock-&gt;unlock();
+3081 }
+3082 
+3083 int InstanceKlass::mark_osr_nmethods(const Method* m) {
+3084   // This is a short non-blocking critical region, so the no safepoint check is ok.
+3085   MutexLockerEx ml(OsrList_lock, Mutex::_no_safepoint_check_flag);
+3086   nmethod* osr = osr_nmethods_head();
+3087   int found = 0;
+3088   while (osr != NULL) {
+3089     assert(osr-&gt;is_osr_method(), "wrong kind of nmethod found in chain");
+3090     if (osr-&gt;method() == m) {
+3091       osr-&gt;mark_for_deoptimization();
+3092       found++;
+3093     }
+3094     osr = osr-&gt;osr_link();
+3095   }
+3096   return found;
+3097 }
+3098 
+3099 nmethod* InstanceKlass::lookup_osr_nmethod(const Method* m, int bci, int comp_level, bool match_level) const {
+3100   // This is a short non-blocking critical region, so the no safepoint check is ok.
+3101   OsrList_lock-&gt;lock_without_safepoint_check();
+3102   nmethod* osr = osr_nmethods_head();
+3103   nmethod* best = NULL;
+3104   while (osr != NULL) {
+3105     assert(osr-&gt;is_osr_method(), "wrong kind of nmethod found in chain");
+3106     // There can be a time when a c1 osr method exists but we are waiting
+3107     // for a c2 version. When c2 completes its osr nmethod we will trash
+3108     // the c1 version and only be able to find the c2 version. However
+3109     // while we overflow in the c1 code at back branches we don't want to
+3110     // try and switch to the same code as we are already running
+3111 
+3112     if (osr-&gt;method() == m &amp;&amp;
+3113         (bci == InvocationEntryBci || osr-&gt;osr_entry_bci() == bci)) {
+3114       if (match_level) {
+3115         if (osr-&gt;comp_level() == comp_level) {
+3116           // Found a match - return it.
+3117           OsrList_lock-&gt;unlock();
+3118           return osr;
+3119         }
+3120       } else {
+3121         if (best == NULL || (osr-&gt;comp_level() &gt; best-&gt;comp_level())) {
+3122           if (osr-&gt;comp_level() == CompLevel_highest_tier) {
+3123             // Found the best possible - return it.
+3124             OsrList_lock-&gt;unlock();
+3125             return osr;
+3126           }
+3127           best = osr;
+3128         }
+3129       }
+3130     }
+3131     osr = osr-&gt;osr_link();
+3132   }
+3133   OsrList_lock-&gt;unlock();
+3134   if (best != NULL &amp;&amp; best-&gt;comp_level() &gt;= comp_level &amp;&amp; match_level == false) {
+3135     return best;
+3136   }
+3137   return NULL;
+3138 }
+3139 
+3140 bool InstanceKlass::add_member_name(Handle mem_name) {
+3141   jweak mem_name_wref = JNIHandles::make_weak_global(mem_name);
+3142   MutexLocker ml(MemberNameTable_lock);
+3143   DEBUG_ONLY(No_Safepoint_Verifier nsv);
+3144 
+3145   // Check if method has been redefined while taking out MemberNameTable_lock, if so
+3146   // return false.  We cannot cache obsolete methods. They will crash when the function
+3147   // is called!
+3148   Method* method = (Method*)java_lang_invoke_MemberName::vmtarget(mem_name());
+3149   if (method-&gt;is_obsolete()) {
+3150     return false;
+3151   } else if (method-&gt;is_old()) {
+3152     // Replace method with redefined version
+3153     java_lang_invoke_MemberName::set_vmtarget(mem_name(), method_with_idnum(method-&gt;method_idnum()));
+3154   }
+3155 
+3156   if (_member_names == NULL) {
+3157     _member_names = new (ResourceObj::C_HEAP, mtClass) MemberNameTable(idnum_allocated_count());
+3158   }
+3159   _member_names-&gt;add_member_name(mem_name_wref);
+3160   return true;
+3161 }
+3162 
+3163 // -----------------------------------------------------------------------------------------------------
+3164 // Printing
+3165 
+3166 #ifndef PRODUCT
+3167 
+3168 #define BULLET  " - "
+3169 
+3170 static const char* state_names[] = {
+3171   "allocated", "loaded", "linked", "being_initialized", "fully_initialized", "initialization_error"
+3172 };
+3173 
+3174 static void print_vtable(intptr_t* start, int len, outputStream* st) {
+3175   for (int i = 0; i &lt; len; i++) {
+3176     intptr_t e = start[i];
+3177     st-&gt;print("%d : " INTPTR_FORMAT, i, e);
+3178     if (e != 0 &amp;&amp; ((Metadata*)e)-&gt;is_metaspace_object()) {
+3179       st-&gt;print(" ");
+3180       ((Metadata*)e)-&gt;print_value_on(st);
+3181     }
+3182     st-&gt;cr();
+3183   }
+3184 }
+3185 
+3186 void InstanceKlass::print_on(outputStream* st) const {
+3187   assert(is_klass(), "must be klass");
+3188   Klass::print_on(st);
+3189 
+3190   st-&gt;print(BULLET"instance size:     %d", size_helper());                        st-&gt;cr();
+3191   st-&gt;print(BULLET"klass size:        %d", size());                               st-&gt;cr();
+3192   st-&gt;print(BULLET"access:            "); access_flags().print_on(st);            st-&gt;cr();
+3193   st-&gt;print(BULLET"state:             "); st-&gt;print_cr("%s", state_names[_init_state]);
+3194   st-&gt;print(BULLET"name:              "); name()-&gt;print_value_on(st);             st-&gt;cr();
+3195   st-&gt;print(BULLET"super:             "); super()-&gt;print_value_on_maybe_null(st); st-&gt;cr();
+3196   st-&gt;print(BULLET"sub:               ");
+3197   Klass* sub = subklass();
+3198   int n;
+3199   for (n = 0; sub != NULL; n++, sub = sub-&gt;next_sibling()) {
+3200     if (n &lt; MaxSubklassPrintSize) {
+3201       sub-&gt;print_value_on(st);
+3202       st-&gt;print("   ");
+3203     }
+3204   }
+3205   if (n &gt;= MaxSubklassPrintSize) st-&gt;print("(%d more klasses...)", n - MaxSubklassPrintSize);
+3206   st-&gt;cr();
+3207 
+3208   if (is_interface()) {
+3209     st-&gt;print_cr(BULLET"nof implementors:  %d", nof_implementors());
+3210     if (nof_implementors() == 1) {
+3211       st-&gt;print_cr(BULLET"implementor:    ");
+3212       st-&gt;print("   ");
+3213       implementor()-&gt;print_value_on(st);
+3214       st-&gt;cr();
+3215     }
+3216   }
+3217 
+3218   st-&gt;print(BULLET"arrays:            "); array_klasses()-&gt;print_value_on_maybe_null(st); st-&gt;cr();
+3219   st-&gt;print(BULLET"methods:           "); methods()-&gt;print_value_on(st);                  st-&gt;cr();
+3220   if (Verbose || WizardMode) {
+3221     Array&lt;Method*&gt;* method_array = methods();
+3222     for (int i = 0; i &lt; method_array-&gt;length(); i++) {
+3223       st-&gt;print("%d : ", i); method_array-&gt;at(i)-&gt;print_value(); st-&gt;cr();
+3224     }
+3225   }
+3226   st-&gt;print(BULLET"method ordering:   "); method_ordering()-&gt;print_value_on(st);      st-&gt;cr();
+3227   st-&gt;print(BULLET"default_methods:   "); default_methods()-&gt;print_value_on(st);      st-&gt;cr();
+3228   if (Verbose &amp;&amp; default_methods() != NULL) {
+3229     Array&lt;Method*&gt;* method_array = default_methods();
+3230     for (int i = 0; i &lt; method_array-&gt;length(); i++) {
+3231       st-&gt;print("%d : ", i); method_array-&gt;at(i)-&gt;print_value(); st-&gt;cr();
+3232     }
+3233   }
+3234   if (default_vtable_indices() != NULL) {
+3235     st-&gt;print(BULLET"default vtable indices:   "); default_vtable_indices()-&gt;print_value_on(st);       st-&gt;cr();
+3236   }
+3237   st-&gt;print(BULLET"local interfaces:  "); local_interfaces()-&gt;print_value_on(st);      st-&gt;cr();
+3238   st-&gt;print(BULLET"trans. interfaces: "); transitive_interfaces()-&gt;print_value_on(st); st-&gt;cr();
+3239   st-&gt;print(BULLET"constants:         "); constants()-&gt;print_value_on(st);         st-&gt;cr();
+3240   if (class_loader_data() != NULL) {
+3241     st-&gt;print(BULLET"class loader data:  ");
+3242     class_loader_data()-&gt;print_value_on(st);
+3243     st-&gt;cr();
+3244   }
+3245   st-&gt;print(BULLET"host class:        "); host_klass()-&gt;print_value_on_maybe_null(st); st-&gt;cr();
+3246   if (source_file_name() != NULL) {
+3247     st-&gt;print(BULLET"source file:       ");
+3248     source_file_name()-&gt;print_value_on(st);
+3249     st-&gt;cr();
+3250   }
+3251   if (source_debug_extension() != NULL) {
+3252     st-&gt;print(BULLET"source debug extension:       ");
+3253     st-&gt;print("%s", source_debug_extension());
+3254     st-&gt;cr();
+3255   }
+3256   st-&gt;print(BULLET"class annotations:       "); class_annotations()-&gt;print_value_on(st); st-&gt;cr();
+3257   st-&gt;print(BULLET"class type annotations:  "); class_type_annotations()-&gt;print_value_on(st); st-&gt;cr();
+3258   st-&gt;print(BULLET"field annotations:       "); fields_annotations()-&gt;print_value_on(st); st-&gt;cr();
+3259   st-&gt;print(BULLET"field type annotations:  "); fields_type_annotations()-&gt;print_value_on(st); st-&gt;cr();
+3260   {
+3261     bool have_pv = false;
+3262     PreviousVersionWalker pvw(Thread::current(), (InstanceKlass*)this);
+3263     for (PreviousVersionNode * pv_node = pvw.next_previous_version();
+3264          pv_node != NULL; pv_node = pvw.next_previous_version()) {
+3265       if (!have_pv)
+3266         st-&gt;print(BULLET"previous version:  ");
+3267       have_pv = true;
+3268       pv_node-&gt;prev_constant_pool()-&gt;print_value_on(st);
+3269     }
+3270     if (have_pv) st-&gt;cr();
+3271   } // pvw is cleaned up
+3272 
+3273   if (generic_signature() != NULL) {
+3274     st-&gt;print(BULLET"generic signature: ");
+3275     generic_signature()-&gt;print_value_on(st);
+3276     st-&gt;cr();
+3277   }
+3278   st-&gt;print(BULLET"inner classes:     "); inner_classes()-&gt;print_value_on(st);     st-&gt;cr();
+3279   st-&gt;print(BULLET"java mirror:       "); java_mirror()-&gt;print_value_on(st);       st-&gt;cr();
+3280   st-&gt;print(BULLET"vtable length      %d  (start addr: " INTPTR_FORMAT ")", vtable_length(), start_of_vtable());  st-&gt;cr();
+3281   if (vtable_length() &gt; 0 &amp;&amp; (Verbose || WizardMode))  print_vtable(start_of_vtable(), vtable_length(), st);
+3282   st-&gt;print(BULLET"itable length      %d (start addr: " INTPTR_FORMAT ")", itable_length(), start_of_itable()); st-&gt;cr();
+3283   if (itable_length() &gt; 0 &amp;&amp; (Verbose || WizardMode))  print_vtable(start_of_itable(), itable_length(), st);
+3284   st-&gt;print_cr(BULLET"---- static fields (%d words):", static_field_size());
+3285   FieldPrinter print_static_field(st);
+3286   ((InstanceKlass*)this)-&gt;do_local_static_fields(&amp;print_static_field);
+3287   st-&gt;print_cr(BULLET"---- non-static fields (%d words):", nonstatic_field_size());
+3288   FieldPrinter print_nonstatic_field(st);
+3289   ((InstanceKlass*)this)-&gt;do_nonstatic_fields(&amp;print_nonstatic_field);
+3290 
+3291   st-&gt;print(BULLET"non-static oop maps: ");
+3292   OopMapBlock* map     = start_of_nonstatic_oop_maps();
+3293   OopMapBlock* end_map = map + nonstatic_oop_map_count();
+3294   while (map &lt; end_map) {
+3295     st-&gt;print("%d-%d ", map-&gt;offset(), map-&gt;offset() + heapOopSize*(map-&gt;count() - 1));
+3296     map++;
+3297   }
+3298   st-&gt;cr();
+3299 }
+3300 
+3301 #endif //PRODUCT
+3302 
+3303 void InstanceKlass::print_value_on(outputStream* st) const {
+3304   assert(is_klass(), "must be klass");
+3305   if (Verbose || WizardMode)  access_flags().print_on(st);
+3306   name()-&gt;print_value_on(st);
+3307 }
+3308 
+3309 #ifndef PRODUCT
+3310 
+3311 void FieldPrinter::do_field(fieldDescriptor* fd) {
+3312   _st-&gt;print(BULLET);
+3313    if (_obj == NULL) {
+3314      fd-&gt;print_on(_st);
+3315      _st-&gt;cr();
+3316    } else {
+3317      fd-&gt;print_on_for(_st, _obj);
+3318      _st-&gt;cr();
+3319    }
+3320 }
+3321 
+3322 
+3323 void InstanceKlass::oop_print_on(oop obj, outputStream* st) {
+3324   Klass::oop_print_on(obj, st);
+3325 
+3326   if (this == SystemDictionary::String_klass()) {
+3327     typeArrayOop value  = java_lang_String::value(obj);
+3328     juint        offset = java_lang_String::offset(obj);
+3329     juint        length = java_lang_String::length(obj);
+3330     if (value != NULL &amp;&amp;
+3331         value-&gt;is_typeArray() &amp;&amp;
+3332         offset          &lt;= (juint) value-&gt;length() &amp;&amp;
+3333         offset + length &lt;= (juint) value-&gt;length()) {
+3334       st-&gt;print(BULLET"string: ");
+3335       java_lang_String::print(obj, st);
+3336       st-&gt;cr();
+3337       if (!WizardMode)  return;  // that is enough
+3338     }
+3339   }
+3340 
+3341   st-&gt;print_cr(BULLET"---- fields (total size %d words):", oop_size(obj));
+3342   FieldPrinter print_field(st, obj);
+3343   do_nonstatic_fields(&amp;print_field);
+3344 
+3345   if (this == SystemDictionary::Class_klass()) {
+3346     st-&gt;print(BULLET"signature: ");
+3347     java_lang_Class::print_signature(obj, st);
+3348     st-&gt;cr();
+3349     Klass* mirrored_klass = java_lang_Class::as_Klass(obj);
+3350     st-&gt;print(BULLET"fake entry for mirror: ");
+3351     mirrored_klass-&gt;print_value_on_maybe_null(st);
+3352     st-&gt;cr();
+3353     Klass* array_klass = java_lang_Class::array_klass(obj);
+3354     st-&gt;print(BULLET"fake entry for array: ");
+3355     array_klass-&gt;print_value_on_maybe_null(st);
+3356     st-&gt;cr();
+3357     st-&gt;print_cr(BULLET"fake entry for oop_size: %d", java_lang_Class::oop_size(obj));
+3358     st-&gt;print_cr(BULLET"fake entry for static_oop_field_count: %d", java_lang_Class::static_oop_field_count(obj));
+3359     Klass* real_klass = java_lang_Class::as_Klass(obj);
+3360     if (real_klass != NULL &amp;&amp; real_klass-&gt;oop_is_instance()) {
+3361       InstanceKlass::cast(real_klass)-&gt;do_local_static_fields(&amp;print_field);
+3362     }
+3363   } else if (this == SystemDictionary::MethodType_klass()) {
+3364     st-&gt;print(BULLET"signature: ");
+3365     java_lang_invoke_MethodType::print_signature(obj, st);
+3366     st-&gt;cr();
+3367   }
+3368 }
+3369 
+3370 #endif //PRODUCT
+3371 
+3372 void InstanceKlass::oop_print_value_on(oop obj, outputStream* st) {
+3373   st-&gt;print("a ");
+3374   name()-&gt;print_value_on(st);
+3375   obj-&gt;print_address_on(st);
+3376   if (this == SystemDictionary::String_klass()
+3377       &amp;&amp; java_lang_String::value(obj) != NULL) {
+3378     ResourceMark rm;
+3379     int len = java_lang_String::length(obj);
+3380     int plen = (len &lt; 24 ? len : 12);
+3381     char* str = java_lang_String::as_utf8_string(obj, 0, plen);
+3382     st-&gt;print(" = \"%s\"", str);
+3383     if (len &gt; plen)
+3384       st-&gt;print("...[%d]", len);
+3385   } else if (this == SystemDictionary::Class_klass()) {
+3386     Klass* k = java_lang_Class::as_Klass(obj);
+3387     st-&gt;print(" = ");
+3388     if (k != NULL) {
+3389       k-&gt;print_value_on(st);
+3390     } else {
+3391       const char* tname = type2name(java_lang_Class::primitive_type(obj));
+3392       st-&gt;print("%s", tname ? tname : "type?");
+3393     }
+3394   } else if (this == SystemDictionary::MethodType_klass()) {
+3395     st-&gt;print(" = ");
+3396     java_lang_invoke_MethodType::print_signature(obj, st);
+3397   } else if (java_lang_boxing_object::is_instance(obj)) {
+3398     st-&gt;print(" = ");
+3399     java_lang_boxing_object::print(obj, st);
+3400   } else if (this == SystemDictionary::LambdaForm_klass()) {
+3401     oop vmentry = java_lang_invoke_LambdaForm::vmentry(obj);
+3402     if (vmentry != NULL) {
+3403       st-&gt;print(" =&gt; ");
+3404       vmentry-&gt;print_value_on(st);
+3405     }
+3406   } else if (this == SystemDictionary::MemberName_klass()) {
+3407     Metadata* vmtarget = java_lang_invoke_MemberName::vmtarget(obj);
+3408     if (vmtarget != NULL) {
+3409       st-&gt;print(" = ");
+3410       vmtarget-&gt;print_value_on(st);
+3411     } else {
+3412       java_lang_invoke_MemberName::clazz(obj)-&gt;print_value_on(st);
+3413       st-&gt;print(".");
+3414       java_lang_invoke_MemberName::name(obj)-&gt;print_value_on(st);
+3415     }
+3416   }
+3417 }
+3418 
+3419 const char* InstanceKlass::internal_name() const {
+3420   return external_name();
+3421 }
+3422 
+3423 #if INCLUDE_SERVICES
+3424 // Size Statistics
+3425 void InstanceKlass::collect_statistics(KlassSizeStats *sz) const {
+3426   Klass::collect_statistics(sz);
+3427 
+3428   sz-&gt;_inst_size  = HeapWordSize * size_helper();
+3429   sz-&gt;_vtab_bytes = HeapWordSize * align_object_offset(vtable_length());
+3430   sz-&gt;_itab_bytes = HeapWordSize * align_object_offset(itable_length());
+3431   sz-&gt;_nonstatic_oopmap_bytes = HeapWordSize *
+3432         ((is_interface() || is_anonymous()) ?
+3433          align_object_offset(nonstatic_oop_map_size()) :
+3434          nonstatic_oop_map_size());
+3435 
+3436   int n = 0;
+3437   n += (sz-&gt;_methods_array_bytes         = sz-&gt;count_array(methods()));
+3438   n += (sz-&gt;_method_ordering_bytes       = sz-&gt;count_array(method_ordering()));
+3439   n += (sz-&gt;_local_interfaces_bytes      = sz-&gt;count_array(local_interfaces()));
+3440   n += (sz-&gt;_transitive_interfaces_bytes = sz-&gt;count_array(transitive_interfaces()));
+3441   n += (sz-&gt;_fields_bytes                = sz-&gt;count_array(fields()));
+3442   n += (sz-&gt;_inner_classes_bytes         = sz-&gt;count_array(inner_classes()));
+3443   sz-&gt;_ro_bytes += n;
+3444 
+3445   const ConstantPool* cp = constants();
+3446   if (cp) {
+3447     cp-&gt;collect_statistics(sz);
+3448   }
+3449 
+3450   const Annotations* anno = annotations();
+3451   if (anno) {
+3452     anno-&gt;collect_statistics(sz);
+3453   }
+3454 
+3455   const Array&lt;Method*&gt;* methods_array = methods();
+3456   if (methods()) {
+3457     for (int i = 0; i &lt; methods_array-&gt;length(); i++) {
+3458       Method* method = methods_array-&gt;at(i);
+3459       if (method) {
+3460         sz-&gt;_method_count ++;
+3461         method-&gt;collect_statistics(sz);
+3462       }
+3463     }
+3464   }
+3465 }
+3466 #endif // INCLUDE_SERVICES
+3467 
+3468 // Verification
+3469 
+3470 class VerifyFieldClosure: public OopClosure {
+3471  protected:
+3472   template &lt;class T&gt; void do_oop_work(T* p) {
+3473     oop obj = oopDesc::load_decode_heap_oop(p);
+3474     if (!obj-&gt;is_oop_or_null()) {
+3475       tty-&gt;print_cr("Failed: " PTR_FORMAT " -&gt; " PTR_FORMAT, p, (address)obj);
+3476       Universe::print();
+3477       guarantee(false, "boom");
+3478     }
+3479   }
+3480  public:
+3481   virtual void do_oop(oop* p)       { VerifyFieldClosure::do_oop_work(p); }
+3482   virtual void do_oop(narrowOop* p) { VerifyFieldClosure::do_oop_work(p); }
+3483 };
+3484 
+3485 void InstanceKlass::verify_on(outputStream* st) {
+3486 #ifndef PRODUCT
+3487   // Avoid redundant verifies, this really should be in product.
+3488   if (_verify_count == Universe::verify_count()) return;
+3489   _verify_count = Universe::verify_count();
+3490 #endif
+3491 
+3492   // Verify Klass
+3493   Klass::verify_on(st);
+3494 
+3495   // Verify that klass is present in ClassLoaderData
+3496   guarantee(class_loader_data()-&gt;contains_klass(this),
+3497             "this class isn't found in class loader data");
+3498 
+3499   // Verify vtables
+3500   if (is_linked()) {
+3501     ResourceMark rm;
+3502     // $$$ This used to be done only for m/s collections.  Doing it
+3503     // always seemed a valid generalization.  (DLD -- 6/00)
+3504     vtable()-&gt;verify(st);
+3505   }
+3506 
+3507   // Verify first subklass
+3508   if (subklass_oop() != NULL) {
+3509     guarantee(subklass_oop()-&gt;is_klass(), "should be klass");
+3510   }
+3511 
+3512   // Verify siblings
+3513   Klass* super = this-&gt;super();
+3514   Klass* sib = next_sibling();
+3515   if (sib != NULL) {
+3516     if (sib == this) {
+3517       fatal(err_msg("subclass points to itself " PTR_FORMAT, sib));
+3518     }
+3519 
+3520     guarantee(sib-&gt;is_klass(), "should be klass");
+3521     guarantee(sib-&gt;super() == super, "siblings should have same superklass");
+3522   }
+3523 
+3524   // Verify implementor fields
+3525   Klass* im = implementor();
+3526   if (im != NULL) {
+3527     guarantee(is_interface(), "only interfaces should have implementor set");
+3528     guarantee(im-&gt;is_klass(), "should be klass");
+3529     guarantee(!im-&gt;is_interface() || im == this,
+3530       "implementors cannot be interfaces");
+3531   }
+3532 
+3533   // Verify local interfaces
+3534   if (local_interfaces()) {
+3535     Array&lt;Klass*&gt;* local_interfaces = this-&gt;local_interfaces();
+3536     for (int j = 0; j &lt; local_interfaces-&gt;length(); j++) {
+3537       Klass* e = local_interfaces-&gt;at(j);
+3538       guarantee(e-&gt;is_klass() &amp;&amp; e-&gt;is_interface(), "invalid local interface");
+3539     }
+3540   }
+3541 
+3542   // Verify transitive interfaces
+3543   if (transitive_interfaces() != NULL) {
+3544     Array&lt;Klass*&gt;* transitive_interfaces = this-&gt;transitive_interfaces();
+3545     for (int j = 0; j &lt; transitive_interfaces-&gt;length(); j++) {
+3546       Klass* e = transitive_interfaces-&gt;at(j);
+3547       guarantee(e-&gt;is_klass() &amp;&amp; e-&gt;is_interface(), "invalid transitive interface");
+3548     }
+3549   }
+3550 
+3551   // Verify methods
+3552   if (methods() != NULL) {
+3553     Array&lt;Method*&gt;* methods = this-&gt;methods();
+3554     for (int j = 0; j &lt; methods-&gt;length(); j++) {
+3555       guarantee(methods-&gt;at(j)-&gt;is_method(), "non-method in methods array");
+3556     }
+3557     for (int j = 0; j &lt; methods-&gt;length() - 1; j++) {
+3558       Method* m1 = methods-&gt;at(j);
+3559       Method* m2 = methods-&gt;at(j + 1);
+3560       guarantee(m1-&gt;name()-&gt;fast_compare(m2-&gt;name()) &lt;= 0, "methods not sorted correctly");
+3561     }
+3562   }
+3563 
+3564   // Verify method ordering
+3565   if (method_ordering() != NULL) {
+3566     Array&lt;int&gt;* method_ordering = this-&gt;method_ordering();
+3567     int length = method_ordering-&gt;length();
+3568     if (JvmtiExport::can_maintain_original_method_order() ||
+3569         ((UseSharedSpaces || DumpSharedSpaces) &amp;&amp; length != 0)) {
+3570       guarantee(length == methods()-&gt;length(), "invalid method ordering length");
+3571       jlong sum = 0;
+3572       for (int j = 0; j &lt; length; j++) {
+3573         int original_index = method_ordering-&gt;at(j);
+3574         guarantee(original_index &gt;= 0, "invalid method ordering index");
+3575         guarantee(original_index &lt; length, "invalid method ordering index");
+3576         sum += original_index;
+3577       }
+3578       // Verify sum of indices 0,1,...,length-1
+3579       guarantee(sum == ((jlong)length*(length-1))/2, "invalid method ordering sum");
+3580     } else {
+3581       guarantee(length == 0, "invalid method ordering length");
+3582     }
+3583   }
+3584 
+3585   // Verify default methods
+3586   if (default_methods() != NULL) {
+3587     Array&lt;Method*&gt;* methods = this-&gt;default_methods();
+3588     for (int j = 0; j &lt; methods-&gt;length(); j++) {
+3589       guarantee(methods-&gt;at(j)-&gt;is_method(), "non-method in methods array");
+3590     }
+3591     for (int j = 0; j &lt; methods-&gt;length() - 1; j++) {
+3592       Method* m1 = methods-&gt;at(j);
+3593       Method* m2 = methods-&gt;at(j + 1);
+3594       guarantee(m1-&gt;name()-&gt;fast_compare(m2-&gt;name()) &lt;= 0, "methods not sorted correctly");
+3595     }
+3596   }
+3597 
+3598   // Verify JNI static field identifiers
+3599   if (jni_ids() != NULL) {
+3600     jni_ids()-&gt;verify(this);
+3601   }
+3602 
+3603   // Verify other fields
+3604   if (array_klasses() != NULL) {
+3605     guarantee(array_klasses()-&gt;is_klass(), "should be klass");
+3606   }
+3607   if (constants() != NULL) {
+3608     guarantee(constants()-&gt;is_constantPool(), "should be constant pool");
+3609   }
+3610   const Klass* host = host_klass();
+3611   if (host != NULL) {
+3612     guarantee(host-&gt;is_klass(), "should be klass");
+3613   }
+3614 }
+3615 
+3616 void InstanceKlass::oop_verify_on(oop obj, outputStream* st) {
+3617   Klass::oop_verify_on(obj, st);
+3618   VerifyFieldClosure blk;
+3619   obj-&gt;oop_iterate_no_header(&amp;blk);
+3620 }
+3621 
+3622 
+3623 // JNIid class for jfieldIDs only
+3624 // Note to reviewers:
+3625 // These JNI functions are just moved over to column 1 and not changed
+3626 // in the compressed oops workspace.
+3627 JNIid::JNIid(Klass* holder, int offset, JNIid* next) {
+3628   _holder = holder;
+3629   _offset = offset;
+3630   _next = next;
+3631   debug_only(_is_static_field_id = false;)
+3632 }
+3633 
+3634 
+3635 JNIid* JNIid::find(int offset) {
+3636   JNIid* current = this;
+3637   while (current != NULL) {
+3638     if (current-&gt;offset() == offset) return current;
+3639     current = current-&gt;next();
+3640   }
+3641   return NULL;
+3642 }
+3643 
+3644 void JNIid::deallocate(JNIid* current) {
+3645   while (current != NULL) {
+3646     JNIid* next = current-&gt;next();
+3647     delete current;
+3648     current = next;
+3649   }
+3650 }
+3651 
+3652 
+3653 void JNIid::verify(Klass* holder) {
+3654   int first_field_offset  = InstanceMirrorKlass::offset_of_static_fields();
+3655   int end_field_offset;
+3656   end_field_offset = first_field_offset + (InstanceKlass::cast(holder)-&gt;static_field_size() * wordSize);
+3657 
+3658   JNIid* current = this;
+3659   while (current != NULL) {
+3660     guarantee(current-&gt;holder() == holder, "Invalid klass in JNIid");
+3661 #ifdef ASSERT
+3662     int o = current-&gt;offset();
+3663     if (current-&gt;is_static_field_id()) {
+3664       guarantee(o &gt;= first_field_offset  &amp;&amp; o &lt; end_field_offset,  "Invalid static field offset in JNIid");
+3665     }
+3666 #endif
+3667     current = current-&gt;next();
+3668   }
+3669 }
+3670 
+3671 
+3672 #ifdef ASSERT
+3673 void InstanceKlass::set_init_state(ClassState state) {
+3674   bool good_state = is_shared() ? (_init_state &lt;= state)
+3675                                                : (_init_state &lt; state);
+3676   assert(good_state || state == allocated, "illegal state transition");
+3677   _init_state = (u1)state;
+3678 }
+3679 #endif
+3680 
+3681 
+3682 // RedefineClasses() support for previous versions:
+3683 
+3684 // Purge previous versions
+3685 static void purge_previous_versions_internal(InstanceKlass* ik, int emcp_method_count) {
+3686   if (ik-&gt;previous_versions() != NULL) {
+3687     // This klass has previous versions so see what we can cleanup
+3688     // while it is safe to do so.
+3689 
+3690     int deleted_count = 0;    // leave debugging breadcrumbs
+3691     int live_count = 0;
+3692     ClassLoaderData* loader_data = ik-&gt;class_loader_data() == NULL ?
+3693                        ClassLoaderData::the_null_class_loader_data() :
+3694                        ik-&gt;class_loader_data();
+3695 
+3696     // RC_TRACE macro has an embedded ResourceMark
+3697     RC_TRACE(0x00000200, ("purge: %s: previous version length=%d",
+3698       ik-&gt;external_name(), ik-&gt;previous_versions()-&gt;length()));
+3699 
+3700     for (int i = ik-&gt;previous_versions()-&gt;length() - 1; i &gt;= 0; i--) {
+3701       // check the previous versions array
+3702       PreviousVersionNode * pv_node = ik-&gt;previous_versions()-&gt;at(i);
+3703       ConstantPool* cp_ref = pv_node-&gt;prev_constant_pool();
+3704       assert(cp_ref != NULL, "cp ref was unexpectedly cleared");
+3705 
+3706       ConstantPool* pvcp = cp_ref;
+3707       if (!pvcp-&gt;on_stack()) {
+3708         // If the constant pool isn't on stack, none of the methods
+3709         // are executing.  Delete all the methods, the constant pool and
+3710         // and this previous version node.
+3711         GrowableArray&lt;Method*&gt;* method_refs = pv_node-&gt;prev_EMCP_methods();
+3712         if (method_refs != NULL) {
+3713           for (int j = method_refs-&gt;length() - 1; j &gt;= 0; j--) {
+3714             Method* method = method_refs-&gt;at(j);
+3715             assert(method != NULL, "method ref was unexpectedly cleared");
+3716             method_refs-&gt;remove_at(j);
+3717             // method will be freed with associated class.
+3718           }
+3719         }
+3720         // Remove the constant pool
+3721         delete pv_node;
+3722         // Since we are traversing the array backwards, we don't have to
+3723         // do anything special with the index.
+3724         ik-&gt;previous_versions()-&gt;remove_at(i);
+3725         deleted_count++;
+3726         continue;
+3727       } else {
+3728         RC_TRACE(0x00000200, ("purge: previous version @%d is alive", i));
+3729         assert(pvcp-&gt;pool_holder() != NULL, "Constant pool with no holder");
+3730         guarantee (!loader_data-&gt;is_unloading(), "unloaded classes can't be on the stack");
+3731         live_count++;
+3732       }
+3733 
+3734       // At least one method is live in this previous version, clean out
+3735       // the others or mark them as obsolete.
+3736       GrowableArray&lt;Method*&gt;* method_refs = pv_node-&gt;prev_EMCP_methods();
+3737       if (method_refs != NULL) {
+3738         RC_TRACE(0x00000200, ("purge: previous methods length=%d",
+3739           method_refs-&gt;length()));
+3740         for (int j = method_refs-&gt;length() - 1; j &gt;= 0; j--) {
+3741           Method* method = method_refs-&gt;at(j);
+3742           assert(method != NULL, "method ref was unexpectedly cleared");
+3743 
+3744           // Remove the emcp method if it's not executing
+3745           // If it's been made obsolete by a redefinition of a non-emcp
+3746           // method, mark it as obsolete but leave it to clean up later.
+3747           if (!method-&gt;on_stack()) {
+3748             method_refs-&gt;remove_at(j);
+3749           } else if (emcp_method_count == 0) {
+3750             method-&gt;set_is_obsolete();
+3751           } else {
+3752             // RC_TRACE macro has an embedded ResourceMark
+3753             RC_TRACE(0x00000200,
+3754               ("purge: %s(%s): prev method @%d in version @%d is alive",
+3755               method-&gt;name()-&gt;as_C_string(),
+3756               method-&gt;signature()-&gt;as_C_string(), j, i));
+3757           }
+3758         }
+3759       }
+3760     }
+3761     assert(ik-&gt;previous_versions()-&gt;length() == live_count, "sanity check");
+3762     RC_TRACE(0x00000200,
+3763       ("purge: previous version stats: live=%d, deleted=%d", live_count,
+3764       deleted_count));
+3765   }
+3766 }
+3767 
+3768 // External interface for use during class unloading.
+3769 void InstanceKlass::purge_previous_versions(InstanceKlass* ik) {
+3770   // Call with &gt;0 emcp methods since they are not currently being redefined.
+3771   purge_previous_versions_internal(ik, 1);
+3772 }
+3773 
+3774 
+3775 // Potentially add an information node that contains pointers to the
+3776 // interesting parts of the previous version of the_class.
+3777 // This is also where we clean out any unused references.
+3778 // Note that while we delete nodes from the _previous_versions
+3779 // array, we never delete the array itself until the klass is
+3780 // unloaded. The has_been_redefined() query depends on that fact.
+3781 //
+3782 void InstanceKlass::add_previous_version(instanceKlassHandle ikh,
+3783        BitMap* emcp_methods, int emcp_method_count) {
+3784   assert(Thread::current()-&gt;is_VM_thread(),
+3785          "only VMThread can add previous versions");
+3786 
+3787   if (_previous_versions == NULL) {
+3788     // This is the first previous version so make some space.
+3789     // Start with 2 elements under the assumption that the class
+3790     // won't be redefined much.
+3791     _previous_versions =  new (ResourceObj::C_HEAP, mtClass)
+3792                             GrowableArray&lt;PreviousVersionNode *&gt;(2, true);
+3793   }
+3794 
+3795   ConstantPool* cp_ref = ikh-&gt;constants();
+3796 
+3797   // RC_TRACE macro has an embedded ResourceMark
+3798   RC_TRACE(0x00000400, ("adding previous version ref for %s @%d, EMCP_cnt=%d "
+3799                         "on_stack=%d",
+3800     ikh-&gt;external_name(), _previous_versions-&gt;length(), emcp_method_count,
+3801     cp_ref-&gt;on_stack()));
+3802 
+3803   // If the constant pool for this previous version of the class
+3804   // is not marked as being on the stack, then none of the methods
+3805   // in this previous version of the class are on the stack so
+3806   // we don't need to create a new PreviousVersionNode. However,
+3807   // we still need to examine older previous versions below.
+3808   Array&lt;Method*&gt;* old_methods = ikh-&gt;methods();
+3809 
+3810   if (cp_ref-&gt;on_stack()) {
+3811     PreviousVersionNode * pv_node = NULL;
+3812     if (emcp_method_count == 0) {
+3813       // non-shared ConstantPool gets a reference
+3814       pv_node = new PreviousVersionNode(cp_ref, NULL);
+3815       RC_TRACE(0x00000400,
+3816           ("add: all methods are obsolete; flushing any EMCP refs"));
+3817     } else {
+3818       int local_count = 0;
+3819       GrowableArray&lt;Method*&gt;* method_refs = new (ResourceObj::C_HEAP, mtClass)
+3820           GrowableArray&lt;Method*&gt;(emcp_method_count, true);
+3821       for (int i = 0; i &lt; old_methods-&gt;length(); i++) {
+3822         if (emcp_methods-&gt;at(i)) {
+3823             // this old method is EMCP. Save it only if it's on the stack
+3824             Method* old_method = old_methods-&gt;at(i);
+3825             if (old_method-&gt;on_stack()) {
+3826               method_refs-&gt;append(old_method);
+3827             }
+3828           if (++local_count &gt;= emcp_method_count) {
+3829             // no more EMCP methods so bail out now
+3830             break;
+3831           }
+3832         }
+3833       }
+3834       // non-shared ConstantPool gets a reference
+3835       pv_node = new PreviousVersionNode(cp_ref, method_refs);
+3836     }
+3837     // append new previous version.
+3838     _previous_versions-&gt;append(pv_node);
+3839   }
+3840 
+3841   // Since the caller is the VMThread and we are at a safepoint, this
+3842   // is a good time to clear out unused references.
+3843 
+3844   RC_TRACE(0x00000400, ("add: previous version length=%d",
+3845     _previous_versions-&gt;length()));
+3846 
+3847   // Purge previous versions not executing on the stack
+3848   purge_previous_versions_internal(this, emcp_method_count);
+3849 
+3850   int obsolete_method_count = old_methods-&gt;length() - emcp_method_count;
+3851 
+3852   if (emcp_method_count != 0 &amp;&amp; obsolete_method_count != 0 &amp;&amp;
+3853       _previous_versions-&gt;length() &gt; 0) {
+3854     // We have a mix of obsolete and EMCP methods so we have to
+3855     // clear out any matching EMCP method entries the hard way.
+3856     int local_count = 0;
+3857     for (int i = 0; i &lt; old_methods-&gt;length(); i++) {
+3858       if (!emcp_methods-&gt;at(i)) {
+3859         // only obsolete methods are interesting
+3860         Method* old_method = old_methods-&gt;at(i);
+3861         Symbol* m_name = old_method-&gt;name();
+3862         Symbol* m_signature = old_method-&gt;signature();
+3863 
+3864         // we might not have added the last entry
+3865         for (int j = _previous_versions-&gt;length() - 1; j &gt;= 0; j--) {
+3866           // check the previous versions array for non executing obsolete methods
+3867           PreviousVersionNode * pv_node = _previous_versions-&gt;at(j);
+3868 
+3869           GrowableArray&lt;Method*&gt;* method_refs = pv_node-&gt;prev_EMCP_methods();
+3870           if (method_refs == NULL) {
+3871             // We have run into a PreviousVersion generation where
+3872             // all methods were made obsolete during that generation's
+3873             // RedefineClasses() operation. At the time of that
+3874             // operation, all EMCP methods were flushed so we don't
+3875             // have to go back any further.
+3876             //
+3877             // A NULL method_refs is different than an empty method_refs.
+3878             // We cannot infer any optimizations about older generations
+3879             // from an empty method_refs for the current generation.
+3880             break;
+3881           }
+3882 
+3883           for (int k = method_refs-&gt;length() - 1; k &gt;= 0; k--) {
+3884             Method* method = method_refs-&gt;at(k);
+3885 
+3886             if (!method-&gt;is_obsolete() &amp;&amp;
+3887                 method-&gt;name() == m_name &amp;&amp;
+3888                 method-&gt;signature() == m_signature) {
+3889               // The current RedefineClasses() call has made all EMCP
+3890               // versions of this method obsolete so mark it as obsolete
+3891               // and remove the reference.
+3892               RC_TRACE(0x00000400,
+3893                 ("add: %s(%s): flush obsolete method @%d in version @%d",
+3894                 m_name-&gt;as_C_string(), m_signature-&gt;as_C_string(), k, j));
+3895 
+3896               method-&gt;set_is_obsolete();
+3897               // Leave obsolete methods on the previous version list to
+3898               // clean up later.
+3899               break;
+3900             }
+3901           }
+3902 
+3903           // The previous loop may not find a matching EMCP method, but
+3904           // that doesn't mean that we can optimize and not go any
+3905           // further back in the PreviousVersion generations. The EMCP
+3906           // method for this generation could have already been deleted,
+3907           // but there still may be an older EMCP method that has not
+3908           // been deleted.
+3909         }
+3910 
+3911         if (++local_count &gt;= obsolete_method_count) {
+3912           // no more obsolete methods so bail out now
+3913           break;
+3914         }
+3915       }
+3916     }
+3917   }
+3918 } // end add_previous_version()
+3919 
+3920 
+3921 // Determine if InstanceKlass has a previous version.
+3922 bool InstanceKlass::has_previous_version() const {
+3923   return (_previous_versions != NULL &amp;&amp; _previous_versions-&gt;length() &gt; 0);
+3924 } // end has_previous_version()
+3925 
+3926 
+3927 Method* InstanceKlass::method_with_idnum(int idnum) {
+3928   Method* m = NULL;
+3929   if (idnum &lt; methods()-&gt;length()) {
+3930     m = methods()-&gt;at(idnum);
+3931   }
+3932   if (m == NULL || m-&gt;method_idnum() != idnum) {
+3933     for (int index = 0; index &lt; methods()-&gt;length(); ++index) {
+3934       m = methods()-&gt;at(index);
+3935       if (m-&gt;method_idnum() == idnum) {
+3936         return m;
+3937       }
+3938     }
+3939     // None found, return null for the caller to handle.
+3940     return NULL;
+3941   }
+3942   return m;
+3943 }
+3944 
+3945 jint InstanceKlass::get_cached_class_file_len() {
+3946   return VM_RedefineClasses::get_cached_class_file_len(_cached_class_file);
+3947 }
+3948 
+3949 unsigned char * InstanceKlass::get_cached_class_file_bytes() {
+3950   return VM_RedefineClasses::get_cached_class_file_bytes(_cached_class_file);
+3951 }
+3952 
+3953 
+3954 // Construct a PreviousVersionNode entry for the array hung off
+3955 // the InstanceKlass.
+3956 PreviousVersionNode::PreviousVersionNode(ConstantPool* prev_constant_pool,
+3957   GrowableArray&lt;Method*&gt;* prev_EMCP_methods) {
+3958 
+3959   _prev_constant_pool = prev_constant_pool;
+3960   _prev_EMCP_methods = prev_EMCP_methods;
+3961 }
+3962 
+3963 
+3964 // Destroy a PreviousVersionNode
+3965 PreviousVersionNode::~PreviousVersionNode() {
+3966   if (_prev_constant_pool != NULL) {
+3967     _prev_constant_pool = NULL;
+3968   }
+3969 
+3970   if (_prev_EMCP_methods != NULL) {
+3971     delete _prev_EMCP_methods;
+3972   }
+3973 }
+3974 
+3975 // Construct a helper for walking the previous versions array
+3976 PreviousVersionWalker::PreviousVersionWalker(Thread* thread, InstanceKlass *ik) {
+3977   _thread = thread;
+3978   _previous_versions = ik-&gt;previous_versions();
+3979   _current_index = 0;
+3980   _current_p = NULL;
+3981   _current_constant_pool_handle = constantPoolHandle(thread, ik-&gt;constants());
+3982 }
+3983 
+3984 
+3985 // Return the interesting information for the next previous version
+3986 // of the klass. Returns NULL if there are no more previous versions.
+3987 PreviousVersionNode* PreviousVersionWalker::next_previous_version() {
+3988   if (_previous_versions == NULL) {
+3989     // no previous versions so nothing to return
+3990     return NULL;
+3991   }
+3992 
+3993   _current_p = NULL;  // reset to NULL
+3994   _current_constant_pool_handle = NULL;
+3995 
+3996   int length = _previous_versions-&gt;length();
+3997 
+3998   while (_current_index &lt; length) {
+3999     PreviousVersionNode * pv_node = _previous_versions-&gt;at(_current_index++);
+4000 
+4001     // Save a handle to the constant pool for this previous version,
+4002     // which keeps all the methods from being deallocated.
+4003     _current_constant_pool_handle = constantPoolHandle(_thread, pv_node-&gt;prev_constant_pool());
+4004     _current_p = pv_node;
+4005     return pv_node;
+4006   }
+4007 
+4008   return NULL;
+4009 } // end next_previous_version()
+</pre></body></html>

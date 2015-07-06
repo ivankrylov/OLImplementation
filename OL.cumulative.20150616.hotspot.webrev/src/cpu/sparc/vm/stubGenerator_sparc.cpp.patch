@@ -1,0 +1,13 @@
+--- old/src/cpu/sparc/vm/stubGenerator_sparc.cpp	2015-06-16 10:25:38.974564796 -0700
++++ new/src/cpu/sparc/vm/stubGenerator_sparc.cpp	2015-06-16 10:25:38.894566684 -0700
+@@ -4874,6 +4874,10 @@
+       StubRoutines::_sha512_implCompress   = generate_sha512_implCompress(false, "sha512_implCompress");
+       StubRoutines::_sha512_implCompressMB = generate_sha512_implCompress(true,  "sha512_implCompressMB");
+     }
++
++    if (UseObjectLayoutIntrinsics) {
++      guarantee(!UseObjectLayoutIntrinsics, "not yet implemented.");
++    }
+   }
+ 
+ 

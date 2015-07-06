@@ -1,0 +1,208 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/oops/instanceKlass.hpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/oops/instanceKlass.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -1,7 +1,7 @@</span>
+ /*
+<span class="removed">- * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.</span>
+<span class="new">+ * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.</span>
+  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+  *
+  * This code is free software; you can redistribute it and/or modify it
+  * under the terms of the GNU General Public License version 2 only, as
+  * published by the Free Software Foundation.
+</pre><hr /><pre>
+<span class="newmarker">@@ -356,12 +356,10 @@</span>
+ 
+   // methods
+   Array&lt;Method*&gt;* methods() const          { return _methods; }
+   void set_methods(Array&lt;Method*&gt;* a)      { _methods = a; }
+   Method* method_with_idnum(int idnum);
+<span class="removed">-  Method* method_with_orig_idnum(int idnum);</span>
+<span class="removed">-  Method* method_with_orig_idnum(int idnum, int version);</span>
+ 
+   // method ordering
+   Array&lt;int&gt;* method_ordering() const     { return _method_ordering; }
+   void set_method_ordering(Array&lt;int&gt;* m) { _method_ordering = m; }
+   void copy_method_ordering(intArray* m, TRAPS);
+</pre><hr /><pre>
+<span class="newmarker">@@ -658,11 +656,10 @@</span>
+   }
+   GrowableArray&lt;PreviousVersionNode *&gt;* previous_versions() const {
+     return _previous_versions;
+   }
+ 
+<span class="removed">-  InstanceKlass* get_klass_version(int version);</span>
+   static void purge_previous_versions(InstanceKlass* ik);
+ 
+   // JVMTI: Support for caching a class file before it is modified by an agent that can do retransformation
+   void set_cached_class_file(JvmtiCachedClassFileData *data) {
+     _cached_class_file = data;
+</pre><hr /><pre>
+<span class="newmarker">@@ -752,15 +749,29 @@</span>
+     return (_annotations != NULL) ? _annotations-&gt;class_type_annotations() : NULL;
+   }
+   Array&lt;AnnotationArray*&gt;* fields_type_annotations() const {
+     return (_annotations != NULL) ? _annotations-&gt;fields_type_annotations() : NULL;
+   }
+<span class="removed">-  // allocation</span>
+<span class="new">+</span>
+<span class="new">+  // Instance allocation</span>
+   instanceOop allocate_instance(TRAPS);
+<span class="new">+  instanceHandle allocate_instance_handle(TRAPS) {</span>
+<span class="new">+    return instanceHandle(THREAD, allocate_instance(THREAD));</span>
+<span class="new">+  }</span>
+<span class="new">+  instanceOop allocate_instance(int size, TRAPS);</span>
+<span class="new">+  instanceHandle allocate_instance_handle(int size, TRAPS) {</span>
+<span class="new">+    return instanceHandle(THREAD, allocate_instance(size, THREAD));</span>
+<span class="new">+  }</span>
+ 
+<span class="removed">-  // additional member function to return a handle</span>
+<span class="removed">-  instanceHandle allocate_instance_handle(TRAPS)      { return instanceHandle(THREAD, allocate_instance(THREAD)); }</span>
+<span class="new">+  // Instance allocation at the given address (in preallocated memory region)</span>
+<span class="new">+  instanceOop allocate_instance_at(address obj_addr,</span>
+<span class="new">+      bool is_contained, bool is_container, TRAPS);</span>
+<span class="new">+  instanceHandle allocate_instance_at_handle(address obj_addr,</span>
+<span class="new">+      bool is_contained, bool is_container, TRAPS) {</span>
+<span class="new">+    return instanceHandle(THREAD, allocate_instance_at(obj_addr,</span>
+<span class="new">+        is_contained, is_container, THREAD));</span>
+<span class="new">+  }</span>
+ 
+   objArrayOop allocate_objArray(int n, int length, TRAPS);
+   // Helper function
+   static instanceOop register_finalizer(instanceOop i, TRAPS);
+ 
+</pre><hr /><pre>
+<span class="newmarker">@@ -960,17 +971,22 @@</span>
+   inline Method* method_at_vtable(int index);
+   klassItable* itable() const;        // return new klassItable wrapper
+   Method* method_at_itable(Klass* holder, int index, TRAPS);
+ 
+ #if INCLUDE_JVMTI
+<span class="removed">-  void adjust_default_methods(InstanceKlass* holder, bool* trace_name_printed);</span>
+<span class="new">+  void adjust_default_methods(Method** old_methods, Method** new_methods,</span>
+<span class="new">+                              int methods_length, bool* trace_name_printed);</span>
+ #endif // INCLUDE_JVMTI
+ 
+<span class="removed">-  // Garbage collection</span>
+<span class="new">+  // Garbage collection support</span>
+<span class="new">+  // Mark-Sweep GCs</span>
+   void oop_follow_contents(oop obj);
+   int  oop_adjust_pointers(oop obj);
+ 
+<span class="new">+  // Parallel Scavenge and Parallel Old GCs</span>
+<span class="new">+  PARALLEL_GC_DECLS</span>
+<span class="new">+</span>
+   void clean_implementors_list(BoolObjectClosure* is_alive);
+   void clean_method_data(BoolObjectClosure* is_alive);
+   void clean_dependent_nmethods();
+ 
+   // Explicit metaspace deallocation of fields
+</pre><hr /><pre>
+<span class="newmarker">@@ -990,13 +1006,10 @@</span>
+ 
+   // callbacks for actions during class unloading
+   static void notify_unload_class(InstanceKlass* ik);
+   static void release_C_heap_structures(InstanceKlass* ik);
+ 
+<span class="removed">-  // Parallel Scavenge and Parallel Old</span>
+<span class="removed">-  PARALLEL_GC_DECLS</span>
+<span class="removed">-</span>
+   // Naming
+   const char* signature_name() const;
+ 
+   // Iterators
+   int oop_oop_iterate(oop obj, ExtendedOopClosure* blk) {
+</pre></body></html>
+

@@ -1,0 +1,360 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #ifndef SHARE_VM_GC_IMPLEMENTATION_SHARED_MARKSWEEP_HPP
+  26 #define SHARE_VM_GC_IMPLEMENTATION_SHARED_MARKSWEEP_HPP
+  27 
+  28 #include "gc_interface/collectedHeap.hpp"
+  29 #include "memory/universe.hpp"
+  30 #include "oops/markOop.hpp"
+  31 #include "oops/oop.hpp"
+  32 #include "runtime/timer.hpp"
+  33 #include "utilities/growableArray.hpp"
+  34 #include "utilities/stack.hpp"
+  35 #include "utilities/taskqueue.hpp"
+  36 
+  37 class ReferenceProcessor;
+  38 class DataLayout;
+  39 class SerialOldTracer;
+  40 class STWGCTimer;
+  41 
+  42 // MarkSweep takes care of global mark-compact garbage collection for a
+  43 // GenCollectedHeap using a four-phase pointer forwarding algorithm.  All
+  44 // generations are assumed to support marking; those that can also support
+  45 // compaction.
+  46 //
+  47 // Class unloading will only occur when a full gc is invoked.
+  48 
+  49 // declared at end
+  50 class PreservedMark;
+  51 
+  52 class MarkSweep : AllStatic {
+  53   //
+  54   // Inline closure decls
+  55   //
+  56   class FollowRootClosure: public OopsInGenClosure {
+  57    public:
+  58     virtual void do_oop(oop* p);
+  59     virtual void do_oop(narrowOop* p);
+  60   };
+  61 
+  62   class MarkAndPushClosure: public OopClosure {
+  63    public:
+  64     virtual void do_oop(oop* p);
+  65     virtual void do_oop(narrowOop* p);
+  66   };
+  67 
+  68   class FollowStackClosure: public VoidClosure {
+  69    public:
+  70     virtual void do_void();
+  71   };
+  72 
+  73   class AdjustPointerClosure: public OopsInGenClosure {
+  74    public:
+  75     virtual void do_oop(oop* p);
+  76     virtual void do_oop(narrowOop* p);
+  77   };
+  78 
+  79   // Used for java/lang/ref handling
+  80   class IsAliveClosure: public BoolObjectClosure {
+  81    public:
+  82     virtual bool do_object_b(oop p);
+  83   };
+  84 
+  85   class KeepAliveClosure: public OopClosure {
+  86    protected:
+  87     template &lt;class T&gt; void do_oop_work(T* p);
+  88    public:
+  89     virtual void do_oop(oop* p);
+  90     virtual void do_oop(narrowOop* p);
+  91   };
+  92 
+  93   //
+  94   // Friend decls
+  95   //
+  96   friend class AdjustPointerClosure;
+  97   friend class KeepAliveClosure;
+  98   friend class VM_MarkSweep;
+  99   friend void marksweep_init();
+ 100 
+ 101   //
+ 102   // Vars
+ 103   //
+ 104  protected:
+ 105   // Total invocations of a MarkSweep collection
+ 106   static uint _total_invocations;
+ 107 
+ 108   // Traversal stacks used during phase1
+ 109   static Stack&lt;oop, mtGC&gt;                      _marking_stack;
+ 110   static Stack&lt;ObjArrayTask, mtGC&gt;             _objarray_stack;
+ 111 
+ 112   // Space for storing/restoring mark word
+ 113   static Stack&lt;markOop, mtGC&gt;                  _preserved_mark_stack;
+ 114   static Stack&lt;oop, mtGC&gt;                      _preserved_oop_stack;
+ 115   static size_t                          _preserved_count;
+ 116   static size_t                          _preserved_count_max;
+ 117   static PreservedMark*                  _preserved_marks;
+ 118 
+ 119   // Reference processing (used in ...follow_contents)
+ 120   static ReferenceProcessor*             _ref_processor;
+ 121 
+ 122   static STWGCTimer*                     _gc_timer;
+ 123   static SerialOldTracer*                _gc_tracer;
+ 124 
+ 125   // Non public closures
+ 126   static KeepAliveClosure keep_alive;
+ 127 
+ 128   // Debugging
+ 129   static void trace(const char* msg) PRODUCT_RETURN;
+ 130 
+ 131  public:
+ 132   // Public closures
+ 133   static IsAliveClosure       is_alive;
+ 134   static FollowRootClosure    follow_root_closure;
+ 135   static MarkAndPushClosure   mark_and_push_closure;
+ 136   static FollowStackClosure   follow_stack_closure;
+ 137   static CLDToOopClosure      follow_cld_closure;
+ 138   static AdjustPointerClosure adjust_pointer_closure;
+ 139   static CLDToOopClosure      adjust_cld_closure;
+ 140 
+ 141   // Accessors
+ 142   static uint total_invocations() { return _total_invocations; }
+ 143 
+ 144   // Reference Processing
+ 145   static ReferenceProcessor* const ref_processor() { return _ref_processor; }
+ 146 
+ 147   static STWGCTimer* gc_timer() { return _gc_timer; }
+ 148   static SerialOldTracer* gc_tracer() { return _gc_tracer; }
+ 149 
+ 150   // Call backs for marking
+ 151   static void mark_object(oop obj);
+ 152   // Mark pointer and follow contents.  Empty marking stack afterwards.
+ 153   template &lt;class T&gt; static inline void follow_root(T* p);
+ 154 
+ 155   // Check mark and maybe push on marking stack
+ 156   template &lt;class T&gt; static void mark_and_push(T* p);
+ 157 
+ 158   static inline void push_objarray(oop obj, size_t index);
+ 159 
+ 160   static void follow_stack();   // Empty marking stack.
+ 161 
+ 162   static void follow_klass(Klass* klass);
+ 163 
+ 164   static void follow_class_loader(ClassLoaderData* cld);
+ 165 
+ 166   static void preserve_mark(oop p, markOop mark);
+ 167                                 // Save the mark word so it can be restored later
+ 168   static void adjust_marks();   // Adjust the pointers in the preserved marks table
+ 169   static void restore_marks();  // Restore the marks that we saved in preserve_mark
+ 170 
+ 171   template &lt;class T&gt; static inline void adjust_pointer(T* p);
+ 172 };
+ 173 
+ 174 class PreservedMark VALUE_OBJ_CLASS_SPEC {
+ 175 private:
+ 176   oop _obj;
+ 177   markOop _mark;
+ 178 
+ 179 public:
+ 180   void init(oop obj, markOop mark) {
+ 181     _obj = obj;
+ 182     _mark = mark;
+ 183   }
+ 184 
+ 185   void adjust_pointer() {
+ 186     MarkSweep::adjust_pointer(&amp;_obj);
+ 187   }
+ 188 
+ 189   void restore() {
+<a name="1" id="anc1"></a><span class="changed"> 190     _obj-&gt;restore_mark(_mark);</span>
+ 191   }
+ 192 };
+ 193 
+ 194 #endif // SHARE_VM_GC_IMPLEMENTATION_SHARED_MARKSWEEP_HPP
+<a name="2" id="anc2"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="2" type="hidden" /></form></body></html>

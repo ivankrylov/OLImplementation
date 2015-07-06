@@ -1,0 +1,594 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #ifndef SHARE_VM_OOPS_OOP_HPP
+  26 #define SHARE_VM_OOPS_OOP_HPP
+  27 
+  28 #include "memory/iterator.hpp"
+  29 #include "memory/memRegion.hpp"
+  30 #include "memory/specialized_oop_closures.hpp"
+  31 #include "oops/metadata.hpp"
+  32 #include "utilities/macros.hpp"
+  33 #include "utilities/top.hpp"
+  34 
+  35 // oopDesc is the top baseclass for objects classes.  The {name}Desc classes describe
+  36 // the format of Java objects so the fields can be accessed from C++.
+  37 // oopDesc is abstract.
+  38 // (see oopHierarchy for complete oop class hierarchy)
+  39 //
+  40 // no virtual functions allowed
+  41 
+  42 // store into oop with store check
+  43 template &lt;class T&gt; void oop_store(T* p, oop v);
+  44 template &lt;class T&gt; void oop_store(volatile T* p, oop v);
+  45 
+  46 extern bool always_do_update_barrier;
+  47 
+  48 // Forward declarations.
+  49 class OopClosure;
+  50 class ScanClosure;
+  51 class FastScanClosure;
+  52 class FilteringClosure;
+  53 class BarrierSet;
+  54 class CMSIsAliveClosure;
+  55 
+  56 class PSPromotionManager;
+  57 class ParCompactionManager;
+  58 
+  59 class oopDesc {
+  60   friend class VMStructs;
+  61  private:
+  62   volatile markOop  _mark;
+  63   union _metadata {
+  64     Klass*      _klass;
+  65     narrowKlass _compressed_klass;
+  66   } _metadata;
+  67 
+  68   // Fast access to barrier set.  Must be initialized.
+  69   static BarrierSet* _bs;
+  70 
+  71  public:
+  72   markOop  mark() const         { return _mark; }
+  73   markOop* mark_addr() const    { return (markOop*) &amp;_mark; }
+  74 
+  75   void set_mark(volatile markOop m)      { _mark = m;   }
+  76 
+  77   void    release_set_mark(markOop m);
+  78   markOop cas_set_mark(markOop new_mark, markOop old_mark);
+  79 
+<a name="1" id="anc1"></a><span class="changed">  80   // Used only to re-initialize the markword (e.g., of promoted</span>
+<span class="changed">  81   // objects during a GC); requires a valid klass pointer</span>
+  82   void init_mark();
+  83 
+  84   Klass* klass() const;
+  85   Klass* klass_or_null() const volatile;
+  86   Klass** klass_addr();
+  87   narrowKlass* compressed_klass_addr();
+  88 
+  89   void set_klass(Klass* k);
+  90 
+  91   // For klass field compression
+  92   int klass_gap() const;
+  93   void set_klass_gap(int z);
+  94   // For when the klass pointer is being used as a linked list "next" field.
+  95   void set_klass_to_list_ptr(oop k);
+  96   oop list_ptr_from_klass();
+  97 
+  98   // size of object header, aligned to platform wordSize
+  99   static int header_size()          { return sizeof(oopDesc)/HeapWordSize; }
+ 100 
+ 101   // Returns whether this is an instance of k or an instance of a subclass of k
+ 102   bool is_a(Klass* k)  const;
+ 103 
+ 104   // Returns the actual oop size of the object
+ 105   int size();
+ 106 
+ 107   // Sometimes (for complicated concurrency-related reasons), it is useful
+ 108   // to be able to figure out the size of an object knowing its klass.
+ 109   int size_given_klass(Klass* klass);
+ 110 
+ 111   // type test operations (inlined in oop.inline.h)
+ 112   bool is_instance()            const;
+ 113   bool is_instanceMirror()      const;
+ 114   bool is_instanceClassLoader() const;
+ 115   bool is_instanceRef()         const;
+ 116   bool is_array()               const;
+ 117   bool is_objArray()            const;
+ 118   bool is_typeArray()           const;
+ 119 
+ 120  private:
+ 121   // field addresses in oop
+ 122   void*     field_base(int offset)        const;
+ 123 
+ 124   jbyte*    byte_field_addr(int offset)   const;
+ 125   jchar*    char_field_addr(int offset)   const;
+ 126   jboolean* bool_field_addr(int offset)   const;
+ 127   jint*     int_field_addr(int offset)    const;
+ 128   jshort*   short_field_addr(int offset)  const;
+ 129   jlong*    long_field_addr(int offset)   const;
+ 130   jfloat*   float_field_addr(int offset)  const;
+ 131   jdouble*  double_field_addr(int offset) const;
+ 132   Metadata** metadata_field_addr(int offset) const;
+ 133 
+ 134  public:
+ 135   // Need this as public for garbage collection.
+ 136   template &lt;class T&gt; T* obj_field_addr(int offset) const;
+ 137 
+ 138   // Needed for javaClasses
+ 139   address*  address_field_addr(int offset) const;
+ 140 
+ 141   static bool is_null(oop obj);
+ 142   static bool is_null(narrowOop obj);
+ 143   static bool is_null(Klass* obj);
+ 144 
+ 145   // Decode an oop pointer from a narrowOop if compressed.
+ 146   // These are overloaded for oop and narrowOop as are the other functions
+ 147   // below so that they can be called in template functions.
+ 148   static oop decode_heap_oop_not_null(oop v);
+ 149   static oop decode_heap_oop_not_null(narrowOop v);
+ 150   static oop decode_heap_oop(oop v);
+ 151   static oop decode_heap_oop(narrowOop v);
+ 152 
+ 153   // Encode an oop pointer to a narrow oop.  The or_null versions accept
+ 154   // null oop pointer, others do not in order to eliminate the
+ 155   // null checking branches.
+ 156   static narrowOop encode_heap_oop_not_null(oop v);
+ 157   static narrowOop encode_heap_oop(oop v);
+ 158 
+ 159   // Load an oop out of the Java heap
+ 160   static narrowOop load_heap_oop(narrowOop* p);
+ 161   static oop       load_heap_oop(oop* p);
+ 162 
+ 163   // Load an oop out of Java heap and decode it to an uncompressed oop.
+ 164   static oop load_decode_heap_oop_not_null(narrowOop* p);
+ 165   static oop load_decode_heap_oop_not_null(oop* p);
+ 166   static oop load_decode_heap_oop(narrowOop* p);
+ 167   static oop load_decode_heap_oop(oop* p);
+ 168 
+ 169   // Store an oop into the heap.
+ 170   static void store_heap_oop(narrowOop* p, narrowOop v);
+ 171   static void store_heap_oop(oop* p, oop v);
+ 172 
+ 173   // Encode oop if UseCompressedOops and store into the heap.
+ 174   static void encode_store_heap_oop_not_null(narrowOop* p, oop v);
+ 175   static void encode_store_heap_oop_not_null(oop* p, oop v);
+ 176   static void encode_store_heap_oop(narrowOop* p, oop v);
+ 177   static void encode_store_heap_oop(oop* p, oop v);
+ 178 
+ 179   static void release_store_heap_oop(volatile narrowOop* p, narrowOop v);
+ 180   static void release_store_heap_oop(volatile oop* p, oop v);
+ 181 
+ 182   static void release_encode_store_heap_oop_not_null(volatile narrowOop* p, oop v);
+ 183   static void release_encode_store_heap_oop_not_null(volatile oop* p, oop v);
+ 184   static void release_encode_store_heap_oop(volatile narrowOop* p, oop v);
+ 185   static void release_encode_store_heap_oop(volatile oop* p, oop v);
+ 186 
+ 187   static oop atomic_exchange_oop(oop exchange_value, volatile HeapWord *dest);
+ 188   static oop atomic_compare_exchange_oop(oop exchange_value,
+ 189                                          volatile HeapWord *dest,
+ 190                                          oop compare_value,
+ 191                                          bool prebarrier = false);
+ 192 
+ 193   // Access to fields in a instanceOop through these methods.
+ 194   oop obj_field(int offset) const;
+ 195   volatile oop obj_field_volatile(int offset) const;
+ 196   void obj_field_put(int offset, oop value);
+ 197   void obj_field_put_raw(int offset, oop value);
+ 198   void obj_field_put_volatile(int offset, oop value);
+ 199 
+ 200   Metadata* metadata_field(int offset) const;
+ 201   void metadata_field_put(int offset, Metadata* value);
+ 202 
+ 203   jbyte byte_field(int offset) const;
+ 204   void byte_field_put(int offset, jbyte contents);
+ 205 
+ 206   jchar char_field(int offset) const;
+ 207   void char_field_put(int offset, jchar contents);
+ 208 
+ 209   jboolean bool_field(int offset) const;
+ 210   void bool_field_put(int offset, jboolean contents);
+ 211 
+ 212   jint int_field(int offset) const;
+ 213   void int_field_put(int offset, jint contents);
+ 214 
+ 215   jshort short_field(int offset) const;
+ 216   void short_field_put(int offset, jshort contents);
+ 217 
+ 218   jlong long_field(int offset) const;
+ 219   void long_field_put(int offset, jlong contents);
+ 220 
+ 221   jfloat float_field(int offset) const;
+ 222   void float_field_put(int offset, jfloat contents);
+ 223 
+ 224   jdouble double_field(int offset) const;
+ 225   void double_field_put(int offset, jdouble contents);
+ 226 
+ 227   address address_field(int offset) const;
+ 228   void address_field_put(int offset, address contents);
+ 229 
+ 230   oop obj_field_acquire(int offset) const;
+ 231   void release_obj_field_put(int offset, oop value);
+ 232 
+ 233   jbyte byte_field_acquire(int offset) const;
+ 234   void release_byte_field_put(int offset, jbyte contents);
+ 235 
+ 236   jchar char_field_acquire(int offset) const;
+ 237   void release_char_field_put(int offset, jchar contents);
+ 238 
+ 239   jboolean bool_field_acquire(int offset) const;
+ 240   void release_bool_field_put(int offset, jboolean contents);
+ 241 
+ 242   jint int_field_acquire(int offset) const;
+ 243   void release_int_field_put(int offset, jint contents);
+ 244 
+ 245   jshort short_field_acquire(int offset) const;
+ 246   void release_short_field_put(int offset, jshort contents);
+ 247 
+ 248   jlong long_field_acquire(int offset) const;
+ 249   void release_long_field_put(int offset, jlong contents);
+ 250 
+ 251   jfloat float_field_acquire(int offset) const;
+ 252   void release_float_field_put(int offset, jfloat contents);
+ 253 
+ 254   jdouble double_field_acquire(int offset) const;
+ 255   void release_double_field_put(int offset, jdouble contents);
+ 256 
+ 257   address address_field_acquire(int offset) const;
+ 258   void release_address_field_put(int offset, address contents);
+ 259 
+ 260   // printing functions for VM debugging
+ 261   void print_on(outputStream* st) const;         // First level print
+ 262   void print_value_on(outputStream* st) const;   // Second level print.
+ 263   void print_address_on(outputStream* st) const; // Address printing
+ 264 
+ 265   // printing on default output stream
+ 266   void print();
+ 267   void print_value();
+ 268   void print_address();
+ 269 
+ 270   // return the print strings
+ 271   char* print_string();
+ 272   char* print_value_string();
+ 273 
+ 274   // verification operations
+ 275   void verify_on(outputStream* st);
+ 276   void verify();
+ 277 
+<a name="2" id="anc2"></a>
+
+
+
+
+ 278   // asserts
+ 279   bool is_oop(bool ignore_mark_word = false) const;
+ 280   bool is_oop_or_null(bool ignore_mark_word = false) const;
+ 281 #ifndef PRODUCT
+ 282   bool is_unlocked_oop() const;
+ 283 #endif
+ 284 
+<a name="3" id="anc3"></a><span class="changed"> 285   // Locking operations</span>
+<span class="changed"> 286   bool is_locked() const;</span>
+<span class="changed"> 287   bool is_unlocked() const;</span>
+<span class="changed"> 288   bool has_bias_pattern() const;</span>
+<span class="changed"> 289 </span>
+<span class="changed"> 290   // The mark is forwarded to stack when the object is locked; in this case</span>
+<span class="changed"> 291   // it is said that the mark is displaced.</span>
+<span class="changed"> 292   bool has_displaced_mark() const;</span>
+<span class="changed"> 293   markOop displaced_mark() const;</span>
+<span class="changed"> 294   void set_displaced_mark(markOop m);</span>
+<span class="changed"> 295 </span>
+<span class="changed"> 296   // Garbage collection support</span>
+ 297   bool is_gc_marked() const;
+<a name="4" id="anc4"></a><span class="changed"> 298   bool is_scavengable() const;</span>
+<span class="changed"> 299 </span>
+<span class="changed"> 300   // Mark-Sweep GCs</span>
+<span class="changed"> 301   // Apply MarkSweep::mark_and_push() to (the address of) every reference</span>
+<span class="changed"> 302   // field in this object</span>
+<span class="changed"> 303   void follow_contents();</span>
+<span class="changed"> 304 </span>
+<span class="changed"> 305   // Adjust all pointers in this object to point at their forwarded locations</span>
+<span class="changed"> 306   // and return the size of this object</span>
+<span class="changed"> 307   int adjust_pointers();</span>
+ 308 
+ 309 #if INCLUDE_ALL_GCS
+<a name="5" id="anc5"></a><span class="changed"> 310   // Parallel Scavenge GC</span>
+ 311   void push_contents(PSPromotionManager* pm);
+ 312 
+<a name="6" id="anc6"></a><span class="changed"> 313   // Parallel Old GC</span>
+
+
+ 314   void follow_contents(ParCompactionManager* cm);
+<a name="7" id="anc7"></a><span class="new"> 315   void update_contents(ParCompactionManager* cm);</span>
+ 316 #endif // INCLUDE_ALL_GCS
+ 317 
+<a name="8" id="anc8"></a><span class="changed"> 318   // Forwarding pointer operations for Mark-Sweep and Scavenge</span>
+
+
+ 319   bool is_forwarded() const;
+<a name="9" id="anc9"></a>
+ 320   void forward_to(oop p);
+ 321   bool cas_forward_to(oop p, markOop compare);
+<a name="10" id="anc10"></a>
+ 322 #if INCLUDE_ALL_GCS
+<a name="11" id="anc11"></a><span class="changed"> 323   // Like forward_to(), but inserts the forwarding pointer atomically.</span>
+ 324   // Exactly one thread succeeds in inserting the forwarding pointer, and
+<a name="12" id="anc12"></a><span class="changed"> 325   // this call returns NULL for that thread; any other thread has the value</span>
+<span class="changed"> 326   // of the forwarding pointer returned and does not modify this object.</span>
+ 327   oop forward_to_atomic(oop p);
+ 328 #endif // INCLUDE_ALL_GCS
+<a name="13" id="anc13"></a>
+ 329   oop forwardee() const;
+ 330 
+<a name="14" id="anc14"></a><span class="changed"> 331   // Age of object used by Scavenge</span>
+ 332   uint age() const;
+ 333   void incr_age();
+ 334 
+<a name="15" id="anc15"></a><span class="changed"> 335   // ObjectLayout support</span>
+<span class="changed"> 336   // Operations with the flag whether the object is contained</span>
+<span class="changed"> 337   bool is_contained() const;</span>
+<span class="changed"> 338   static bool is_contained(markOop mark);</span>
+<span class="changed"> 339   void set_contained();</span>
+<span class="changed"> 340   void clear_contained();</span>
+<span class="changed"> 341 </span>
+<span class="changed"> 342   // Operations with the flag whether the object is a container</span>
+<span class="changed"> 343   bool is_container() const;</span>
+<span class="changed"> 344   static bool is_container(markOop mark, Klass* klass);</span>
+<span class="changed"> 345 </span>
+<span class="changed"> 346   // Manipulations with the object's mark that preserve the current values of</span>
+<span class="changed"> 347   // its "contained" and "container" properties</span>
+<span class="changed"> 348   void convert_to_marked();</span>
+<span class="changed"> 349   void convert_to_unmarked();</span>
+<span class="changed"> 350   void restore_mark(markOop saved_value);</span>
+<span class="changed"> 351 </span>
+<span class="changed"> 352   // Operations with the relative container offset (RCO) object corresponding</span>
+<span class="changed"> 353   // to this object (which must be contained). The only mission of the RCO</span>
+<span class="changed"> 354   // object is to store the offset of this object from its immediate container.</span>
+<span class="changed"> 355   // RCO objects are transparently created by the VM for every contained object</span>
+<span class="changed"> 356   // (including contained containers) at the time of their construction. They</span>
+<span class="changed"> 357   // look like "prepadding" objects taking several words just before the</span>
+<span class="changed"> 358   // corresponding contained objects.</span>
+<span class="changed"> 359   jlong relative_container_offset() const;</span>
+<span class="changed"> 360   void set_relative_container_offset(jlong offset);</span>
+<span class="changed"> 361 </span>
+<span class="changed"> 362   // Return the immediate container of this object (which must be contained)</span>
+<span class="changed"> 363   oop container() const;</span>
+<span class="changed"> 364 </span>
+<span class="changed"> 365   // Return the outermost container of this object (which must be contained)</span>
+<span class="changed"> 366   oop outermost_container();</span>
+<span class="changed"> 367 </span>
+<span class="changed"> 368   // Return the outermost GC-marked container of this object (which must be</span>
+<span class="changed"> 369   // contained and also GC-marked)</span>
+<span class="changed"> 370   oop outermost_alive_container();</span>
+ 371 
+ 372   // Fast access to barrier set
+ 373   static BarrierSet* bs()            { return _bs; }
+ 374   static void set_bs(BarrierSet* bs) { _bs = bs; }
+ 375 
+ 376   // iterators, returns size of object
+ 377 #define OOP_ITERATE_DECL(OopClosureType, nv_suffix)                      \
+ 378   int oop_iterate(OopClosureType* blk);                                  \
+ 379   int oop_iterate(OopClosureType* blk, MemRegion mr);  // Only in mr.
+ 380 
+ 381   ALL_OOP_OOP_ITERATE_CLOSURES_1(OOP_ITERATE_DECL)
+ 382   ALL_OOP_OOP_ITERATE_CLOSURES_2(OOP_ITERATE_DECL)
+ 383 
+ 384 #if INCLUDE_ALL_GCS
+ 385 
+ 386 #define OOP_ITERATE_BACKWARDS_DECL(OopClosureType, nv_suffix)            \
+ 387   int oop_iterate_backwards(OopClosureType* blk);
+ 388 
+ 389   ALL_OOP_OOP_ITERATE_CLOSURES_1(OOP_ITERATE_BACKWARDS_DECL)
+ 390   ALL_OOP_OOP_ITERATE_CLOSURES_2(OOP_ITERATE_BACKWARDS_DECL)
+ 391 #endif
+ 392 
+ 393   int oop_iterate_no_header(OopClosure* bk);
+ 394   int oop_iterate_no_header(OopClosure* bk, MemRegion mr);
+ 395 
+ 396   // identity hash; returns the identity hash key (computes it if necessary)
+ 397   // NOTE with the introduction of UseBiasedLocking that identity_hash() might reach a
+ 398   // safepoint if called on a biased object. Calling code must be aware of that.
+ 399   intptr_t identity_hash();
+ 400   intptr_t slow_identity_hash();
+ 401 
+ 402   // Alternate hashing code if string table is rehashed
+ 403   unsigned int new_hash(juint seed);
+<a name="16" id="anc16"></a>
+
+
+
+
+ 404 
+ 405   // for code generation
+ 406   static int mark_offset_in_bytes()    { return offset_of(oopDesc, _mark); }
+ 407   static int klass_offset_in_bytes()   { return offset_of(oopDesc, _metadata._klass); }
+ 408   static int klass_gap_offset_in_bytes();
+ 409 };
+ 410 
+ 411 #endif // SHARE_VM_OOPS_OOP_HPP
+<a name="17" id="anc17"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="17" type="hidden" /></form></body></html>

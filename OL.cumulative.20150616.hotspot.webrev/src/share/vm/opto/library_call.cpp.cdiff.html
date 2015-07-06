@@ -1,0 +1,473 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Cdiff src/share/vm/opto/library_call.cpp</title>
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/opto/library_call.cpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+<hr /><span class="oldmarker">*** 29,39 ****</span>
+  #include "compiler/compileLog.hpp"
+  #include "oops/objArrayKlass.hpp"
+  #include "opto/addnode.hpp"
+  #include "opto/callGenerator.hpp"
+  #include "opto/cfgnode.hpp"
+<span class="removed">- #include "opto/connode.hpp"</span>
+  #include "opto/idealKit.hpp"
+  #include "opto/mathexactnode.hpp"
+  #include "opto/mulnode.hpp"
+  #include "opto/parse.hpp"
+  #include "opto/runtime.hpp"
+<span class="newmarker">--- 29,38 ----</span>
+<hr /><span class="oldmarker">*** 228,237 ****</span>
+<span class="newmarker">--- 227,237 ----</span>
+    Node* make_unsafe_address(Node* base, Node* offset);
+    // Helper for inline_unsafe_access.
+    // Generates the guards that check whether the result of
+    // Unsafe.getObject should be recorded in an SATB log buffer.
+    void insert_pre_barrier(Node* base_oop, Node* offset, Node* pre_val, bool need_mem_bar);
+<span class="new">+   bool inline_unsafe_deriveContainedObjectAtOffset();</span>
+    bool inline_unsafe_access(bool is_native_ptr, bool is_store, BasicType type, bool is_volatile);
+    bool inline_unsafe_prefetch(bool is_native_ptr, bool is_store, bool is_static);
+    static bool klass_needs_init_guard(Node* kls);
+    bool inline_unsafe_allocate();
+    bool inline_unsafe_copyMemory();
+<hr /><span class="oldmarker">*** 304,313 ****</span>
+<span class="newmarker">--- 304,316 ----</span>
+    bool inline_unsafe_ordered_store(BasicType type);
+    bool inline_unsafe_fence(vmIntrinsics::ID id);
+    bool inline_fp_conversions(vmIntrinsics::ID id);
+    bool inline_number_methods(vmIntrinsics::ID id);
+    bool inline_reference_get();
+<span class="new">+   bool inline_derive_contained_object();</span>
+<span class="new">+   bool inline_asa_get();</span>
+<span class="new">+   Node* load_container_class(Node* ctrObj);</span>
+    bool inline_aescrypt_Block(vmIntrinsics::ID id);
+    bool inline_cipherBlockChaining_AESCrypt(vmIntrinsics::ID id);
+    Node* inline_cipherBlockChaining_AESCrypt_predicate(bool decrypting);
+    Node* get_key_start_from_aescrypt_object(Node* aescrypt_object);
+    Node* get_original_key_start_from_aescrypt_object(Node* aescrypt_object);
+<hr /><span class="oldmarker">*** 322,333 ****</span>
+    bool inline_encodeISOArray();
+    bool inline_updateCRC32();
+    bool inline_updateBytesCRC32();
+    bool inline_updateByteBufferCRC32();
+    bool inline_multiplyToLen();
+<span class="removed">- </span>
+<span class="removed">-   bool inline_profileBoolean();</span>
+  };
+  
+  
+  //---------------------------make_vm_intrinsic----------------------------
+  CallGenerator* Compile::make_vm_intrinsic(ciMethod* m, bool is_virtual) {
+<span class="newmarker">--- 325,334 ----</span>
+<hr /><span class="oldmarker">*** 516,525 ****</span>
+<span class="newmarker">--- 517,530 ----</span>
+  #else
+      if (!Matcher::match_rule_supported(Op_GetAndSetP)) return NULL;
+      break;
+  #endif
+  
+<span class="new">+   case vmIntrinsics::_deriveContainedObjectAtOffset:</span>
+<span class="new">+     if (!UseObjectLayoutIntrinsics) return NULL;</span>
+<span class="new">+     break;</span>
+<span class="new">+ </span>
+    case vmIntrinsics::_aescrypt_encryptBlock:
+    case vmIntrinsics::_aescrypt_decryptBlock:
+      if (!UseAESIntrinsics) return NULL;
+      break;
+  
+<hr /><span class="oldmarker">*** 907,916 ****</span>
+<span class="newmarker">--- 912,924 ----</span>
+  
+    case vmIntrinsics::_getCallerClass:           return inline_native_Reflection_getCallerClass();
+  
+    case vmIntrinsics::_Reference_get:            return inline_reference_get();
+  
+<span class="new">+   case vmIntrinsics::_deriveContainedObjectAtOffset:</span>
+<span class="new">+                                                 return inline_unsafe_deriveContainedObjectAtOffset();</span>
+<span class="new">+ </span>
+    case vmIntrinsics::_aescrypt_encryptBlock:
+    case vmIntrinsics::_aescrypt_decryptBlock:    return inline_aescrypt_Block(intrinsic_id());
+  
+    case vmIntrinsics::_cipherBlockChaining_encryptAESCrypt:
+    case vmIntrinsics::_cipherBlockChaining_decryptAESCrypt:
+<hr /><span class="oldmarker">*** 935,947 ****</span>
+    case vmIntrinsics::_updateBytesCRC32:
+      return inline_updateBytesCRC32();
+    case vmIntrinsics::_updateByteBufferCRC32:
+      return inline_updateByteBufferCRC32();
+  
+<span class="removed">-   case vmIntrinsics::_profileBoolean:</span>
+<span class="removed">-     return inline_profileBoolean();</span>
+<span class="removed">- </span>
+    default:
+      // If you get here, it may be that someone has added a new intrinsic
+      // to the list in vmSymbols.hpp without implementing it here.
+  #ifndef PRODUCT
+      if ((PrintMiscellaneous &amp;&amp; (Verbose || WizardMode)) || PrintOpto) {
+<span class="newmarker">--- 943,952 ----</span>
+<hr /><span class="oldmarker">*** 2376,2385 ****</span>
+<span class="newmarker">--- 2381,2420 ----</span>
+    }
+    set_result(_gvn.transform(n));
+    return true;
+  }
+  
+<span class="new">+ //------------------inline_unsafe_deriveContainedObjectAtOffset---------------</span>
+<span class="new">+ </span>
+<span class="new">+ bool LibraryCallKit::inline_unsafe_deriveContainedObjectAtOffset() {</span>
+<span class="new">+   Node* receiver = argument(0); // the unsafe instance</span>
+<span class="new">+   Node* base     = argument(1);</span>
+<span class="new">+   Node* offset   = argument(2);</span>
+<span class="new">+ </span>
+<span class="new">+   // null check unsafe: must have capability</span>
+<span class="new">+   receiver = null_check(receiver);</span>
+<span class="new">+   if (stopped()) {</span>
+<span class="new">+     return true;</span>
+<span class="new">+   }</span>
+<span class="new">+ </span>
+<span class="new">+   // null check base</span>
+<span class="new">+   base = null_check(base);</span>
+<span class="new">+   if (stopped()) {</span>
+<span class="new">+     return true;</span>
+<span class="new">+   }</span>
+<span class="new">+ </span>
+<span class="new">+   // if (!is_size_aligned((size_t) offset, HeapWordSize))</span>
+<span class="new">+   //   throw new IllegalArgumentException();</span>
+<span class="new">+   // TODO</span>
+<span class="new">+ </span>
+<span class="new">+   Node* adr = basic_plus_adr(top(), base, offset); // don't want to keep base-derived relationship here</span>
+<span class="new">+   Node* cast = new (C) CastDerivedNode(adr, TypeInstPtr::NOTNULL); // assuming a non-null Object</span>
+<span class="new">+   cast = _gvn.transform(cast);</span>
+<span class="new">+   set_result(cast);</span>
+<span class="new">+   return true;</span>
+<span class="new">+ }</span>
+<span class="new">+ </span>
+  //----------------------------inline_unsafe_access----------------------------
+  
+  const static BasicType T_ADDRESS_HOLDER = T_LONG;
+  
+  // Helper that guards and inserts a pre-barrier.
+<hr /><span class="oldmarker">*** 6047,6056 ****</span>
+<span class="newmarker">--- 6082,6236 ----</span>
+      insert_mem_bar(Op_MemBarAcquire, loadedField);
+    }
+    return loadedField;
+  }
+  
+<span class="new">+ Node * LibraryCallKit::load_container_class(Node* ctrObj) {</span>
+<span class="new">+ </span>
+<span class="new">+   const TypeInstPtr* tinst = _gvn.type(ctrObj)-&gt;isa_instptr();</span>
+<span class="new">+   assert(tinst != NULL, "obj is null");</span>
+<span class="new">+   assert(tinst-&gt;klass()-&gt;is_loaded(), "obj is not loaded");</span>
+<span class="new">+ </span>
+<span class="new">+   ciField* field = tinst-&gt;klass()-&gt;as_instance_klass()-&gt;get_field_by_name(</span>
+<span class="new">+           ciSymbol::make("elementClass"), ciSymbol::make("Ljava/lang/Class;"), false);</span>
+<span class="new">+   if (field == NULL) return (Node *) NULL;</span>
+<span class="new">+   assert (field != NULL, "undefined field");</span>
+<span class="new">+ </span>
+<span class="new">+   ciType* field_klass = field-&gt;type();</span>
+<span class="new">+   assert(field_klass-&gt;is_loaded(), "should be loaded");</span>
+<span class="new">+   const TypePtr* adr_type = C-&gt;alias_type(field)-&gt;adr_type();</span>
+<span class="new">+   int offset  = field-&gt;offset_in_bytes();</span>
+<span class="new">+   Node* adr = basic_plus_adr(ctrObj, ctrObj, offset);</span>
+<span class="new">+   BasicType bt = field-&gt;layout_type();</span>
+<span class="new">+   assert(bt == T_OBJECT, "");</span>
+<span class="new">+ </span>
+<span class="new">+   const Type* type = TypeOopPtr::make_from_klass(field_klass-&gt;as_klass());</span>
+<span class="new">+   Node* loadedField = make_load(NULL, adr, type, bt, adr_type, MemNode::unordered, false);</span>
+<span class="new">+   return loadedField;</span>
+<span class="new">+ }</span>
+<span class="new">+ </span>
+<span class="new">+ bool LibraryCallKit::inline_asa_get() {</span>
+<span class="new">+     assert(UseObjectLayoutIntrinsics, "not implemented on this platform");</span>
+<span class="new">+ </span>
+<span class="new">+ #ifndef PRODUCT</span>
+<span class="new">+   tty-&gt;print_cr("Attempting to inline org.ObjectLayout.AbstractStructuredArray.get(long) ...");</span>
+<span class="new">+   {</span>
+<span class="new">+     ResourceMark rm;</span>
+<span class="new">+     // Check the signature</span>
+<span class="new">+     ciSignature* sig = callee()-&gt;signature();</span>
+<span class="new">+     BasicType rtype = sig-&gt;return_type()-&gt;basic_type();</span>
+<span class="new">+     assert(rtype == T_OBJECT, "return value is object");</span>
+<span class="new">+     assert(sig-&gt;count() == 1, "1 arguments");</span>
+<span class="new">+     assert(sig-&gt;type_at(0)-&gt;basic_type() == T_LONG,   "sanity");</span>
+<span class="new">+   }</span>
+<span class="new">+ #endif // PRODUCT</span>
+<span class="new">+   Node* receiver = argument(0);</span>
+<span class="new">+   Node* index    = argument(1);</span>
+<span class="new">+ </span>
+<span class="new">+   receiver = null_check_receiver();</span>
+<span class="new">+   if (stopped()) return true;</span>
+<span class="new">+ </span>
+<span class="new">+   Node* bodySize = NULL;</span>
+<span class="new">+   Node* elemtSize = NULL;</span>
+<span class="new">+   Node* padSize = NULL;</span>
+<span class="new">+ </span>
+<span class="new">+   int len_off = org_ObjectLayout_AbstractStructuredArray::length_offset();</span>
+<span class="new">+   int bs_off  = org_ObjectLayout_AbstractStructuredArray::bodySize_offset();</span>
+<span class="new">+   int es_off  = org_ObjectLayout_AbstractStructuredArray::elementSize_offset();</span>
+<span class="new">+   int ps_off  = org_ObjectLayout_AbstractStructuredArray::paddingSize_offset();</span>
+<span class="new">+ </span>
+<span class="new">+   Node* lnp = basic_plus_adr(top(), receiver, len_off);</span>
+<span class="new">+   if (lnp == NULL) return false; // cannot happen?</span>
+<span class="new">+   Node* lnv = make_load(NULL, lnp, TypeLong::LONG, T_LONG, MemNode::unordered);</span>
+<span class="new">+ </span>
+<span class="new">+   Node* bsp = basic_plus_adr(top(), receiver, bs_off);</span>
+<span class="new">+   if (bsp == NULL) return false; // cannot happen?</span>
+<span class="new">+   Node* bsv = make_load(NULL, bsp, TypeInt::INT, T_INT, MemNode::unordered);</span>
+<span class="new">+ </span>
+<span class="new">+   Node* esp = basic_plus_adr(top(), receiver, es_off);</span>
+<span class="new">+   if (esp == NULL) return false; // cannot happen?</span>
+<span class="new">+   Node* esv = make_load(NULL, esp, TypeLong::LONG, T_LONG, MemNode::unordered);</span>
+<span class="new">+ </span>
+<span class="new">+   Node* psp = basic_plus_adr(top(), receiver, ps_off);</span>
+<span class="new">+   if (psp == NULL) return false; // cannot happen?</span>
+<span class="new">+   Node* psv = make_load(NULL, psp, TypeLong::LONG, T_LONG, MemNode::unordered);</span>
+<span class="new">+ </span>
+<span class="new">+   /* long offset = getBodySize() + index*getElementSize() + getPaddingSize(); */</span>
+<span class="new">+ </span>
+<span class="new">+   Node* bs_ps_sum = _gvn.transform(new (C) AddLNode(bsv, psv));</span>
+<span class="new">+   Node* idx_es_mul = _gvn.transform(new (C) MulLNode(index, esv));</span>
+<span class="new">+   Node* offset = _gvn.transform(new (C) AddLNode(bs_ps_sum, idx_es_mul));</span>
+<span class="new">+ </span>
+<span class="new">+   const Type* t = TypeOopPtr::BOTTOM; // FIXME</span>
+<span class="new">+ </span>
+<span class="new">+   Node* result = make_load(NULL, offset, t, T_OBJECT, MemNode::unordered);</span>
+<span class="new">+ </span>
+<span class="new">+   _gvn.set_type(result, t);</span>
+<span class="new">+ </span>
+<span class="new">+   set_result(result);</span>
+<span class="new">+ #ifndef PRODUCT</span>
+<span class="new">+   tty-&gt;print_cr("Done.");</span>
+<span class="new">+ #endif</span>
+<span class="new">+   return false;</span>
+<span class="new">+ }</span>
+<span class="new">+ </span>
+<span class="new">+ /*</span>
+<span class="new">+  * Derive contained object at offset.</span>
+<span class="new">+  * Object deriveContainedObjectAtOffset(Object container, long index)</span>
+<span class="new">+  */</span>
+<span class="new">+ bool LibraryCallKit::inline_derive_contained_object() {</span>
+<span class="new">+     assert(UseObjectLayoutIntrinsics, "not implemented on this platform");</span>
+<span class="new">+ </span>
+<span class="new">+ #ifndef PRODUCT</span>
+<span class="new">+   tty-&gt;print_cr("Attempting to inline sun.misc.Unsafe.deriveContainedObjectAtOffset(Object,long) ...");</span>
+<span class="new">+   {</span>
+<span class="new">+     ResourceMark rm;</span>
+<span class="new">+     // Check the signature</span>
+<span class="new">+     ciSignature* sig = callee()-&gt;signature();</span>
+<span class="new">+     BasicType rtype = sig-&gt;return_type()-&gt;basic_type();</span>
+<span class="new">+     assert(rtype == T_OBJECT, "return value is object");</span>
+<span class="new">+     assert(sig-&gt;count() == 2, "2 arguments");</span>
+<span class="new">+     assert(sig-&gt;type_at(0)-&gt;basic_type() == T_OBJECT, "sanity");</span>
+<span class="new">+     assert(sig-&gt;type_at(1)-&gt;basic_type() == T_LONG,   "sanity");</span>
+<span class="new">+   }</span>
+<span class="new">+ #endif // PRODUCT</span>
+<span class="new">+ </span>
+<span class="new">+   Node* receiver = argument(0); // type: oop</span>
+<span class="new">+   Node* container = argument(1); // type: oop</span>
+<span class="new">+   Node* offset = argument(2); // type: long</span>
+<span class="new">+ </span>
+<span class="new">+   receiver  = null_check(receiver);</span>
+<span class="new">+   container = null_check(container);</span>
+<span class="new">+   if (stopped()) {</span>
+<span class="new">+     return true;</span>
+<span class="new">+   }</span>
+<span class="new">+ </span>
+<span class="new">+   Node* result = basic_plus_adr(container, container, offset);</span>
+<span class="new">+ </span>
+<span class="new">+   const TypePtr *adr_type = _gvn.type(result)-&gt;isa_ptr();</span>
+<span class="new">+   Compile::AliasType* alias_type = C-&gt;alias_type(adr_type);</span>
+<span class="new">+   assert(alias_type-&gt;index() != Compile::AliasIdxBot, "no bare pointers here");</span>
+<span class="new">+ </span>
+<span class="new">+   bool need_mem_bar = (alias_type-&gt;adr_type() == TypeOopPtr::BOTTOM); // it's true</span>
+<span class="new">+   </span>
+<span class="new">+   Node* heap_base_oop = container;</span>
+<span class="new">+   bool need_read_barrier = offset != top() &amp;&amp; heap_base_oop != top(); // it's true</span>
+<span class="new">+   </span>
+<span class="new">+   if (need_mem_bar) insert_mem_bar(Op_MemBarCPUOrder);</span>
+<span class="new">+ </span>
+<span class="new">+   if (need_read_barrier) {</span>
+<span class="new">+     insert_pre_barrier(heap_base_oop, offset, result, !(need_mem_bar));</span>
+<span class="new">+   }</span>
+<span class="new">+ </span>
+<span class="new">+   set_result(result);</span>
+<span class="new">+ </span>
+<span class="new">+   if (need_mem_bar) insert_mem_bar(Op_MemBarCPUOrder);</span>
+<span class="new">+ #ifndef PRODUCT</span>
+<span class="new">+   tty-&gt;print_cr("Done.");</span>
+<span class="new">+ #endif</span>
+<span class="new">+   return true;</span>
+<span class="new">+ }</span>
+  
+  //------------------------------inline_aescrypt_Block-----------------------
+  bool LibraryCallKit::inline_aescrypt_Block(vmIntrinsics::ID id) {
+    address stubAddr;
+    const char *stubName;
+<hr /><span class="oldmarker">*** 6548,6630 ****</span>
+    Node* bool_instof = _gvn.transform(new (C) BoolNode(cmp_instof, BoolTest::ne));
+    Node* instof_false = generate_guard(bool_instof, NULL, PROB_MIN);
+  
+    return instof_false;  // even if it is NULL
+  }
+<span class="removed">- </span>
+<span class="removed">- bool LibraryCallKit::inline_profileBoolean() {</span>
+<span class="removed">-   Node* counts = argument(1);</span>
+<span class="removed">-   const TypeAryPtr* ary = NULL;</span>
+<span class="removed">-   ciArray* aobj = NULL;</span>
+<span class="removed">-   if (counts-&gt;is_Con()</span>
+<span class="removed">-       &amp;&amp; (ary = counts-&gt;bottom_type()-&gt;isa_aryptr()) != NULL</span>
+<span class="removed">-       &amp;&amp; (aobj = ary-&gt;const_oop()-&gt;as_array()) != NULL</span>
+<span class="removed">-       &amp;&amp; (aobj-&gt;length() == 2)) {</span>
+<span class="removed">-     // Profile is int[2] where [0] and [1] correspond to false and true value occurrences respectively.</span>
+<span class="removed">-     jint false_cnt = aobj-&gt;element_value(0).as_int();</span>
+<span class="removed">-     jint  true_cnt = aobj-&gt;element_value(1).as_int();</span>
+<span class="removed">- </span>
+<span class="removed">-     method()-&gt;set_injected_profile(true);</span>
+<span class="removed">- </span>
+<span class="removed">-     if (C-&gt;log() != NULL) {</span>
+<span class="removed">-       C-&gt;log()-&gt;elem("observe source='profileBoolean' false='%d' true='%d'",</span>
+<span class="removed">-                      false_cnt, true_cnt);</span>
+<span class="removed">-     }</span>
+<span class="removed">- </span>
+<span class="removed">-     if (false_cnt + true_cnt == 0) {</span>
+<span class="removed">-       // According to profile, never executed.</span>
+<span class="removed">-       uncommon_trap_exact(Deoptimization::Reason_intrinsic,</span>
+<span class="removed">-                           Deoptimization::Action_reinterpret);</span>
+<span class="removed">-       return true;</span>
+<span class="removed">-     }</span>
+<span class="removed">- </span>
+<span class="removed">-     // result is a boolean (0 or 1) and its profile (false_cnt &amp; true_cnt)</span>
+<span class="removed">-     // is a number of each value occurrences.</span>
+<span class="removed">-     Node* result = argument(0);</span>
+<span class="removed">-     if (false_cnt == 0 || true_cnt == 0) {</span>
+<span class="removed">-       // According to profile, one value has been never seen.</span>
+<span class="removed">-       int expected_val = (false_cnt == 0) ? 1 : 0;</span>
+<span class="removed">- </span>
+<span class="removed">-       Node* cmp  = _gvn.transform(new (C) CmpINode(result, intcon(expected_val)));</span>
+<span class="removed">-       Node* test = _gvn.transform(new (C) BoolNode(cmp, BoolTest::eq));</span>
+<span class="removed">- </span>
+<span class="removed">-       IfNode* check = create_and_map_if(control(), test, PROB_ALWAYS, COUNT_UNKNOWN);</span>
+<span class="removed">-       Node* fast_path = _gvn.transform(new (C) IfTrueNode(check));</span>
+<span class="removed">-       Node* slow_path = _gvn.transform(new (C) IfFalseNode(check));</span>
+<span class="removed">- </span>
+<span class="removed">-       { // Slow path: uncommon trap for never seen value and then reexecute</span>
+<span class="removed">-         // MethodHandleImpl::profileBoolean() to bump the count, so JIT knows</span>
+<span class="removed">-         // the value has been seen at least once.</span>
+<span class="removed">-         PreserveJVMState pjvms(this);</span>
+<span class="removed">-         PreserveReexecuteState preexecs(this);</span>
+<span class="removed">-         jvms()-&gt;set_should_reexecute(true);</span>
+<span class="removed">- </span>
+<span class="removed">-         set_control(slow_path);</span>
+<span class="removed">-         set_i_o(i_o());</span>
+<span class="removed">- </span>
+<span class="removed">-         uncommon_trap_exact(Deoptimization::Reason_intrinsic,</span>
+<span class="removed">-                             Deoptimization::Action_reinterpret);</span>
+<span class="removed">-       }</span>
+<span class="removed">-       // The guard for never seen value enables sharpening of the result and</span>
+<span class="removed">-       // returning a constant. It allows to eliminate branches on the same value</span>
+<span class="removed">-       // later on.</span>
+<span class="removed">-       set_control(fast_path);</span>
+<span class="removed">-       result = intcon(expected_val);</span>
+<span class="removed">-     }</span>
+<span class="removed">-     // Stop profiling.</span>
+<span class="removed">-     // MethodHandleImpl::profileBoolean() has profiling logic in its bytecode.</span>
+<span class="removed">-     // By replacing method body with profile data (represented as ProfileBooleanNode</span>
+<span class="removed">-     // on IR level) we effectively disable profiling.</span>
+<span class="removed">-     // It enables full speed execution once optimized code is generated.</span>
+<span class="removed">-     Node* profile = _gvn.transform(new (C) ProfileBooleanNode(result, false_cnt, true_cnt));</span>
+<span class="removed">-     C-&gt;record_for_igvn(profile);</span>
+<span class="removed">-     set_result(profile);</span>
+<span class="removed">-     return true;</span>
+<span class="removed">-   } else {</span>
+<span class="removed">-     // Continue profiling.</span>
+<span class="removed">-     // Profile data isn't available at the moment. So, execute method's bytecode version.</span>
+<span class="removed">-     // Usually, when GWT LambdaForms are profiled it means that a stand-alone nmethod</span>
+<span class="removed">-     // is compiled and counters aren't available since corresponding MethodHandle</span>
+<span class="removed">-     // isn't a compile-time constant.</span>
+<span class="removed">-     return false;</span>
+<span class="removed">-   }</span>
+<span class="removed">- }</span>
+<span class="newmarker">--- 6728,6732 ----</span>
+</pre></body></html>
+

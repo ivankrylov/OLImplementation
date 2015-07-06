@@ -1,0 +1,223 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/cpu/x86/vm </title>
+</head><body id="SUNWwebrev">
+<h2>src/cpu/x86/vm/x86_64.ad</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+6945   match(Set dst (AddP dst src));
+6946   effect(KILL cr);
+6947 
+6948   format %{ "addq    $dst, $src\t# ptr" %}
+6949   opcode(0x03);
+6950   ins_encode(REX_reg_reg_wide(dst, src), OpcP, reg_reg(dst, src));
+6951   ins_pipe(ialu_reg_reg);
+6952 %}
+6953 
+6954 instruct addP_rReg_imm(rRegP dst, immL32 src, rFlagsReg cr)
+6955 %{
+6956   match(Set dst (AddP dst src));
+6957   effect(KILL cr);
+6958 
+6959   format %{ "addq    $dst, $src\t# ptr" %}
+6960   opcode(0x81, 0x00); /* /0 id */
+6961   ins_encode(OpcSErm_wide(dst, src), Con8or32(src));
+6962   ins_pipe( ialu_reg );
+6963 %}
+6964 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+6965 // XXX addP mem ops ????
+6966 
+6967 instruct leaP_rReg_imm(rRegP dst, rRegP src0, immL32 src1)
+6968 %{
+6969   match(Set dst (AddP src0 src1));
+6970 
+6971   ins_cost(110);
+6972   format %{ "leaq    $dst, [$src0 + $src1]\t# ptr" %}
+6973   opcode(0x8D); /* 0x8D /r */
+6974   ins_encode(REX_reg_reg_wide(dst, src0), OpcP, reg_lea(dst, src0, src1));// XXX
+6975   ins_pipe(ialu_reg_reg);
+6976 %}
+6977 
+6978 instruct checkCastPP(rRegP dst)
+6979 %{
+6980   match(Set dst (CheckCastPP dst));
+6981 
+6982   size(0);
+6983   format %{ "# checkcastPP of $dst" %}
+6984   ins_encode(/* empty encoding */);
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+6945   match(Set dst (AddP dst src));
+6946   effect(KILL cr);
+6947 
+6948   format %{ "addq    $dst, $src\t# ptr" %}
+6949   opcode(0x03);
+6950   ins_encode(REX_reg_reg_wide(dst, src), OpcP, reg_reg(dst, src));
+6951   ins_pipe(ialu_reg_reg);
+6952 %}
+6953 
+6954 instruct addP_rReg_imm(rRegP dst, immL32 src, rFlagsReg cr)
+6955 %{
+6956   match(Set dst (AddP dst src));
+6957   effect(KILL cr);
+6958 
+6959   format %{ "addq    $dst, $src\t# ptr" %}
+6960   opcode(0x81, 0x00); /* /0 id */
+6961   ins_encode(OpcSErm_wide(dst, src), Con8or32(src));
+6962   ins_pipe( ialu_reg );
+6963 %}
+6964 
+<span class="new">6965 instruct castDerived_rReg(rRegP dst, rRegL src, rFlagsReg cr)</span>
+<span class="new">6966 %{</span>
+<span class="new">6967   match(Set dst (CastDerived (AddP dst src)));</span>
+<span class="new">6968   effect(KILL cr);</span>
+<span class="new">6969 </span>
+<span class="new">6970   format %{ "addq    $dst, $src\t# cast derived ptr" %}</span>
+<span class="new">6971   opcode(0x03);</span>
+<span class="new">6972   ins_encode(REX_reg_reg_wide(dst, src), OpcP, reg_reg(dst, src));</span>
+<span class="new">6973   ins_pipe(ialu_reg_reg);</span>
+<span class="new">6974 %}</span>
+<span class="new">6975 </span>
+<span class="new">6976 instruct castDerived_rReg_imm(rRegP dst, immL32 src, rFlagsReg cr)</span>
+<span class="new">6977 %{</span>
+<span class="new">6978   match(Set dst (CastDerived (AddP dst src)));</span>
+<span class="new">6979   effect(KILL cr);</span>
+<span class="new">6980 </span>
+<span class="new">6981   format %{ "addq    $dst, $src\t# cast derived ptr" %}</span>
+<span class="new">6982   opcode(0x81, 0x00); /* /0 id */</span>
+<span class="new">6983   ins_encode(OpcSErm_wide(dst, src), Con8or32(src));</span>
+<span class="new">6984   ins_pipe( ialu_reg );</span>
+<span class="new">6985 %}</span>
+<span class="new">6986 </span>
+6987 // XXX addP mem ops ????
+6988 
+6989 instruct leaP_rReg_imm(rRegP dst, rRegP src0, immL32 src1)
+6990 %{
+6991   match(Set dst (AddP src0 src1));
+6992 
+6993   ins_cost(110);
+6994   format %{ "leaq    $dst, [$src0 + $src1]\t# ptr" %}
+6995   opcode(0x8D); /* 0x8D /r */
+6996   ins_encode(REX_reg_reg_wide(dst, src0), OpcP, reg_lea(dst, src0, src1));// XXX
+6997   ins_pipe(ialu_reg_reg);
+6998 %}
+6999 
+7000 instruct checkCastPP(rRegP dst)
+7001 %{
+7002   match(Set dst (CheckCastPP dst));
+7003 
+7004   size(0);
+7005   format %{ "# checkcastPP of $dst" %}
+7006   ins_encode(/* empty encoding */);
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

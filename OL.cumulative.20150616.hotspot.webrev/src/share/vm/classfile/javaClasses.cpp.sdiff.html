@@ -1,0 +1,1535 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/classfile </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/classfile/javaClasses.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+   1 /*
+<span class="changed">   2  * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.</span>
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+
+</pre><hr></hr><pre>
+ 107     return ik-&gt;find_local_field(name_symbol, signature_symbol, fd);
+ 108 }
+ 109 
+ 110 // Helpful routine for computing field offsets at run time rather than hardcoding them
+ 111 static void
+ 112 compute_offset(int &amp;dest_offset,
+ 113                Klass* klass_oop, Symbol* name_symbol, Symbol* signature_symbol,
+ 114                bool allow_super = false) {
+ 115   fieldDescriptor fd;
+ 116   InstanceKlass* ik = InstanceKlass::cast(klass_oop);
+ 117   if (!find_field(ik, name_symbol, signature_symbol, &amp;fd, allow_super)) {
+ 118     ResourceMark rm;
+ 119     tty-&gt;print_cr("Invalid layout of %s at %s", ik-&gt;external_name(), name_symbol-&gt;as_C_string());
+ 120 #ifndef PRODUCT
+ 121     klass_oop-&gt;print();
+ 122     tty-&gt;print_cr("all fields:");
+ 123     for (AllFieldStream fs(InstanceKlass::cast(klass_oop)); !fs.done(); fs.next()) {
+ 124       tty-&gt;print_cr("  name: %s, sig: %s, flags: %08x", fs.name()-&gt;as_C_string(), fs.signature()-&gt;as_C_string(), fs.access_flags().as_int());
+ 125     }
+ 126 #endif //PRODUCT
+<span class="changed"> 127     vm_exit_during_initialization("Invalid layout of preloaded class: use -XX:+TraceClassLoading to see the origin of the problem class");</span>
+ 128   }
+ 129   dest_offset = fd.offset();
+ 130 }
+ 131 
+ 132 // Same as above but for "optional" offsets that might not be present in certain JDK versions
+ 133 static void
+ 134 compute_optional_offset(int&amp; dest_offset,
+ 135                         Klass* klass_oop, Symbol* name_symbol, Symbol* signature_symbol,
+ 136                         bool allow_super = false) {
+ 137   fieldDescriptor fd;
+ 138   InstanceKlass* ik = InstanceKlass::cast(klass_oop);
+ 139   if (find_field(ik, name_symbol, signature_symbol, &amp;fd, allow_super)) {
+ 140     dest_offset = fd.offset();
+ 141   }
+ 142 }
+ 143 
+ 144 
+ 145 int java_lang_String::value_offset  = 0;
+ 146 int java_lang_String::offset_offset = 0;
+ 147 int java_lang_String::count_offset  = 0;
+
+</pre><hr></hr><pre>
+1261 
+1262 // After this many redefines, the stack trace is unreliable.
+1263 const int MAX_VERSION = USHRT_MAX;
+1264 
+1265 // Helper backtrace functions to store bci|version together.
+1266 static inline int merge_bci_and_version(int bci, int version) {
+1267   // only store u2 for version, checking for overflow.
+1268   if (version &gt; USHRT_MAX || version &lt; 0) version = MAX_VERSION;
+1269   assert((jushort)bci == bci, "bci should be short");
+1270   return build_int_from_shorts(version, bci);
+1271 }
+1272 
+1273 static inline int bci_at(unsigned int merged) {
+1274   return extract_high_short_from_int(merged);
+1275 }
+1276 static inline int version_at(unsigned int merged) {
+1277   return extract_low_short_from_int(merged);
+1278 }
+1279 
+1280 static inline bool version_matches(Method* method, int version) {
+<span class="changed">1281   assert(version &lt; MAX_VERSION, "version is too big");</span>
+<span class="changed">1282   return method != NULL &amp;&amp; (method-&gt;constants()-&gt;version() == version);</span>
+1283 }
+1284 
+1285 static inline int get_line_number(Method* method, int bci) {
+1286   int line_number = 0;
+1287   if (method-&gt;is_native()) {
+1288     // Negative value different from -1 below, enabling Java code in
+1289     // class java.lang.StackTraceElement to distinguish "native" from
+1290     // "no LineNumberTable".  JDK tests for -2.
+1291     line_number = -2;
+1292   } else {
+1293     // Returns -1 if no LineNumberTable, and otherwise actual line number
+1294     line_number = method-&gt;line_number_from_bci(bci);
+1295     if (line_number == -1 &amp;&amp; ShowHiddenFrames) {
+1296       line_number = bci + 1000000;
+1297     }
+1298   }
+1299   return line_number;
+1300 }
+1301 
+1302 // This class provides a simple wrapper over the internal structure of
+1303 // exception backtrace to insulate users of the backtrace from needing
+1304 // to know what it looks like.
+1305 class BacktraceBuilder: public StackObj {
+1306  private:
+1307   Handle          _backtrace;
+1308   objArrayOop     _head;
+1309   typeArrayOop    _methods;
+1310   typeArrayOop    _bcis;
+1311   objArrayOop     _mirrors;
+<span class="removed">1312   typeArrayOop    _cprefs; // needed to insulate method name against redefinition</span>
+1313   int             _index;
+1314   No_Safepoint_Verifier _nsv;
+1315 
+1316  public:
+1317 
+1318   enum {
+1319     trace_methods_offset = java_lang_Throwable::trace_methods_offset,
+1320     trace_bcis_offset    = java_lang_Throwable::trace_bcis_offset,
+1321     trace_mirrors_offset = java_lang_Throwable::trace_mirrors_offset,
+<span class="removed">1322     trace_cprefs_offset  = java_lang_Throwable::trace_cprefs_offset,</span>
+1323     trace_next_offset    = java_lang_Throwable::trace_next_offset,
+1324     trace_size           = java_lang_Throwable::trace_size,
+1325     trace_chunk_size     = java_lang_Throwable::trace_chunk_size
+1326   };
+1327 
+1328   // get info out of chunks
+1329   static typeArrayOop get_methods(objArrayHandle chunk) {
+1330     typeArrayOop methods = typeArrayOop(chunk-&gt;obj_at(trace_methods_offset));
+1331     assert(methods != NULL, "method array should be initialized in backtrace");
+1332     return methods;
+1333   }
+1334   static typeArrayOop get_bcis(objArrayHandle chunk) {
+1335     typeArrayOop bcis = typeArrayOop(chunk-&gt;obj_at(trace_bcis_offset));
+1336     assert(bcis != NULL, "bci array should be initialized in backtrace");
+1337     return bcis;
+1338   }
+1339   static objArrayOop get_mirrors(objArrayHandle chunk) {
+1340     objArrayOop mirrors = objArrayOop(chunk-&gt;obj_at(trace_mirrors_offset));
+1341     assert(mirrors != NULL, "mirror array should be initialized in backtrace");
+1342     return mirrors;
+1343   }
+<span class="removed">1344   static typeArrayOop get_cprefs(objArrayHandle chunk) {</span>
+<span class="removed">1345     typeArrayOop cprefs = typeArrayOop(chunk-&gt;obj_at(trace_cprefs_offset));</span>
+<span class="removed">1346     assert(cprefs != NULL, "cprefs array should be initialized in backtrace");</span>
+<span class="removed">1347     return cprefs;</span>
+<span class="removed">1348   }</span>
+1349 
+1350   // constructor for new backtrace
+<span class="changed">1351   BacktraceBuilder(TRAPS): _methods(NULL), _bcis(NULL), _head(NULL), _mirrors(NULL), _cprefs(NULL) {</span>
+1352     expand(CHECK);
+1353     _backtrace = _head;
+1354     _index = 0;
+1355   }
+1356 
+1357   BacktraceBuilder(objArrayHandle backtrace) {
+1358     _methods = get_methods(backtrace);
+1359     _bcis = get_bcis(backtrace);
+1360     _mirrors = get_mirrors(backtrace);
+<span class="removed">1361     _cprefs = get_cprefs(backtrace);</span>
+1362     assert(_methods-&gt;length() == _bcis-&gt;length() &amp;&amp;
+1363            _methods-&gt;length() == _mirrors-&gt;length(),
+1364            "method and source information arrays should match");
+1365 
+1366     // head is the preallocated backtrace
+1367     _backtrace = _head = backtrace();
+1368     _index = 0;
+1369   }
+1370 
+1371   void expand(TRAPS) {
+1372     objArrayHandle old_head(THREAD, _head);
+1373     Pause_No_Safepoint_Verifier pnsv(&amp;_nsv);
+1374 
+1375     objArrayOop head = oopFactory::new_objectArray(trace_size, CHECK);
+1376     objArrayHandle new_head(THREAD, head);
+1377 
+1378     typeArrayOop methods = oopFactory::new_shortArray(trace_chunk_size, CHECK);
+1379     typeArrayHandle new_methods(THREAD, methods);
+1380 
+1381     typeArrayOop bcis = oopFactory::new_intArray(trace_chunk_size, CHECK);
+1382     typeArrayHandle new_bcis(THREAD, bcis);
+1383 
+1384     objArrayOop mirrors = oopFactory::new_objectArray(trace_chunk_size, CHECK);
+1385     objArrayHandle new_mirrors(THREAD, mirrors);
+1386 
+<span class="removed">1387     typeArrayOop cprefs = oopFactory::new_shortArray(trace_chunk_size, CHECK);</span>
+<span class="removed">1388     typeArrayHandle new_cprefs(THREAD, cprefs);</span>
+<span class="removed">1389 </span>
+1390     if (!old_head.is_null()) {
+1391       old_head-&gt;obj_at_put(trace_next_offset, new_head());
+1392     }
+1393     new_head-&gt;obj_at_put(trace_methods_offset, new_methods());
+1394     new_head-&gt;obj_at_put(trace_bcis_offset, new_bcis());
+1395     new_head-&gt;obj_at_put(trace_mirrors_offset, new_mirrors());
+<span class="removed">1396     new_head-&gt;obj_at_put(trace_cprefs_offset, new_cprefs());</span>
+1397 
+1398     _head    = new_head();
+1399     _methods = new_methods();
+1400     _bcis = new_bcis();
+1401     _mirrors = new_mirrors();
+<span class="removed">1402     _cprefs  = new_cprefs();</span>
+1403     _index = 0;
+1404   }
+1405 
+1406   oop backtrace() {
+1407     return _backtrace();
+1408   }
+1409 
+1410   inline void push(Method* method, int bci, TRAPS) {
+1411     // Smear the -1 bci to 0 since the array only holds unsigned
+1412     // shorts.  The later line number lookup would just smear the -1
+1413     // to a 0 even if it could be recorded.
+1414     if (bci == SynchronizationEntryBCI) bci = 0;
+1415 
+1416     if (_index &gt;= trace_chunk_size) {
+1417       methodHandle mhandle(THREAD, method);
+1418       expand(CHECK);
+1419       method = mhandle();
+1420     }
+1421 
+<span class="changed">1422     _methods-&gt;short_at_put(_index, method-&gt;orig_method_idnum());</span>
+1423     _bcis-&gt;int_at_put(_index, merge_bci_and_version(bci, method-&gt;constants()-&gt;version()));
+<span class="removed">1424     _cprefs-&gt;short_at_put(_index, method-&gt;name_index());</span>
+1425 
+1426     // We need to save the mirrors in the backtrace to keep the class
+1427     // from being unloaded while we still have this stack trace.
+1428     assert(method-&gt;method_holder()-&gt;java_mirror() != NULL, "never push null for mirror");
+1429     _mirrors-&gt;obj_at_put(_index, method-&gt;method_holder()-&gt;java_mirror());
+1430     _index++;
+1431   }
+1432 
+1433 };
+1434 
+1435 // Print stack trace element to resource allocated buffer
+1436 char* java_lang_Throwable::print_stack_element_to_buffer(Handle mirror,
+<span class="changed">1437                                   int method_id, int version, int bci, int cpref) {</span>
+1438 
+1439   // Get strings and string lengths
+1440   InstanceKlass* holder = InstanceKlass::cast(java_lang_Class::as_Klass(mirror()));
+1441   const char* klass_name  = holder-&gt;external_name();
+1442   int buf_len = (int)strlen(klass_name);
+1443 
+<span class="changed">1444   Method* method = holder-&gt;method_with_orig_idnum(method_id, version);</span>
+
+
+
+
+
+
+
+1445 
+<span class="changed">1446   // The method can be NULL if the requested class version is gone</span>
+<span class="changed">1447   Symbol* sym = (method != NULL) ? method-&gt;name() : holder-&gt;constants()-&gt;symbol_at(cpref);</span>
+<span class="changed">1448   char* method_name = sym-&gt;as_C_string();</span>
+1449   buf_len += (int)strlen(method_name);
+1450 
+<span class="removed">1451   // Use a specific ik version as a holder since the mirror might</span>
+<span class="removed">1452   // refer to a version that is now obsolete and no longer accessible</span>
+<span class="removed">1453   // via the previous versions list.</span>
+<span class="removed">1454   holder = holder-&gt;get_klass_version(version);</span>
+1455   char* source_file_name = NULL;
+<span class="changed">1456   if (holder != NULL) {</span>
+1457     Symbol* source = holder-&gt;source_file_name();
+1458     if (source != NULL) {
+1459       source_file_name = source-&gt;as_C_string();
+1460       buf_len += (int)strlen(source_file_name);
+1461     }
+1462   }
+1463 
+1464   // Allocate temporary buffer with extra space for formatting and line number
+1465   char* buf = NEW_RESOURCE_ARRAY(char, buf_len + 64);
+1466 
+1467   // Print stack trace line in buffer
+1468   sprintf(buf, "\tat %s.%s", klass_name, method_name);
+1469 
+1470   if (!version_matches(method, version)) {
+1471     strcat(buf, "(Redefined)");
+1472   } else {
+1473     int line_number = get_line_number(method, bci);
+1474     if (line_number == -2) {
+1475       strcat(buf, "(Native Method)");
+1476     } else {
+
+</pre><hr></hr><pre>
+1478         // Sourcename and linenumber
+1479         sprintf(buf + (int)strlen(buf), "(%s:%d)", source_file_name, line_number);
+1480       } else if (source_file_name != NULL) {
+1481         // Just sourcename
+1482         sprintf(buf + (int)strlen(buf), "(%s)", source_file_name);
+1483       } else {
+1484         // Neither sourcename nor linenumber
+1485         sprintf(buf + (int)strlen(buf), "(Unknown Source)");
+1486       }
+1487       nmethod* nm = method-&gt;code();
+1488       if (WizardMode &amp;&amp; nm != NULL) {
+1489         sprintf(buf + (int)strlen(buf), "(nmethod " INTPTR_FORMAT ")", (intptr_t)nm);
+1490       }
+1491     }
+1492   }
+1493 
+1494   return buf;
+1495 }
+1496 
+1497 void java_lang_Throwable::print_stack_element(outputStream *st, Handle mirror,
+<span class="changed">1498                                               int method_id, int version, int bci, int cpref) {</span>
+1499   ResourceMark rm;
+<span class="changed">1500   char* buf = print_stack_element_to_buffer(mirror, method_id, version, bci, cpref);</span>
+1501   st-&gt;print_cr("%s", buf);
+1502 }
+1503 
+1504 void java_lang_Throwable::print_stack_element(outputStream *st, methodHandle method, int bci) {
+1505   Handle mirror = method-&gt;method_holder()-&gt;java_mirror();
+<span class="changed">1506   int method_id = method-&gt;orig_method_idnum();</span>
+1507   int version = method-&gt;constants()-&gt;version();
+<span class="changed">1508   int cpref = method-&gt;name_index();</span>
+<span class="changed">1509   print_stack_element(st, mirror, method_id, version, bci, cpref);</span>
+1510 }
+1511 
+1512 const char* java_lang_Throwable::no_stack_trace_message() {
+1513   return "\t&lt;&lt;no stack trace available&gt;&gt;";
+1514 }
+1515 
+1516 
+1517 // Currently used only for exceptions occurring during startup
+1518 void java_lang_Throwable::print_stack_trace(oop throwable, outputStream* st) {
+1519   Thread *THREAD = Thread::current();
+1520   Handle h_throwable(THREAD, throwable);
+1521   while (h_throwable.not_null()) {
+1522     objArrayHandle result (THREAD, objArrayOop(backtrace(h_throwable())));
+1523     if (result.is_null()) {
+1524       st-&gt;print_cr("%s", no_stack_trace_message());
+1525       return;
+1526     }
+1527 
+1528     while (result.not_null()) {
+1529 
+1530       // Get method id, bci, version and mirror from chunk
+1531       typeArrayHandle methods (THREAD, BacktraceBuilder::get_methods(result));
+1532       typeArrayHandle bcis (THREAD, BacktraceBuilder::get_bcis(result));
+1533       objArrayHandle mirrors (THREAD, BacktraceBuilder::get_mirrors(result));
+<span class="removed">1534       typeArrayHandle cprefs (THREAD, BacktraceBuilder::get_cprefs(result));</span>
+1535 
+1536       int length = methods()-&gt;length();
+1537       for (int index = 0; index &lt; length; index++) {
+1538         Handle mirror(THREAD, mirrors-&gt;obj_at(index));
+1539         // NULL mirror means end of stack trace
+1540         if (mirror.is_null()) goto handle_cause;
+1541         int method = methods-&gt;short_at(index);
+1542         int version = version_at(bcis-&gt;int_at(index));
+1543         int bci = bci_at(bcis-&gt;int_at(index));
+<span class="changed">1544         int cpref = cprefs-&gt;short_at(index);</span>
+<span class="changed">1545         print_stack_element(st, mirror, method, version, bci, cpref);</span>
+1546       }
+1547       result = objArrayHandle(THREAD, objArrayOop(result-&gt;obj_at(trace_next_offset)));
+1548     }
+1549   handle_cause:
+1550     {
+1551       EXCEPTION_MARK;
+1552       JavaValue cause(T_OBJECT);
+1553       JavaCalls::call_virtual(&amp;cause,
+1554                               h_throwable,
+1555                               KlassHandle(THREAD, h_throwable-&gt;klass()),
+1556                               vmSymbols::getCause_name(),
+1557                               vmSymbols::void_throwable_signature(),
+1558                               THREAD);
+1559       // Ignore any exceptions. we are in the middle of exception handling. Same as classic VM.
+1560       if (HAS_PENDING_EXCEPTION) {
+1561         CLEAR_PENDING_EXCEPTION;
+1562         h_throwable = Handle();
+1563       } else {
+1564         h_throwable = Handle(THREAD, (oop) cause.get_jobject());
+1565         if (h_throwable.not_null()) {
+
+</pre><hr></hr><pre>
+1809 
+1810 
+1811 oop java_lang_Throwable::get_stack_trace_element(oop throwable, int index, TRAPS) {
+1812   if (throwable == NULL) {
+1813     THROW_0(vmSymbols::java_lang_NullPointerException());
+1814   }
+1815   if (index &lt; 0) {
+1816     THROW_(vmSymbols::java_lang_IndexOutOfBoundsException(), NULL);
+1817   }
+1818   // Compute how many chunks to skip and index into actual chunk
+1819   objArrayOop chunk = objArrayOop(backtrace(throwable));
+1820   int skip_chunks = index / trace_chunk_size;
+1821   int chunk_index = index % trace_chunk_size;
+1822   while (chunk != NULL &amp;&amp; skip_chunks &gt; 0) {
+1823     chunk = objArrayOop(chunk-&gt;obj_at(trace_next_offset));
+1824         skip_chunks--;
+1825   }
+1826   if (chunk == NULL) {
+1827     THROW_(vmSymbols::java_lang_IndexOutOfBoundsException(), NULL);
+1828   }
+<span class="changed">1829   // Get method id, bci, version, mirror and cpref from chunk</span>
+1830   typeArrayOop methods = BacktraceBuilder::get_methods(chunk);
+1831   typeArrayOop bcis = BacktraceBuilder::get_bcis(chunk);
+1832   objArrayOop mirrors = BacktraceBuilder::get_mirrors(chunk);
+<span class="removed">1833   typeArrayOop cprefs = BacktraceBuilder::get_cprefs(chunk);</span>
+1834 
+1835   assert(methods != NULL &amp;&amp; bcis != NULL &amp;&amp; mirrors != NULL, "sanity check");
+1836 
+1837   int method = methods-&gt;short_at(chunk_index);
+1838   int version = version_at(bcis-&gt;int_at(chunk_index));
+1839   int bci = bci_at(bcis-&gt;int_at(chunk_index));
+<span class="removed">1840   int cpref = cprefs-&gt;short_at(chunk_index);</span>
+1841   Handle mirror(THREAD, mirrors-&gt;obj_at(chunk_index));
+1842 
+1843   // Chunk can be partial full
+1844   if (mirror.is_null()) {
+1845     THROW_(vmSymbols::java_lang_IndexOutOfBoundsException(), NULL);
+1846   }
+<span class="changed">1847   oop element = java_lang_StackTraceElement::create(mirror, method, version, bci, cpref, CHECK_0);</span>
+
+1848   return element;
+1849 }
+1850 
+1851 oop java_lang_StackTraceElement::create(Handle mirror, int method_id,
+<span class="changed">1852                                         int version, int bci, int cpref, TRAPS) {</span>
+1853   // Allocate java.lang.StackTraceElement instance
+1854   Klass* k = SystemDictionary::StackTraceElement_klass();
+1855   assert(k != NULL, "must be loaded in 1.4+");
+1856   instanceKlassHandle ik (THREAD, k);
+1857   if (ik-&gt;should_be_initialized()) {
+1858     ik-&gt;initialize(CHECK_0);
+1859   }
+1860 
+1861   Handle element = ik-&gt;allocate_instance_handle(CHECK_0);
+1862   // Fill in class name
+1863   ResourceMark rm(THREAD);
+1864   InstanceKlass* holder = InstanceKlass::cast(java_lang_Class::as_Klass(mirror()));
+1865   const char* str = holder-&gt;external_name();
+1866   oop classname = StringTable::intern((char*) str, CHECK_0);
+1867   java_lang_StackTraceElement::set_declaringClass(element(), classname);
+1868 
+<span class="changed">1869   Method* method = holder-&gt;method_with_orig_idnum(method_id, version);</span>
+<span class="changed">1870 </span>
+<span class="changed">1871   // The method can be NULL if the requested class version is gone</span>
+<span class="changed">1872   Symbol* sym = (method != NULL) ? method-&gt;name() : holder-&gt;constants()-&gt;symbol_at(cpref);</span>
+
+
+
+
+1873 
+1874   // Fill in method name
+<span class="changed">1875   oop methodname = StringTable::intern(sym, CHECK_0);</span>
+1876   java_lang_StackTraceElement::set_methodName(element(), methodname);
+1877 
+1878   if (!version_matches(method, version)) {
+1879     // The method was redefined, accurate line number information isn't available
+1880     java_lang_StackTraceElement::set_fileName(element(), NULL);
+1881     java_lang_StackTraceElement::set_lineNumber(element(), -1);
+1882   } else {
+1883     // Fill in source file name and line number.
+<span class="removed">1884     // Use a specific ik version as a holder since the mirror might</span>
+<span class="removed">1885     // refer to a version that is now obsolete and no longer accessible</span>
+<span class="removed">1886     // via the previous versions list.</span>
+<span class="removed">1887     holder = holder-&gt;get_klass_version(version);</span>
+<span class="removed">1888     assert(holder != NULL, "sanity check");</span>
+1889     Symbol* source = holder-&gt;source_file_name();
+1890     if (ShowHiddenFrames &amp;&amp; source == NULL)
+1891       source = vmSymbols::unknown_class_name();
+1892     oop filename = StringTable::intern(source, CHECK_0);
+1893     java_lang_StackTraceElement::set_fileName(element(), filename);
+1894 
+1895     int line_number = get_line_number(method, bci);
+1896     java_lang_StackTraceElement::set_lineNumber(element(), line_number);
+1897   }
+1898   return element();
+1899 }
+1900 
+1901 oop java_lang_StackTraceElement::create(methodHandle method, int bci, TRAPS) {
+1902   Handle mirror (THREAD, method-&gt;method_holder()-&gt;java_mirror());
+<span class="changed">1903   int method_id = method-&gt;orig_method_idnum();</span>
+<span class="changed">1904   int cpref = method-&gt;name_index();</span>
+<span class="changed">1905   return create(mirror, method_id, method-&gt;constants()-&gt;version(), bci, cpref, THREAD);</span>
+1906 }
+1907 
+1908 void java_lang_reflect_AccessibleObject::compute_offsets() {
+1909   Klass* k = SystemDictionary::reflect_AccessibleObject_klass();
+1910   compute_offset(override_offset, k, vmSymbols::override_name(), vmSymbols::bool_signature());
+1911 }
+1912 
+1913 jboolean java_lang_reflect_AccessibleObject::override(oop reflect) {
+1914   assert(Universe::is_fully_initialized(), "Need to find another solution to the reflection problem");
+1915   return (jboolean) reflect-&gt;bool_field(override_offset);
+1916 }
+1917 
+1918 void java_lang_reflect_AccessibleObject::set_override(oop reflect, jboolean value) {
+1919   assert(Universe::is_fully_initialized(), "Need to find another solution to the reflection problem");
+1920   reflect-&gt;bool_field_put(override_offset, (int) value);
+1921 }
+1922 
+1923 void java_lang_reflect_Method::compute_offsets() {
+1924   Klass* k = SystemDictionary::reflect_Method_klass();
+1925   compute_offset(clazz_offset,          k, vmSymbols::clazz_name(),          vmSymbols::class_signature());
+
+</pre><hr></hr><pre>
+2784 int java_lang_invoke_MemberName::flags(oop mname) {
+2785   assert(is_instance(mname), "wrong type");
+2786   return mname-&gt;int_field(_flags_offset);
+2787 }
+2788 
+2789 void java_lang_invoke_MemberName::set_flags(oop mname, int flags) {
+2790   assert(is_instance(mname), "wrong type");
+2791   mname-&gt;int_field_put(_flags_offset, flags);
+2792 }
+2793 
+2794 Metadata* java_lang_invoke_MemberName::vmtarget(oop mname) {
+2795   assert(is_instance(mname), "wrong type");
+2796   return (Metadata*)mname-&gt;address_field(_vmtarget_offset);
+2797 }
+2798 
+2799 bool java_lang_invoke_MemberName::is_method(oop mname) {
+2800   assert(is_instance(mname), "must be MemberName");
+2801   return (flags(mname) &amp; (MN_IS_METHOD | MN_IS_CONSTRUCTOR)) &gt; 0;
+2802 }
+2803 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+2804 void java_lang_invoke_MemberName::set_vmtarget(oop mname, Metadata* ref) {
+2805   assert(is_instance(mname), "wrong type");
+2806   // check the type of the vmtarget
+2807   oop dependency = NULL;
+2808   if (ref != NULL) {
+2809     switch (flags(mname) &amp; (MN_IS_METHOD |
+2810                             MN_IS_CONSTRUCTOR |
+2811                             MN_IS_FIELD)) {
+2812     case MN_IS_METHOD:
+2813     case MN_IS_CONSTRUCTOR:
+2814       assert(ref-&gt;is_method(), "should be a method");
+2815       dependency = ((Method*)ref)-&gt;method_holder()-&gt;java_mirror();
+2816       break;
+2817     case MN_IS_FIELD:
+2818       assert(ref-&gt;is_klass(), "should be a class");
+2819       dependency = ((Klass*)ref)-&gt;java_mirror();
+2820       break;
+2821     default:
+2822       ShouldNotReachHere();
+2823     }
+
+</pre><hr></hr><pre>
+3234   o-&gt;obj_field_put(packageEnabled_offset, val);
+3235 }
+3236 
+3237 void java_lang_AssertionStatusDirectives::set_deflt(oop o, bool val) {
+3238   o-&gt;bool_field_put(deflt_offset, val);
+3239 }
+3240 
+3241 
+3242 // Support for intrinsification of java.nio.Buffer.checkIndex
+3243 int java_nio_Buffer::limit_offset() {
+3244   return _limit_offset;
+3245 }
+3246 
+3247 
+3248 void java_nio_Buffer::compute_offsets() {
+3249   Klass* k = SystemDictionary::nio_Buffer_klass();
+3250   assert(k != NULL, "must be loaded in 1.4+");
+3251   compute_offset(_limit_offset, k, vmSymbols::limit_name(), vmSymbols::int_signature());
+3252 }
+3253 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+3254 void java_util_concurrent_locks_AbstractOwnableSynchronizer::initialize(TRAPS) {
+3255   if (_owner_offset != 0) return;
+3256 
+3257   assert(JDK_Version::is_gte_jdk16x_version(), "Must be JDK 1.6 or later");
+3258   SystemDictionary::load_abstract_ownable_synchronizer_klass(CHECK);
+3259   Klass* k = SystemDictionary::abstract_ownable_synchronizer_klass();
+3260   compute_offset(_owner_offset, k,
+3261                  vmSymbols::exclusive_owner_thread_name(), vmSymbols::thread_signature());
+3262 }
+3263 
+3264 oop java_util_concurrent_locks_AbstractOwnableSynchronizer::get_owner_threadObj(oop obj) {
+3265   assert(_owner_offset != 0, "Must be initialized");
+3266   return obj-&gt;obj_field(_owner_offset);
+3267 }
+3268 
+3269 // Compute hard-coded offsets
+3270 // Invoked before SystemDictionary::initialize, so pre-loaded classes
+3271 // are not available to determine the offset_of_static_fields.
+3272 void JavaClasses::compute_hard_coded_offsets() {
+3273   const int x = heapOopSize;
+
+</pre><hr></hr><pre>
+3338     java_lang_invoke_CallSite::compute_offsets();
+3339   }
+3340   java_security_AccessControlContext::compute_offsets();
+3341   // Initialize reflection classes. The layouts of these classes
+3342   // changed with the new reflection implementation in JDK 1.4, and
+3343   // since the Universe doesn't know what JDK version it is until this
+3344   // point we defer computation of these offsets until now.
+3345   java_lang_reflect_AccessibleObject::compute_offsets();
+3346   java_lang_reflect_Method::compute_offsets();
+3347   java_lang_reflect_Constructor::compute_offsets();
+3348   java_lang_reflect_Field::compute_offsets();
+3349   if (JDK_Version::is_gte_jdk14x_version()) {
+3350     java_nio_Buffer::compute_offsets();
+3351   }
+3352   if (JDK_Version::is_gte_jdk15x_version()) {
+3353     sun_reflect_ConstantPool::compute_offsets();
+3354     sun_reflect_UnsafeStaticFieldAccessorImpl::compute_offsets();
+3355   }
+3356   if (JDK_Version::is_jdk18x_version())
+3357     java_lang_reflect_Parameter::compute_offsets();
+
+
+
+3358 
+3359   // generated interpreter code wants to know about the offsets we just computed:
+3360   AbstractAssembler::update_delayed_values();
+3361 }
+3362 
+3363 #ifndef PRODUCT
+3364 
+3365 // These functions exist to assert the validity of hard-coded field offsets to guard
+3366 // against changes in the class files
+3367 
+3368 bool JavaClasses::check_offset(const char *klass_name, int hardcoded_offset, const char *field_name, const char* field_sig) {
+3369   EXCEPTION_MARK;
+3370   fieldDescriptor fd;
+3371   TempNewSymbol klass_sym = SymbolTable::new_symbol(klass_name, CATCH);
+3372   Klass* k = SystemDictionary::resolve_or_fail(klass_sym, true, CATCH);
+3373   instanceKlassHandle h_klass (THREAD, k);
+3374   TempNewSymbol f_name = SymbolTable::new_symbol(field_name, CATCH);
+3375   TempNewSymbol f_sig  = SymbolTable::new_symbol(field_sig, CATCH);
+3376   if (!h_klass-&gt;find_local_field(f_name, f_sig, &amp;fd)) {
+3377     tty-&gt;print_cr("Nonstatic field %s.%s not found", klass_name, field_name);
+
+</pre><hr></hr><pre>
+3557 int InjectedField::compute_offset() {
+3558   Klass* klass_oop = klass();
+3559   for (AllFieldStream fs(InstanceKlass::cast(klass_oop)); !fs.done(); fs.next()) {
+3560     if (!may_be_java &amp;&amp; !fs.access_flags().is_internal()) {
+3561       // Only look at injected fields
+3562       continue;
+3563     }
+3564     if (fs.name() == name() &amp;&amp; fs.signature() == signature()) {
+3565       return fs.offset();
+3566     }
+3567   }
+3568   ResourceMark rm;
+3569   tty-&gt;print_cr("Invalid layout of %s at %s/%s%s", InstanceKlass::cast(klass_oop)-&gt;external_name(), name()-&gt;as_C_string(), signature()-&gt;as_C_string(), may_be_java ? " (may_be_java)" : "");
+3570 #ifndef PRODUCT
+3571   klass_oop-&gt;print();
+3572   tty-&gt;print_cr("all fields:");
+3573   for (AllFieldStream fs(InstanceKlass::cast(klass_oop)); !fs.done(); fs.next()) {
+3574     tty-&gt;print_cr("  name: %s, sig: %s, flags: %08x", fs.name()-&gt;as_C_string(), fs.signature()-&gt;as_C_string(), fs.access_flags().as_int());
+3575   }
+3576 #endif //PRODUCT
+<span class="changed">3577   vm_exit_during_initialization("Invalid layout of preloaded class: use -XX:+TraceClassLoading to see the origin of the problem class");</span>
+3578   return -1;
+3579 }
+3580 
+3581 void javaClasses_init() {
+3582   JavaClasses::compute_offsets();
+3583   JavaClasses::check_offsets();
+3584   FilteredFieldsMap::initialize();  // must be done after computing offsets.
+3585 }
+</pre></td><td><pre>
+   1 /*
+<span class="changed">   2  * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.</span>
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+
+</pre><hr></hr><pre>
+ 107     return ik-&gt;find_local_field(name_symbol, signature_symbol, fd);
+ 108 }
+ 109 
+ 110 // Helpful routine for computing field offsets at run time rather than hardcoding them
+ 111 static void
+ 112 compute_offset(int &amp;dest_offset,
+ 113                Klass* klass_oop, Symbol* name_symbol, Symbol* signature_symbol,
+ 114                bool allow_super = false) {
+ 115   fieldDescriptor fd;
+ 116   InstanceKlass* ik = InstanceKlass::cast(klass_oop);
+ 117   if (!find_field(ik, name_symbol, signature_symbol, &amp;fd, allow_super)) {
+ 118     ResourceMark rm;
+ 119     tty-&gt;print_cr("Invalid layout of %s at %s", ik-&gt;external_name(), name_symbol-&gt;as_C_string());
+ 120 #ifndef PRODUCT
+ 121     klass_oop-&gt;print();
+ 122     tty-&gt;print_cr("all fields:");
+ 123     for (AllFieldStream fs(InstanceKlass::cast(klass_oop)); !fs.done(); fs.next()) {
+ 124       tty-&gt;print_cr("  name: %s, sig: %s, flags: %08x", fs.name()-&gt;as_C_string(), fs.signature()-&gt;as_C_string(), fs.access_flags().as_int());
+ 125     }
+ 126 #endif //PRODUCT
+<span class="changed"> 127     fatal("Invalid layout of preloaded class");</span>
+ 128   }
+ 129   dest_offset = fd.offset();
+ 130 }
+ 131 
+ 132 // Same as above but for "optional" offsets that might not be present in certain JDK versions
+ 133 static void
+ 134 compute_optional_offset(int&amp; dest_offset,
+ 135                         Klass* klass_oop, Symbol* name_symbol, Symbol* signature_symbol,
+ 136                         bool allow_super = false) {
+ 137   fieldDescriptor fd;
+ 138   InstanceKlass* ik = InstanceKlass::cast(klass_oop);
+ 139   if (find_field(ik, name_symbol, signature_symbol, &amp;fd, allow_super)) {
+ 140     dest_offset = fd.offset();
+ 141   }
+ 142 }
+ 143 
+ 144 
+ 145 int java_lang_String::value_offset  = 0;
+ 146 int java_lang_String::offset_offset = 0;
+ 147 int java_lang_String::count_offset  = 0;
+
+</pre><hr></hr><pre>
+1261 
+1262 // After this many redefines, the stack trace is unreliable.
+1263 const int MAX_VERSION = USHRT_MAX;
+1264 
+1265 // Helper backtrace functions to store bci|version together.
+1266 static inline int merge_bci_and_version(int bci, int version) {
+1267   // only store u2 for version, checking for overflow.
+1268   if (version &gt; USHRT_MAX || version &lt; 0) version = MAX_VERSION;
+1269   assert((jushort)bci == bci, "bci should be short");
+1270   return build_int_from_shorts(version, bci);
+1271 }
+1272 
+1273 static inline int bci_at(unsigned int merged) {
+1274   return extract_high_short_from_int(merged);
+1275 }
+1276 static inline int version_at(unsigned int merged) {
+1277   return extract_low_short_from_int(merged);
+1278 }
+1279 
+1280 static inline bool version_matches(Method* method, int version) {
+<span class="changed">1281   return (method-&gt;constants()-&gt;version() == version &amp;&amp; version &lt; MAX_VERSION);</span>
+
+1282 }
+1283 
+1284 static inline int get_line_number(Method* method, int bci) {
+1285   int line_number = 0;
+1286   if (method-&gt;is_native()) {
+1287     // Negative value different from -1 below, enabling Java code in
+1288     // class java.lang.StackTraceElement to distinguish "native" from
+1289     // "no LineNumberTable".  JDK tests for -2.
+1290     line_number = -2;
+1291   } else {
+1292     // Returns -1 if no LineNumberTable, and otherwise actual line number
+1293     line_number = method-&gt;line_number_from_bci(bci);
+1294     if (line_number == -1 &amp;&amp; ShowHiddenFrames) {
+1295       line_number = bci + 1000000;
+1296     }
+1297   }
+1298   return line_number;
+1299 }
+1300 
+1301 // This class provides a simple wrapper over the internal structure of
+1302 // exception backtrace to insulate users of the backtrace from needing
+1303 // to know what it looks like.
+1304 class BacktraceBuilder: public StackObj {
+1305  private:
+1306   Handle          _backtrace;
+1307   objArrayOop     _head;
+1308   typeArrayOop    _methods;
+1309   typeArrayOop    _bcis;
+1310   objArrayOop     _mirrors;
+
+1311   int             _index;
+1312   No_Safepoint_Verifier _nsv;
+1313 
+1314  public:
+1315 
+1316   enum {
+1317     trace_methods_offset = java_lang_Throwable::trace_methods_offset,
+1318     trace_bcis_offset = java_lang_Throwable::trace_bcis_offset,
+1319     trace_mirrors_offset = java_lang_Throwable::trace_mirrors_offset,
+
+1320     trace_next_offset    = java_lang_Throwable::trace_next_offset,
+1321     trace_size           = java_lang_Throwable::trace_size,
+1322     trace_chunk_size     = java_lang_Throwable::trace_chunk_size
+1323   };
+1324 
+1325   // get info out of chunks
+1326   static typeArrayOop get_methods(objArrayHandle chunk) {
+1327     typeArrayOop methods = typeArrayOop(chunk-&gt;obj_at(trace_methods_offset));
+1328     assert(methods != NULL, "method array should be initialized in backtrace");
+1329     return methods;
+1330   }
+1331   static typeArrayOop get_bcis(objArrayHandle chunk) {
+1332     typeArrayOop bcis = typeArrayOop(chunk-&gt;obj_at(trace_bcis_offset));
+1333     assert(bcis != NULL, "bci array should be initialized in backtrace");
+1334     return bcis;
+1335   }
+1336   static objArrayOop get_mirrors(objArrayHandle chunk) {
+1337     objArrayOop mirrors = objArrayOop(chunk-&gt;obj_at(trace_mirrors_offset));
+1338     assert(mirrors != NULL, "mirror array should be initialized in backtrace");
+1339     return mirrors;
+1340   }
+
+
+
+
+
+1341 
+1342   // constructor for new backtrace
+<span class="changed">1343   BacktraceBuilder(TRAPS): _methods(NULL), _bcis(NULL), _head(NULL), _mirrors(NULL) {</span>
+1344     expand(CHECK);
+1345     _backtrace = _head;
+1346     _index = 0;
+1347   }
+1348 
+1349   BacktraceBuilder(objArrayHandle backtrace) {
+1350     _methods = get_methods(backtrace);
+1351     _bcis = get_bcis(backtrace);
+1352     _mirrors = get_mirrors(backtrace);
+
+1353     assert(_methods-&gt;length() == _bcis-&gt;length() &amp;&amp;
+1354            _methods-&gt;length() == _mirrors-&gt;length(),
+1355            "method and source information arrays should match");
+1356 
+1357     // head is the preallocated backtrace
+1358     _backtrace = _head = backtrace();
+1359     _index = 0;
+1360   }
+1361 
+1362   void expand(TRAPS) {
+1363     objArrayHandle old_head(THREAD, _head);
+1364     Pause_No_Safepoint_Verifier pnsv(&amp;_nsv);
+1365 
+1366     objArrayOop head = oopFactory::new_objectArray(trace_size, CHECK);
+1367     objArrayHandle new_head(THREAD, head);
+1368 
+1369     typeArrayOop methods = oopFactory::new_shortArray(trace_chunk_size, CHECK);
+1370     typeArrayHandle new_methods(THREAD, methods);
+1371 
+1372     typeArrayOop bcis = oopFactory::new_intArray(trace_chunk_size, CHECK);
+1373     typeArrayHandle new_bcis(THREAD, bcis);
+1374 
+1375     objArrayOop mirrors = oopFactory::new_objectArray(trace_chunk_size, CHECK);
+1376     objArrayHandle new_mirrors(THREAD, mirrors);
+1377 
+
+
+
+1378     if (!old_head.is_null()) {
+1379       old_head-&gt;obj_at_put(trace_next_offset, new_head());
+1380     }
+1381     new_head-&gt;obj_at_put(trace_methods_offset, new_methods());
+1382     new_head-&gt;obj_at_put(trace_bcis_offset, new_bcis());
+1383     new_head-&gt;obj_at_put(trace_mirrors_offset, new_mirrors());
+
+1384 
+1385     _head    = new_head();
+1386     _methods = new_methods();
+1387     _bcis = new_bcis();
+1388     _mirrors = new_mirrors();
+
+1389     _index = 0;
+1390   }
+1391 
+1392   oop backtrace() {
+1393     return _backtrace();
+1394   }
+1395 
+1396   inline void push(Method* method, int bci, TRAPS) {
+1397     // Smear the -1 bci to 0 since the array only holds unsigned
+1398     // shorts.  The later line number lookup would just smear the -1
+1399     // to a 0 even if it could be recorded.
+1400     if (bci == SynchronizationEntryBCI) bci = 0;
+1401 
+1402     if (_index &gt;= trace_chunk_size) {
+1403       methodHandle mhandle(THREAD, method);
+1404       expand(CHECK);
+1405       method = mhandle();
+1406     }
+1407 
+<span class="changed">1408     _methods-&gt;short_at_put(_index, method-&gt;method_idnum());</span>
+1409     _bcis-&gt;int_at_put(_index, merge_bci_and_version(bci, method-&gt;constants()-&gt;version()));
+
+1410 
+1411     // We need to save the mirrors in the backtrace to keep the class
+1412     // from being unloaded while we still have this stack trace.
+1413     assert(method-&gt;method_holder()-&gt;java_mirror() != NULL, "never push null for mirror");
+1414     _mirrors-&gt;obj_at_put(_index, method-&gt;method_holder()-&gt;java_mirror());
+1415     _index++;
+1416   }
+1417 
+1418 };
+1419 
+1420 // Print stack trace element to resource allocated buffer
+1421 char* java_lang_Throwable::print_stack_element_to_buffer(Handle mirror,
+<span class="changed">1422                                   int method_id, int version, int bci) {</span>
+1423 
+1424   // Get strings and string lengths
+1425   InstanceKlass* holder = InstanceKlass::cast(java_lang_Class::as_Klass(mirror()));
+1426   const char* klass_name  = holder-&gt;external_name();
+1427   int buf_len = (int)strlen(klass_name);
+1428 
+<span class="changed">1429   // The method id may point to an obsolete method, can't get more stack information</span>
+<span class="changed">1430   Method* method = holder-&gt;method_with_idnum(method_id);</span>
+<span class="changed">1431   if (method == NULL) {</span>
+<span class="changed">1432     char* buf = NEW_RESOURCE_ARRAY(char, buf_len + 64);</span>
+<span class="changed">1433     // This is what the java code prints in this case - added Redefined</span>
+<span class="changed">1434     sprintf(buf, "\tat %s.null (Redefined)", klass_name);</span>
+<span class="changed">1435     return buf;</span>
+<span class="changed">1436   }</span>
+1437 
+<span class="changed">1438   char* method_name = method-&gt;name()-&gt;as_C_string();</span>
+
+
+1439   buf_len += (int)strlen(method_name);
+1440 
+
+
+
+
+1441   char* source_file_name = NULL;
+<span class="changed">1442   if (version_matches(method, version)) {</span>
+1443     Symbol* source = holder-&gt;source_file_name();
+1444     if (source != NULL) {
+1445       source_file_name = source-&gt;as_C_string();
+1446       buf_len += (int)strlen(source_file_name);
+1447     }
+1448   }
+1449 
+1450   // Allocate temporary buffer with extra space for formatting and line number
+1451   char* buf = NEW_RESOURCE_ARRAY(char, buf_len + 64);
+1452 
+1453   // Print stack trace line in buffer
+1454   sprintf(buf, "\tat %s.%s", klass_name, method_name);
+1455 
+1456   if (!version_matches(method, version)) {
+1457     strcat(buf, "(Redefined)");
+1458   } else {
+1459     int line_number = get_line_number(method, bci);
+1460     if (line_number == -2) {
+1461       strcat(buf, "(Native Method)");
+1462     } else {
+
+</pre><hr></hr><pre>
+1464         // Sourcename and linenumber
+1465         sprintf(buf + (int)strlen(buf), "(%s:%d)", source_file_name, line_number);
+1466       } else if (source_file_name != NULL) {
+1467         // Just sourcename
+1468         sprintf(buf + (int)strlen(buf), "(%s)", source_file_name);
+1469       } else {
+1470         // Neither sourcename nor linenumber
+1471         sprintf(buf + (int)strlen(buf), "(Unknown Source)");
+1472       }
+1473       nmethod* nm = method-&gt;code();
+1474       if (WizardMode &amp;&amp; nm != NULL) {
+1475         sprintf(buf + (int)strlen(buf), "(nmethod " INTPTR_FORMAT ")", (intptr_t)nm);
+1476       }
+1477     }
+1478   }
+1479 
+1480   return buf;
+1481 }
+1482 
+1483 void java_lang_Throwable::print_stack_element(outputStream *st, Handle mirror,
+<span class="changed">1484                                               int method_id, int version, int bci) {</span>
+1485   ResourceMark rm;
+<span class="changed">1486   char* buf = print_stack_element_to_buffer(mirror, method_id, version, bci);</span>
+1487   st-&gt;print_cr("%s", buf);
+1488 }
+1489 
+1490 void java_lang_Throwable::print_stack_element(outputStream *st, methodHandle method, int bci) {
+1491   Handle mirror = method-&gt;method_holder()-&gt;java_mirror();
+<span class="changed">1492   int method_id = method-&gt;method_idnum();</span>
+1493   int version = method-&gt;constants()-&gt;version();
+<span class="changed">1494   print_stack_element(st, mirror, method_id, version, bci);</span>
+
+1495 }
+1496 
+1497 const char* java_lang_Throwable::no_stack_trace_message() {
+1498   return "\t&lt;&lt;no stack trace available&gt;&gt;";
+1499 }
+1500 
+1501 
+1502 // Currently used only for exceptions occurring during startup
+1503 void java_lang_Throwable::print_stack_trace(oop throwable, outputStream* st) {
+1504   Thread *THREAD = Thread::current();
+1505   Handle h_throwable(THREAD, throwable);
+1506   while (h_throwable.not_null()) {
+1507     objArrayHandle result (THREAD, objArrayOop(backtrace(h_throwable())));
+1508     if (result.is_null()) {
+1509       st-&gt;print_cr("%s", no_stack_trace_message());
+1510       return;
+1511     }
+1512 
+1513     while (result.not_null()) {
+1514 
+1515       // Get method id, bci, version and mirror from chunk
+1516       typeArrayHandle methods (THREAD, BacktraceBuilder::get_methods(result));
+1517       typeArrayHandle bcis (THREAD, BacktraceBuilder::get_bcis(result));
+1518       objArrayHandle mirrors (THREAD, BacktraceBuilder::get_mirrors(result));
+
+1519 
+1520       int length = methods()-&gt;length();
+1521       for (int index = 0; index &lt; length; index++) {
+1522         Handle mirror(THREAD, mirrors-&gt;obj_at(index));
+1523         // NULL mirror means end of stack trace
+1524         if (mirror.is_null()) goto handle_cause;
+1525         int method = methods-&gt;short_at(index);
+1526         int version = version_at(bcis-&gt;int_at(index));
+1527         int bci = bci_at(bcis-&gt;int_at(index));
+<span class="changed">1528         print_stack_element(st, mirror, method, version, bci);</span>
+
+1529       }
+1530       result = objArrayHandle(THREAD, objArrayOop(result-&gt;obj_at(trace_next_offset)));
+1531     }
+1532   handle_cause:
+1533     {
+1534       EXCEPTION_MARK;
+1535       JavaValue cause(T_OBJECT);
+1536       JavaCalls::call_virtual(&amp;cause,
+1537                               h_throwable,
+1538                               KlassHandle(THREAD, h_throwable-&gt;klass()),
+1539                               vmSymbols::getCause_name(),
+1540                               vmSymbols::void_throwable_signature(),
+1541                               THREAD);
+1542       // Ignore any exceptions. we are in the middle of exception handling. Same as classic VM.
+1543       if (HAS_PENDING_EXCEPTION) {
+1544         CLEAR_PENDING_EXCEPTION;
+1545         h_throwable = Handle();
+1546       } else {
+1547         h_throwable = Handle(THREAD, (oop) cause.get_jobject());
+1548         if (h_throwable.not_null()) {
+
+</pre><hr></hr><pre>
+1792 
+1793 
+1794 oop java_lang_Throwable::get_stack_trace_element(oop throwable, int index, TRAPS) {
+1795   if (throwable == NULL) {
+1796     THROW_0(vmSymbols::java_lang_NullPointerException());
+1797   }
+1798   if (index &lt; 0) {
+1799     THROW_(vmSymbols::java_lang_IndexOutOfBoundsException(), NULL);
+1800   }
+1801   // Compute how many chunks to skip and index into actual chunk
+1802   objArrayOop chunk = objArrayOop(backtrace(throwable));
+1803   int skip_chunks = index / trace_chunk_size;
+1804   int chunk_index = index % trace_chunk_size;
+1805   while (chunk != NULL &amp;&amp; skip_chunks &gt; 0) {
+1806     chunk = objArrayOop(chunk-&gt;obj_at(trace_next_offset));
+1807         skip_chunks--;
+1808   }
+1809   if (chunk == NULL) {
+1810     THROW_(vmSymbols::java_lang_IndexOutOfBoundsException(), NULL);
+1811   }
+<span class="changed">1812   // Get method id, bci, version and mirror from chunk</span>
+1813   typeArrayOop methods = BacktraceBuilder::get_methods(chunk);
+1814   typeArrayOop bcis = BacktraceBuilder::get_bcis(chunk);
+1815   objArrayOop mirrors = BacktraceBuilder::get_mirrors(chunk);
+
+1816 
+1817   assert(methods != NULL &amp;&amp; bcis != NULL &amp;&amp; mirrors != NULL, "sanity check");
+1818 
+1819   int method = methods-&gt;short_at(chunk_index);
+1820   int version = version_at(bcis-&gt;int_at(chunk_index));
+1821   int bci = bci_at(bcis-&gt;int_at(chunk_index));
+
+1822   Handle mirror(THREAD, mirrors-&gt;obj_at(chunk_index));
+1823 
+1824   // Chunk can be partial full
+1825   if (mirror.is_null()) {
+1826     THROW_(vmSymbols::java_lang_IndexOutOfBoundsException(), NULL);
+1827   }
+<span class="changed">1828 </span>
+<span class="changed">1829   oop element = java_lang_StackTraceElement::create(mirror, method, version, bci, CHECK_0);</span>
+1830   return element;
+1831 }
+1832 
+1833 oop java_lang_StackTraceElement::create(Handle mirror, int method_id,
+<span class="changed">1834                                         int version, int bci, TRAPS) {</span>
+1835   // Allocate java.lang.StackTraceElement instance
+1836   Klass* k = SystemDictionary::StackTraceElement_klass();
+1837   assert(k != NULL, "must be loaded in 1.4+");
+1838   instanceKlassHandle ik (THREAD, k);
+1839   if (ik-&gt;should_be_initialized()) {
+1840     ik-&gt;initialize(CHECK_0);
+1841   }
+1842 
+1843   Handle element = ik-&gt;allocate_instance_handle(CHECK_0);
+1844   // Fill in class name
+1845   ResourceMark rm(THREAD);
+1846   InstanceKlass* holder = InstanceKlass::cast(java_lang_Class::as_Klass(mirror()));
+1847   const char* str = holder-&gt;external_name();
+1848   oop classname = StringTable::intern((char*) str, CHECK_0);
+1849   java_lang_StackTraceElement::set_declaringClass(element(), classname);
+1850 
+<span class="changed">1851   Method* method = holder-&gt;method_with_idnum(method_id);</span>
+<span class="changed">1852   // Method on stack may be obsolete because it was redefined so cannot be</span>
+<span class="changed">1853   // found by idnum.</span>
+<span class="changed">1854   if (method == NULL) {</span>
+<span class="changed">1855     // leave name and fileName null</span>
+<span class="changed">1856     java_lang_StackTraceElement::set_lineNumber(element(), -1);</span>
+<span class="changed">1857     return element();</span>
+<span class="changed">1858   }</span>
+1859 
+1860   // Fill in method name
+<span class="changed">1861   oop methodname = StringTable::intern(method-&gt;name(), CHECK_0);</span>
+1862   java_lang_StackTraceElement::set_methodName(element(), methodname);
+1863 
+1864   if (!version_matches(method, version)) {
+1865     // The method was redefined, accurate line number information isn't available
+1866     java_lang_StackTraceElement::set_fileName(element(), NULL);
+1867     java_lang_StackTraceElement::set_lineNumber(element(), -1);
+1868   } else {
+1869     // Fill in source file name and line number.
+
+
+
+
+
+1870     Symbol* source = holder-&gt;source_file_name();
+1871     if (ShowHiddenFrames &amp;&amp; source == NULL)
+1872       source = vmSymbols::unknown_class_name();
+1873     oop filename = StringTable::intern(source, CHECK_0);
+1874     java_lang_StackTraceElement::set_fileName(element(), filename);
+1875 
+1876     int line_number = get_line_number(method, bci);
+1877     java_lang_StackTraceElement::set_lineNumber(element(), line_number);
+1878   }
+1879   return element();
+1880 }
+1881 
+1882 oop java_lang_StackTraceElement::create(methodHandle method, int bci, TRAPS) {
+1883   Handle mirror (THREAD, method-&gt;method_holder()-&gt;java_mirror());
+<span class="changed">1884   int method_id = method-&gt;method_idnum();</span>
+<span class="changed">1885   return create(mirror, method_id, method-&gt;constants()-&gt;version(), bci, THREAD);</span>
+
+1886 }
+1887 
+1888 void java_lang_reflect_AccessibleObject::compute_offsets() {
+1889   Klass* k = SystemDictionary::reflect_AccessibleObject_klass();
+1890   compute_offset(override_offset, k, vmSymbols::override_name(), vmSymbols::bool_signature());
+1891 }
+1892 
+1893 jboolean java_lang_reflect_AccessibleObject::override(oop reflect) {
+1894   assert(Universe::is_fully_initialized(), "Need to find another solution to the reflection problem");
+1895   return (jboolean) reflect-&gt;bool_field(override_offset);
+1896 }
+1897 
+1898 void java_lang_reflect_AccessibleObject::set_override(oop reflect, jboolean value) {
+1899   assert(Universe::is_fully_initialized(), "Need to find another solution to the reflection problem");
+1900   reflect-&gt;bool_field_put(override_offset, (int) value);
+1901 }
+1902 
+1903 void java_lang_reflect_Method::compute_offsets() {
+1904   Klass* k = SystemDictionary::reflect_Method_klass();
+1905   compute_offset(clazz_offset,          k, vmSymbols::clazz_name(),          vmSymbols::class_signature());
+
+</pre><hr></hr><pre>
+2764 int java_lang_invoke_MemberName::flags(oop mname) {
+2765   assert(is_instance(mname), "wrong type");
+2766   return mname-&gt;int_field(_flags_offset);
+2767 }
+2768 
+2769 void java_lang_invoke_MemberName::set_flags(oop mname, int flags) {
+2770   assert(is_instance(mname), "wrong type");
+2771   mname-&gt;int_field_put(_flags_offset, flags);
+2772 }
+2773 
+2774 Metadata* java_lang_invoke_MemberName::vmtarget(oop mname) {
+2775   assert(is_instance(mname), "wrong type");
+2776   return (Metadata*)mname-&gt;address_field(_vmtarget_offset);
+2777 }
+2778 
+2779 bool java_lang_invoke_MemberName::is_method(oop mname) {
+2780   assert(is_instance(mname), "must be MemberName");
+2781   return (flags(mname) &amp; (MN_IS_METHOD | MN_IS_CONSTRUCTOR)) &gt; 0;
+2782 }
+2783 
+<span class="new">2784 #if INCLUDE_JVMTI</span>
+<span class="new">2785 // Can be executed on VM thread only</span>
+<span class="new">2786 void java_lang_invoke_MemberName::adjust_vmtarget(oop mname, Method* old_method,</span>
+<span class="new">2787                                                   Method* new_method, bool* trace_name_printed) {</span>
+<span class="new">2788   assert(is_method(mname), "wrong type");</span>
+<span class="new">2789   assert(Thread::current()-&gt;is_VM_thread(), "not VM thread");</span>
+<span class="new">2790 </span>
+<span class="new">2791   Method* target = (Method*)mname-&gt;address_field(_vmtarget_offset);</span>
+<span class="new">2792   if (target == old_method) {</span>
+<span class="new">2793     mname-&gt;address_field_put(_vmtarget_offset, (address)new_method);</span>
+<span class="new">2794 </span>
+<span class="new">2795     if (RC_TRACE_IN_RANGE(0x00100000, 0x00400000)) {</span>
+<span class="new">2796       if (!(*trace_name_printed)) {</span>
+<span class="new">2797         // RC_TRACE_MESG macro has an embedded ResourceMark</span>
+<span class="new">2798         RC_TRACE_MESG(("adjust: name=%s",</span>
+<span class="new">2799                        old_method-&gt;method_holder()-&gt;external_name()));</span>
+<span class="new">2800         *trace_name_printed = true;</span>
+<span class="new">2801       }</span>
+<span class="new">2802       // RC_TRACE macro has an embedded ResourceMark</span>
+<span class="new">2803       RC_TRACE(0x00400000, ("MemberName method update: %s(%s)",</span>
+<span class="new">2804                             new_method-&gt;name()-&gt;as_C_string(),</span>
+<span class="new">2805                             new_method-&gt;signature()-&gt;as_C_string()));</span>
+<span class="new">2806     }</span>
+<span class="new">2807   }</span>
+<span class="new">2808 }</span>
+<span class="new">2809 #endif // INCLUDE_JVMTI</span>
+<span class="new">2810 </span>
+2811 void java_lang_invoke_MemberName::set_vmtarget(oop mname, Metadata* ref) {
+2812   assert(is_instance(mname), "wrong type");
+2813   // check the type of the vmtarget
+2814   oop dependency = NULL;
+2815   if (ref != NULL) {
+2816     switch (flags(mname) &amp; (MN_IS_METHOD |
+2817                             MN_IS_CONSTRUCTOR |
+2818                             MN_IS_FIELD)) {
+2819     case MN_IS_METHOD:
+2820     case MN_IS_CONSTRUCTOR:
+2821       assert(ref-&gt;is_method(), "should be a method");
+2822       dependency = ((Method*)ref)-&gt;method_holder()-&gt;java_mirror();
+2823       break;
+2824     case MN_IS_FIELD:
+2825       assert(ref-&gt;is_klass(), "should be a class");
+2826       dependency = ((Klass*)ref)-&gt;java_mirror();
+2827       break;
+2828     default:
+2829       ShouldNotReachHere();
+2830     }
+
+</pre><hr></hr><pre>
+3241   o-&gt;obj_field_put(packageEnabled_offset, val);
+3242 }
+3243 
+3244 void java_lang_AssertionStatusDirectives::set_deflt(oop o, bool val) {
+3245   o-&gt;bool_field_put(deflt_offset, val);
+3246 }
+3247 
+3248 
+3249 // Support for intrinsification of java.nio.Buffer.checkIndex
+3250 int java_nio_Buffer::limit_offset() {
+3251   return _limit_offset;
+3252 }
+3253 
+3254 
+3255 void java_nio_Buffer::compute_offsets() {
+3256   Klass* k = SystemDictionary::nio_Buffer_klass();
+3257   assert(k != NULL, "must be loaded in 1.4+");
+3258   compute_offset(_limit_offset, k, vmSymbols::limit_name(), vmSymbols::int_signature());
+3259 }
+3260 
+<span class="new">3261 int org_ObjectLayout_AbstractStructuredArray::_bodySize_offset = 0;</span>
+<span class="new">3262 int org_ObjectLayout_AbstractStructuredArray::_length_offset = 0;</span>
+<span class="new">3263 int org_ObjectLayout_AbstractStructuredArray::_elementSize_offset = 0;</span>
+<span class="new">3264 int org_ObjectLayout_AbstractStructuredArray::_paddingSize_offset = 0;</span>
+<span class="new">3265 int org_ObjectLayout_AbstractStructuredArray::_elementClass_offset = 0;</span>
+<span class="new">3266 </span>
+<span class="new">3267 void org_ObjectLayout_AbstractStructuredArray::compute_offsets() {</span>
+<span class="new">3268   Klass* k = SystemDictionary::AbstractStructuredArray_klass();</span>
+<span class="new">3269   if (k != NULL) {</span>
+<span class="new">3270     compute_offset(_bodySize_offset, k,</span>
+<span class="new">3271         vmSymbols::bodySize_name(), vmSymbols::int_signature());</span>
+<span class="new">3272     compute_offset(_length_offset, k,</span>
+<span class="new">3273         vmSymbols::length_name(), vmSymbols::long_signature());</span>
+<span class="new">3274     compute_offset(_elementSize_offset, k,</span>
+<span class="new">3275         vmSymbols::elementSize_name(), vmSymbols::long_signature());</span>
+<span class="new">3276     compute_offset(_paddingSize_offset, k,</span>
+<span class="new">3277         vmSymbols::paddingSize_name(), vmSymbols::long_signature());</span>
+<span class="new">3278     compute_offset(_elementClass_offset, k,</span>
+<span class="new">3279         vmSymbols::elementClass_name(), vmSymbols::class_signature());</span>
+<span class="new">3280 </span>
+<span class="new">3281     if (TraceObjectLayoutIntrinsics) {</span>
+<span class="new">3282       tty-&gt;print_cr(</span>
+<span class="new">3283           "org_ObjectLayout_AbstractStructuredArray::compute_offsets: "</span>
+<span class="new">3284           "_bodySize_offset=%d, _length_offset=%d, _elementSize_offset=%d, "</span>
+<span class="new">3285           "_paddingSize_offset=%d, _elementClass_offset=%d",</span>
+<span class="new">3286           _bodySize_offset, _length_offset, _elementSize_offset,</span>
+<span class="new">3287           _paddingSize_offset, _elementClass_offset);</span>
+<span class="new">3288     }</span>
+<span class="new">3289   }</span>
+<span class="new">3290 }</span>
+<span class="new">3291 </span>
+3292 void java_util_concurrent_locks_AbstractOwnableSynchronizer::initialize(TRAPS) {
+3293   if (_owner_offset != 0) return;
+3294 
+3295   assert(JDK_Version::is_gte_jdk16x_version(), "Must be JDK 1.6 or later");
+3296   SystemDictionary::load_abstract_ownable_synchronizer_klass(CHECK);
+3297   Klass* k = SystemDictionary::abstract_ownable_synchronizer_klass();
+3298   compute_offset(_owner_offset, k,
+3299                  vmSymbols::exclusive_owner_thread_name(), vmSymbols::thread_signature());
+3300 }
+3301 
+3302 oop java_util_concurrent_locks_AbstractOwnableSynchronizer::get_owner_threadObj(oop obj) {
+3303   assert(_owner_offset != 0, "Must be initialized");
+3304   return obj-&gt;obj_field(_owner_offset);
+3305 }
+3306 
+3307 // Compute hard-coded offsets
+3308 // Invoked before SystemDictionary::initialize, so pre-loaded classes
+3309 // are not available to determine the offset_of_static_fields.
+3310 void JavaClasses::compute_hard_coded_offsets() {
+3311   const int x = heapOopSize;
+
+</pre><hr></hr><pre>
+3376     java_lang_invoke_CallSite::compute_offsets();
+3377   }
+3378   java_security_AccessControlContext::compute_offsets();
+3379   // Initialize reflection classes. The layouts of these classes
+3380   // changed with the new reflection implementation in JDK 1.4, and
+3381   // since the Universe doesn't know what JDK version it is until this
+3382   // point we defer computation of these offsets until now.
+3383   java_lang_reflect_AccessibleObject::compute_offsets();
+3384   java_lang_reflect_Method::compute_offsets();
+3385   java_lang_reflect_Constructor::compute_offsets();
+3386   java_lang_reflect_Field::compute_offsets();
+3387   if (JDK_Version::is_gte_jdk14x_version()) {
+3388     java_nio_Buffer::compute_offsets();
+3389   }
+3390   if (JDK_Version::is_gte_jdk15x_version()) {
+3391     sun_reflect_ConstantPool::compute_offsets();
+3392     sun_reflect_UnsafeStaticFieldAccessorImpl::compute_offsets();
+3393   }
+3394   if (JDK_Version::is_jdk18x_version())
+3395     java_lang_reflect_Parameter::compute_offsets();
+<span class="new">3396   if (JDK_Version::is_gte_jdk18x_version()) {</span>
+<span class="new">3397     org_ObjectLayout_AbstractStructuredArray::compute_offsets();</span>
+<span class="new">3398   }</span>
+3399 
+3400   // generated interpreter code wants to know about the offsets we just computed:
+3401   AbstractAssembler::update_delayed_values();
+3402 }
+3403 
+3404 #ifndef PRODUCT
+3405 
+3406 // These functions exist to assert the validity of hard-coded field offsets to guard
+3407 // against changes in the class files
+3408 
+3409 bool JavaClasses::check_offset(const char *klass_name, int hardcoded_offset, const char *field_name, const char* field_sig) {
+3410   EXCEPTION_MARK;
+3411   fieldDescriptor fd;
+3412   TempNewSymbol klass_sym = SymbolTable::new_symbol(klass_name, CATCH);
+3413   Klass* k = SystemDictionary::resolve_or_fail(klass_sym, true, CATCH);
+3414   instanceKlassHandle h_klass (THREAD, k);
+3415   TempNewSymbol f_name = SymbolTable::new_symbol(field_name, CATCH);
+3416   TempNewSymbol f_sig  = SymbolTable::new_symbol(field_sig, CATCH);
+3417   if (!h_klass-&gt;find_local_field(f_name, f_sig, &amp;fd)) {
+3418     tty-&gt;print_cr("Nonstatic field %s.%s not found", klass_name, field_name);
+
+</pre><hr></hr><pre>
+3598 int InjectedField::compute_offset() {
+3599   Klass* klass_oop = klass();
+3600   for (AllFieldStream fs(InstanceKlass::cast(klass_oop)); !fs.done(); fs.next()) {
+3601     if (!may_be_java &amp;&amp; !fs.access_flags().is_internal()) {
+3602       // Only look at injected fields
+3603       continue;
+3604     }
+3605     if (fs.name() == name() &amp;&amp; fs.signature() == signature()) {
+3606       return fs.offset();
+3607     }
+3608   }
+3609   ResourceMark rm;
+3610   tty-&gt;print_cr("Invalid layout of %s at %s/%s%s", InstanceKlass::cast(klass_oop)-&gt;external_name(), name()-&gt;as_C_string(), signature()-&gt;as_C_string(), may_be_java ? " (may_be_java)" : "");
+3611 #ifndef PRODUCT
+3612   klass_oop-&gt;print();
+3613   tty-&gt;print_cr("all fields:");
+3614   for (AllFieldStream fs(InstanceKlass::cast(klass_oop)); !fs.done(); fs.next()) {
+3615     tty-&gt;print_cr("  name: %s, sig: %s, flags: %08x", fs.name()-&gt;as_C_string(), fs.signature()-&gt;as_C_string(), fs.access_flags().as_int());
+3616   }
+3617 #endif //PRODUCT
+<span class="changed">3618   fatal("Invalid layout of preloaded class");</span>
+3619   return -1;
+3620 }
+3621 
+3622 void javaClasses_init() {
+3623   JavaClasses::compute_offsets();
+3624   JavaClasses::check_offsets();
+3625   FilteredFieldsMap::initialize();  // must be done after computing offsets.
+3626 }
+</pre></td>
+</tr></table>
+</body></html>

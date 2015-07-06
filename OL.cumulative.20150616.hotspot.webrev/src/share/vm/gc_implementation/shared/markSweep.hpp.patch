@@ -1,0 +1,11 @@
+--- old/src/share/vm/gc_implementation/shared/markSweep.hpp	2015-06-16 10:25:43.894447683 -0700
++++ new/src/share/vm/gc_implementation/shared/markSweep.hpp	2015-06-16 10:25:43.826449311 -0700
+@@ -187,7 +187,7 @@
+   }
+ 
+   void restore() {
+-    _obj->set_mark(_mark);
++    _obj->restore_mark(_mark);
+   }
+ };
+ 

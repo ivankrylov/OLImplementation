@@ -1,0 +1,291 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/gc_implementation/shared </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/shared/markSweep.inline.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+  25 #ifndef SHARE_VM_GC_IMPLEMENTATION_SHARED_MARKSWEEP_INLINE_HPP
+  26 #define SHARE_VM_GC_IMPLEMENTATION_SHARED_MARKSWEEP_INLINE_HPP
+  27 
+  28 #include "gc_implementation/shared/markSweep.hpp"
+  29 #include "gc_interface/collectedHeap.hpp"
+  30 #include "utilities/stack.inline.hpp"
+  31 #include "utilities/macros.hpp"
+  32 #if INCLUDE_ALL_GCS
+  33 #include "gc_implementation/g1/g1StringDedup.hpp"
+  34 #include "gc_implementation/parallelScavenge/psParallelCompact.hpp"
+  35 #endif // INCLUDE_ALL_GCS
+  36 
+  37 inline void MarkSweep::mark_object(oop obj) {
+  38 #if INCLUDE_ALL_GCS
+  39   if (G1StringDedup::is_enabled()) {
+  40     // We must enqueue the object before it is marked
+  41     // as we otherwise can't read the object's age.
+  42     G1StringDedup::enqueue_from_mark(obj);
+  43   }
+  44 #endif
+<span class="removed">  45   // some marks may contain information we need to preserve so we store them away</span>
+<span class="removed">  46   // and overwrite the mark.  We'll restore it at the end of markSweep.</span>
+<span class="removed">  47   markOop mark = obj-&gt;mark();</span>
+<span class="removed">  48   obj-&gt;set_mark(markOopDesc::prototype()-&gt;set_marked());</span>
+  49 
+
+
+
+
+  50   if (mark-&gt;must_be_preserved(obj)) {
+  51     preserve_mark(obj, mark);
+  52   }
+  53 }
+  54 
+  55 inline void MarkSweep::follow_klass(Klass* klass) {
+  56   oop op = klass-&gt;klass_holder();
+  57   MarkSweep::mark_and_push(&amp;op);
+  58 }
+  59 
+  60 template &lt;class T&gt; inline void MarkSweep::follow_root(T* p) {
+  61   assert(!Universe::heap()-&gt;is_in_reserved(p),
+  62          "roots shouldn't be things within the heap");
+  63   T heap_oop = oopDesc::load_heap_oop(p);
+  64   if (!oopDesc::is_null(heap_oop)) {
+  65     oop obj = oopDesc::decode_heap_oop_not_null(heap_oop);
+  66     if (!obj-&gt;mark()-&gt;is_marked()) {
+  67       mark_object(obj);
+  68       obj-&gt;follow_contents();
+  69     }
+  70   }
+  71   follow_stack();
+  72 }
+  73 
+  74 template &lt;class T&gt; inline void MarkSweep::mark_and_push(T* p) {
+<span class="removed">  75 //  assert(Universe::heap()-&gt;is_in_reserved(p), "should be in object space");</span>
+  76   T heap_oop = oopDesc::load_heap_oop(p);
+  77   if (!oopDesc::is_null(heap_oop)) {
+  78     oop obj = oopDesc::decode_heap_oop_not_null(heap_oop);
+<span class="changed">  79     if (!obj-&gt;mark()-&gt;is_marked()) {</span>
+
+
+
+  80       mark_object(obj);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  81       _marking_stack.push(obj);
+  82     }
+  83   }
+  84 }
+  85 
+  86 void MarkSweep::push_objarray(oop obj, size_t index) {
+  87   ObjArrayTask task(obj, index);
+  88   assert(task.is_valid(), "bad ObjArrayTask");
+  89   _objarray_stack.push(task);
+  90 }
+  91 
+  92 template &lt;class T&gt; inline void MarkSweep::adjust_pointer(T* p) {
+  93   T heap_oop = oopDesc::load_heap_oop(p);
+  94   if (!oopDesc::is_null(heap_oop)) {
+  95     oop obj     = oopDesc::decode_heap_oop_not_null(heap_oop);
+  96     oop new_obj = oop(obj-&gt;mark()-&gt;decode_pointer());
+  97     assert(new_obj != NULL ||                         // is forwarding ptr?
+  98            obj-&gt;mark() == markOopDesc::prototype() || // not gc marked?
+  99            (UseBiasedLocking &amp;&amp; obj-&gt;mark()-&gt;has_bias_pattern()),
+ 100                                                       // not gc marked?
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+  25 #ifndef SHARE_VM_GC_IMPLEMENTATION_SHARED_MARKSWEEP_INLINE_HPP
+  26 #define SHARE_VM_GC_IMPLEMENTATION_SHARED_MARKSWEEP_INLINE_HPP
+  27 
+  28 #include "gc_implementation/shared/markSweep.hpp"
+  29 #include "gc_interface/collectedHeap.hpp"
+  30 #include "utilities/stack.inline.hpp"
+  31 #include "utilities/macros.hpp"
+  32 #if INCLUDE_ALL_GCS
+  33 #include "gc_implementation/g1/g1StringDedup.hpp"
+  34 #include "gc_implementation/parallelScavenge/psParallelCompact.hpp"
+  35 #endif // INCLUDE_ALL_GCS
+  36 
+  37 inline void MarkSweep::mark_object(oop obj) {
+  38 #if INCLUDE_ALL_GCS
+  39   if (G1StringDedup::is_enabled()) {
+  40     // We must enqueue the object before it is marked
+  41     // as we otherwise can't read the object's age.
+  42     G1StringDedup::enqueue_from_mark(obj);
+  43   }
+  44 #endif
+
+
+
+
+  45 
+<span class="new">  46   // Some marks may contain information we need to preserve, so we store them</span>
+<span class="new">  47   // away and overwrite the mark. We'll restore it at the end of Mark-Sweep.</span>
+<span class="new">  48   markOop mark = obj-&gt;mark();</span>
+<span class="new">  49   obj-&gt;convert_to_marked();</span>
+  50   if (mark-&gt;must_be_preserved(obj)) {
+  51     preserve_mark(obj, mark);
+  52   }
+  53 }
+  54 
+  55 inline void MarkSweep::follow_klass(Klass* klass) {
+  56   oop op = klass-&gt;klass_holder();
+  57   MarkSweep::mark_and_push(&amp;op);
+  58 }
+  59 
+  60 template &lt;class T&gt; inline void MarkSweep::follow_root(T* p) {
+  61   assert(!Universe::heap()-&gt;is_in_reserved(p),
+  62          "roots shouldn't be things within the heap");
+  63   T heap_oop = oopDesc::load_heap_oop(p);
+  64   if (!oopDesc::is_null(heap_oop)) {
+  65     oop obj = oopDesc::decode_heap_oop_not_null(heap_oop);
+  66     if (!obj-&gt;mark()-&gt;is_marked()) {
+  67       mark_object(obj);
+  68       obj-&gt;follow_contents();
+  69     }
+  70   }
+  71   follow_stack();
+  72 }
+  73 
+  74 template &lt;class T&gt; inline void MarkSweep::mark_and_push(T* p) {
+
+  75   T heap_oop = oopDesc::load_heap_oop(p);
+  76   if (!oopDesc::is_null(heap_oop)) {
+  77     oop obj = oopDesc::decode_heap_oop_not_null(heap_oop);
+<span class="changed">  78     markOop mark = obj-&gt;mark();</span>
+<span class="changed">  79     if (!mark-&gt;is_marked()) {</span>
+<span class="changed">  80       debug_only(bool is_contained = obj-&gt;is_contained());</span>
+<span class="changed">  81       debug_only(bool is_container = obj-&gt;is_container());</span>
+  82       mark_object(obj);
+<span class="new">  83       assert(is_contained == obj-&gt;is_contained(),</span>
+<span class="new">  84           "contained property not preserved");</span>
+<span class="new">  85       assert(is_container == obj-&gt;is_container(),</span>
+<span class="new">  86           "container property not preserved");</span>
+<span class="new">  87       if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 2)</span>
+<span class="new">  88       {</span>
+<span class="new">  89         ResourceMark rm;</span>
+<span class="new">  90         tty-&gt;print_cr(</span>
+<span class="new">  91             "MarkSweep::mark_and_push: "</span>
+<span class="new">  92             "type=%s, addr=0x%p, %scontained, %scontainer, mark=0x%p=&gt;0x%p",</span>
+<span class="new">  93             obj-&gt;klass()-&gt;signature_name(), (void*) obj,</span>
+<span class="new">  94             obj-&gt;is_contained() ? "" : "not ",</span>
+<span class="new">  95             obj-&gt;is_container() ? "" : "not ",</span>
+<span class="new">  96             (void*) mark, (void*) (obj-&gt;mark()));</span>
+<span class="new">  97       }</span>
+  98       _marking_stack.push(obj);
+  99     }
+ 100   }
+ 101 }
+ 102 
+ 103 void MarkSweep::push_objarray(oop obj, size_t index) {
+ 104   ObjArrayTask task(obj, index);
+ 105   assert(task.is_valid(), "bad ObjArrayTask");
+ 106   _objarray_stack.push(task);
+ 107 }
+ 108 
+ 109 template &lt;class T&gt; inline void MarkSweep::adjust_pointer(T* p) {
+ 110   T heap_oop = oopDesc::load_heap_oop(p);
+ 111   if (!oopDesc::is_null(heap_oop)) {
+ 112     oop obj     = oopDesc::decode_heap_oop_not_null(heap_oop);
+ 113     oop new_obj = oop(obj-&gt;mark()-&gt;decode_pointer());
+ 114     assert(new_obj != NULL ||                         // is forwarding ptr?
+ 115            obj-&gt;mark() == markOopDesc::prototype() || // not gc marked?
+ 116            (UseBiasedLocking &amp;&amp; obj-&gt;mark()-&gt;has_bias_pattern()),
+ 117                                                       // not gc marked?
+</pre></td>
+</tr></table>
+</body></html>

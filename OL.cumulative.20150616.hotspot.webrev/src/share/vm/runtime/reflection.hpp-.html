@@ -1,0 +1,231 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>Old src/share/vm/runtime/reflection.hpp</title>
+<body id="SUNWwebrev">
+<pre>
+   1 /*
+   2  * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #ifndef SHARE_VM_RUNTIME_REFLECTION_HPP
+  26 #define SHARE_VM_RUNTIME_REFLECTION_HPP
+  27 
+  28 #include "oops/oop.hpp"
+  29 #include "runtime/fieldDescriptor.hpp"
+  30 #include "utilities/accessFlags.hpp"
+  31 #include "utilities/growableArray.hpp"
+  32 
+  33 // Class Reflection contains utility methods needed for implementing the
+  34 // reflection api.
+  35 //
+  36 // Used by functions in the JVM interface.
+  37 //
+  38 // NOTE that in JDK 1.4 most of reflection is now implemented in Java
+  39 // using dynamic bytecode generation. The Array class has not yet been
+  40 // rewritten using bytecodes; if it were, most of the rest of this
+  41 // class could go away, as well as a few more entry points in jvm.cpp.
+  42 
+  43 class FieldStream;
+  44 
+  45 class Reflection: public AllStatic {
+  46  private:
+  47   // Access checking
+  48   static bool reflect_check_access(Klass* field_class, AccessFlags acc, Klass* target_class, bool is_method_invoke, TRAPS);
+  49 
+  50   // Conversion
+  51   static Klass* basic_type_mirror_to_arrayklass(oop basic_type_mirror, TRAPS);
+  52   static oop      basic_type_arrayklass_to_mirror(Klass* basic_type_arrayklass, TRAPS);
+  53 
+  54   static objArrayHandle get_parameter_types(methodHandle method, int parameter_count, oop* return_type, TRAPS);
+  55   static objArrayHandle get_exception_types(methodHandle method, TRAPS);
+  56   // Creating new java.lang.reflect.xxx wrappers
+  57   static Handle new_type(Symbol* signature, KlassHandle k, TRAPS);
+  58 
+  59  public:
+  60   // Constants defined by java reflection api classes
+  61   enum SomeConstants {
+  62     PUBLIC            = 0,
+  63     DECLARED          = 1,
+  64     MEMBER_PUBLIC     = 0,
+  65     MEMBER_DECLARED   = 1,
+  66     MAX_DIM           = 255
+  67   };
+  68 
+  69   // Boxing. Returns boxed value of appropriate type. Throws IllegalArgumentException.
+  70   static oop box(jvalue* v, BasicType type, TRAPS);
+  71   // Unboxing. Returns type code and sets value.
+  72   static BasicType unbox_for_primitive(oop boxed_value, jvalue* value, TRAPS);
+  73   static BasicType unbox_for_regular_object(oop boxed_value, jvalue* value);
+  74 
+  75   // Widening of basic types. Throws IllegalArgumentException.
+  76   static void widen(jvalue* value, BasicType current_type, BasicType wide_type, TRAPS);
+  77 
+  78   // Reflective array access. Returns type code. Throws ArrayIndexOutOfBoundsException.
+  79   static BasicType array_get(jvalue* value, arrayOop a, int index, TRAPS);
+  80   static void      array_set(jvalue* value, arrayOop a, int index, BasicType value_type, TRAPS);
+  81   // Returns mirror on array element type (NULL for basic type arrays and non-arrays).
+  82   static oop       array_component_type(oop mirror, TRAPS);
+  83 
+  84   // Object creation
+  85   static arrayOop reflect_new_array(oop element_mirror, jint length, TRAPS);
+  86   static arrayOop reflect_new_multi_array(oop element_mirror, typeArrayOop dimensions, TRAPS);
+  87 
+  88   // Verification
+  89   static bool     verify_class_access(Klass* current_class, Klass* new_class, bool classloader_only);
+  90 
+  91   static bool     verify_field_access(Klass* current_class,
+  92                                       Klass* resolved_class,
+  93                                       Klass* field_class,
+  94                                       AccessFlags access,
+  95                                       bool classloader_only,
+  96                                       bool protected_restriction = false);
+  97   static bool     is_same_class_package(Klass* class1, Klass* class2);
+  98   static bool     is_same_package_member(Klass* class1, Klass* class2, TRAPS);
+  99 
+ 100   static bool can_relax_access_check_for(
+ 101     Klass* accessor, Klass* accesee, bool classloader_only);
+ 102 
+ 103   // inner class reflection
+ 104   // raise an ICCE unless the required relationship can be proven to hold
+ 105   // If inner_is_member, require the inner to be a member of the outer.
+ 106   // If !inner_is_member, require the inner to be anonymous (a non-member).
+ 107   // Caller is responsible for figuring out in advance which case must be true.
+ 108   static void check_for_inner_class(instanceKlassHandle outer, instanceKlassHandle inner,
+ 109                                     bool inner_is_member, TRAPS);
+ 110 
+ 111   //
+ 112   // Support for reflection based on dynamic bytecode generation (JDK 1.4)
+ 113   //
+ 114 
+ 115   // Create a java.lang.reflect.Method object based on a method
+ 116   static oop new_method(methodHandle method, bool intern_name, bool for_constant_pool_access, TRAPS);
+ 117   // Create a java.lang.reflect.Constructor object based on a method
+ 118   static oop new_constructor(methodHandle method, TRAPS);
+ 119   // Create a java.lang.reflect.Field object based on a field descriptor
+ 120   static oop new_field(fieldDescriptor* fd, bool intern_name, TRAPS);
+ 121   // Create a java.lang.reflect.Parameter object based on a
+ 122   // MethodParameterElement
+ 123   static oop new_parameter(Handle method, int index, Symbol* sym,
+ 124                            int flags, TRAPS);
+ 125 
+ 126 private:
+ 127   // method resolution for invoke
+ 128   static methodHandle resolve_interface_call(instanceKlassHandle klass, methodHandle method, KlassHandle recv_klass, Handle receiver, TRAPS);
+ 129   // Method call (shared by invoke_method and invoke_constructor)
+ 130   static oop  invoke(instanceKlassHandle klass, methodHandle method, Handle receiver, bool override, objArrayHandle ptypes, BasicType rtype, objArrayHandle args, bool is_method_invoke, TRAPS);
+ 131 
+ 132   // Narrowing of basic types. Used to create correct jvalues for
+ 133   // boolean, byte, char and short return return values from interpreter
+ 134   // which are returned as ints. Throws IllegalArgumentException.
+ 135   static void narrow(jvalue* value, BasicType narrow_type, TRAPS);
+ 136 
+ 137   // Conversion
+ 138   static BasicType basic_type_mirror_to_basic_type(oop basic_type_mirror, TRAPS);
+ 139 
+ 140 public:
+ 141   // Method invokation through java.lang.reflect.Method
+ 142   static oop      invoke_method(oop method_mirror, Handle receiver, objArrayHandle args, TRAPS);
+ 143   // Method invokation through java.lang.reflect.Constructor
+ 144   static oop      invoke_constructor(oop method_mirror, objArrayHandle args, TRAPS);
+ 145 
+ 146 };
+ 147 
+ 148 #endif // SHARE_VM_RUNTIME_REFLECTION_HPP
+</pre></body></html>

@@ -1,0 +1,965 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/runtime </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/runtime/arguments.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+1237 
+1238   // If we are using CMS, we prefer to UseParNewGC,
+1239   // unless explicitly forbidden.
+1240   if (FLAG_IS_DEFAULT(UseParNewGC)) {
+1241     FLAG_SET_ERGO(bool, UseParNewGC, true);
+1242   }
+1243 
+1244   // Turn off AdaptiveSizePolicy by default for cms until it is complete.
+1245   disable_adaptive_size_policy("UseConcMarkSweepGC");
+1246 
+1247   // In either case, adjust ParallelGCThreads and/or UseParNewGC
+1248   // as needed.
+1249   if (UseParNewGC) {
+1250     set_parnew_gc_flags();
+1251   }
+1252 
+1253   size_t max_heap = align_size_down(MaxHeapSize,
+1254                                     CardTableRS::ct_max_alignment_constraint());
+1255 
+1256   // Now make adjustments for CMS
+<span class="changed">1257   intx   tenuring_default = (intx)6;</span>
+1258   size_t young_gen_per_worker = CMSYoungGenPerWorker;
+1259 
+1260   // Preferred young gen size for "short" pauses:
+1261   // upper bound depends on # of threads and NewRatio.
+1262   const uintx parallel_gc_threads =
+1263     (ParallelGCThreads == 0 ? 1 : ParallelGCThreads);
+1264   const size_t preferred_max_new_size_unaligned =
+1265     MIN2(max_heap/(NewRatio+1), ScaleForWordSize(young_gen_per_worker * parallel_gc_threads));
+1266   size_t preferred_max_new_size =
+1267     align_size_up(preferred_max_new_size_unaligned, os::vm_page_size());
+1268 
+1269   // Unless explicitly requested otherwise, size young gen
+1270   // for "short" pauses ~ CMSYoungGenPerWorker*ParallelGCThreads
+1271 
+1272   // If either MaxNewSize or NewRatio is set on the command line,
+1273   // assume the user is trying to set the size of the young gen.
+1274   if (FLAG_IS_DEFAULT(MaxNewSize) &amp;&amp; FLAG_IS_DEFAULT(NewRatio)) {
+1275 
+1276     // Set MaxNewSize to our calculated preferred_max_new_size unless
+1277     // NewSize was set on the command line and it is larger than
+
+</pre><hr></hr><pre>
+1555   }
+1556 #endif // INCLUDE_ALL_GCS
+1557   _conservative_max_heap_alignment = MAX4(heap_alignment,
+1558                                           (size_t)os::vm_allocation_granularity(),
+1559                                           os::max_page_size(),
+1560                                           CollectorPolicy::compute_heap_alignment());
+1561 }
+1562 
+1563 void Arguments::select_gc_ergonomically() {
+1564   if (os::is_server_class_machine()) {
+1565     if (should_auto_select_low_pause_collector()) {
+1566       FLAG_SET_ERGO(bool, UseConcMarkSweepGC, true);
+1567     } else {
+1568       FLAG_SET_ERGO(bool, UseParallelGC, true);
+1569     }
+1570   }
+1571 }
+1572 
+1573 void Arguments::select_gc() {
+1574   if (!gc_selected()) {
+<span class="changed">1575     select_gc_ergonomically();</span>
+1576   }
+1577 }
+1578 
+1579 void Arguments::set_ergonomics_flags() {
+1580   select_gc();
+1581 
+1582 #ifdef COMPILER2
+1583   // Shared spaces work fine with other GCs but causes bytecode rewriting
+1584   // to be disabled, which hurts interpreter performance and decreases
+1585   // server performance.  When -server is specified, keep the default off
+1586   // unless it is asked for.  Future work: either add bytecode rewriting
+1587   // at link time, or rewrite bytecodes in non-shared methods.
+1588   if (!DumpSharedSpaces &amp;&amp; !RequireSharedSpaces &amp;&amp;
+1589       (FLAG_IS_DEFAULT(UseSharedSpaces) || !UseSharedSpaces)) {
+1590     no_shared_spaces("COMPILER2 default: -Xshare:auto | off, have to manually setup to on.");
+1591   }
+1592 #endif
+1593 
+1594   set_conservative_max_heap_alignment();
+1595 
+1596 #ifndef ZERO
+1597 #ifdef _LP64
+1598   set_use_compressed_oops();
+1599 
+1600   // set_use_compressed_klass_ptrs() must be called after calling
+1601   // set_use_compressed_oops().
+1602   set_use_compressed_klass_ptrs();
+1603 
+1604   // Also checks that certain machines are slower with compressed oops
+1605   // in vm_version initialization code.
+1606 #endif // _LP64
+1607 #endif // !ZERO
+1608 }
+1609 
+1610 void Arguments::set_parallel_gc_flags() {
+1611   assert(UseParallelGC || UseParallelOldGC, "Error");
+1612   // Enable ParallelOld unless it was explicitly disabled (cmd line or rc file).
+1613   if (FLAG_IS_DEFAULT(UseParallelOldGC)) {
+<span class="changed">1614     FLAG_SET_DEFAULT(UseParallelOldGC, true);</span>
+1615   }
+1616   FLAG_SET_DEFAULT(UseParallelGC, true);
+1617 
+1618   // If no heap maximum was requested explicitly, use some reasonable fraction
+1619   // of the physical memory, up to a maximum of 1GB.
+1620   FLAG_SET_DEFAULT(ParallelGCThreads,
+1621                    Abstract_VM_Version::parallel_worker_threads());
+1622   if (ParallelGCThreads == 0) {
+1623     jio_fprintf(defaultStream::error_stream(),
+1624         "The Parallel GC can not be combined with -XX:ParallelGCThreads=0\n");
+1625     vm_exit(1);
+1626   }
+1627 
+1628   if (UseAdaptiveSizePolicy) {
+1629     // We don't want to limit adaptive heap sizing's freedom to adjust the heap
+1630     // unless the user actually sets these flags.
+1631     if (FLAG_IS_DEFAULT(MinHeapFreeRatio)) {
+1632       FLAG_SET_DEFAULT(MinHeapFreeRatio, 0);
+1633       _min_heap_free_ratio = MinHeapFreeRatio;
+1634     }
+
+</pre><hr></hr><pre>
+1697     FLAG_SET_DEFAULT(GCTimeRatio, 9);
+1698   }
+1699 
+1700   if (PrintGCDetails &amp;&amp; Verbose) {
+1701     tty-&gt;print_cr("MarkStackSize: %uk  MarkStackSizeMax: %uk",
+1702       (unsigned int) (MarkStackSize / K), (uint) (MarkStackSizeMax / K));
+1703     tty-&gt;print_cr("ConcGCThreads: %u", (uint) ConcGCThreads);
+1704   }
+1705 }
+1706 
+1707 #if !INCLUDE_ALL_GCS
+1708 #ifdef ASSERT
+1709 static bool verify_serial_gc_flags() {
+1710   return (UseSerialGC &amp;&amp;
+1711         !(UseParNewGC || (UseConcMarkSweepGC || CMSIncrementalMode) || UseG1GC ||
+1712           UseParallelGC || UseParallelOldGC));
+1713 }
+1714 #endif // ASSERT
+1715 #endif // INCLUDE_ALL_GCS
+1716 
+
+
+
+
+
+
+
+
+
+
+
+1717 void Arguments::set_gc_specific_flags() {
+1718 #if INCLUDE_ALL_GCS
+1719   // Set per-collector flags
+1720   if (UseParallelGC || UseParallelOldGC) {
+1721     set_parallel_gc_flags();
+1722   } else if (UseConcMarkSweepGC) { // Should be done before ParNew check below
+1723     set_cms_and_parnew_gc_flags();
+1724   } else if (UseParNewGC) {  // Skipped if CMS is set above
+1725     set_parnew_gc_flags();
+1726   } else if (UseG1GC) {
+1727     set_g1_gc_flags();
+1728   }
+1729   check_deprecated_gcs();
+1730   check_deprecated_gc_flags();
+1731   if (AssumeMP &amp;&amp; !UseSerialGC) {
+1732     if (FLAG_IS_DEFAULT(ParallelGCThreads) &amp;&amp; ParallelGCThreads == 1) {
+1733       warning("If the number of processors is expected to increase from one, then"
+1734               " you should configure the number of parallel GC threads appropriately"
+1735               " using -XX:ParallelGCThreads=N");
+1736     }
+
+</pre><hr></hr><pre>
+2050   return true;
+2051 }
+2052 
+2053 bool Arguments::verify_MaxHeapFreeRatio(FormatBuffer&lt;80&gt;&amp; err_msg, uintx max_heap_free_ratio) {
+2054   if (!is_percentage(max_heap_free_ratio)) {
+2055     err_msg.print("MaxHeapFreeRatio must have a value between 0 and 100");
+2056     return false;
+2057   }
+2058   if (max_heap_free_ratio &lt; MinHeapFreeRatio) {
+2059     err_msg.print("MaxHeapFreeRatio (" UINTX_FORMAT ") must be greater than or "
+2060                   "equal to MinHeapFreeRatio (" UINTX_FORMAT ")", max_heap_free_ratio,
+2061                   MinHeapFreeRatio);
+2062     return false;
+2063   }
+2064   // This does not set the flag itself, but stores the value in a safe place for later usage.
+2065   _max_heap_free_ratio = max_heap_free_ratio;
+2066   return true;
+2067 }
+2068 
+2069 // Check consistency of GC selection
+<span class="changed">2070 bool Arguments::check_gc_consistency() {</span>
+2071   check_gclog_consistency();
+2072   bool status = true;
+2073   // Ensure that the user has not selected conflicting sets
+2074   // of collectors. [Note: this check is merely a user convenience;
+2075   // collectors over-ride each other so that only a non-conflicting
+2076   // set is selected; however what the user gets is not what they
+2077   // may have expected from the combination they asked for. It's
+2078   // better to reduce user confusion by not allowing them to
+2079   // select conflicting combinations.
+2080   uint i = 0;
+2081   if (UseSerialGC)                       i++;
+2082   if (UseConcMarkSweepGC || UseParNewGC) i++;
+2083   if (UseParallelGC || UseParallelOldGC) i++;
+2084   if (UseG1GC)                           i++;
+2085   if (i &gt; 1) {
+2086     jio_fprintf(defaultStream::error_stream(),
+2087                 "Conflicting collector combinations in option list; "
+2088                 "please refer to the release notes for the combinations "
+2089                 "allowed\n");
+2090     status = false;
+
+</pre><hr></hr><pre>
+2216     MarkSweepAlwaysCompactCount = 1;  // Move objects every gc.
+2217   }
+2218 
+2219   if (UseParallelOldGC &amp;&amp; ParallelOldGCSplitALot) {
+2220     // Settings to encourage splitting.
+2221     if (!FLAG_IS_CMDLINE(NewRatio)) {
+2222       FLAG_SET_CMDLINE(uintx, NewRatio, 2);
+2223     }
+2224     if (!FLAG_IS_CMDLINE(ScavengeBeforeFullGC)) {
+2225       FLAG_SET_CMDLINE(bool, ScavengeBeforeFullGC, false);
+2226     }
+2227   }
+2228 
+2229   status = status &amp;&amp; verify_percentage(GCHeapFreeLimit, "GCHeapFreeLimit");
+2230   status = status &amp;&amp; verify_percentage(GCTimeLimit, "GCTimeLimit");
+2231   if (GCTimeLimit == 100) {
+2232     // Turn off gc-overhead-limit-exceeded checks
+2233     FLAG_SET_DEFAULT(UseGCOverheadLimit, false);
+2234   }
+2235 
+<span class="changed">2236   status = status &amp;&amp; check_gc_consistency();</span>
+2237   status = status &amp;&amp; check_stack_pages();
+2238 
+2239   if (CMSIncrementalMode) {
+2240     if (!UseConcMarkSweepGC) {
+2241       jio_fprintf(defaultStream::error_stream(),
+2242                   "error:  invalid argument combination.\n"
+2243                   "The CMS collector (-XX:+UseConcMarkSweepGC) must be "
+2244                   "selected in order\nto use CMSIncrementalMode.\n");
+2245       status = false;
+2246     } else {
+2247       status = status &amp;&amp; verify_percentage(CMSIncrementalDutyCycle,
+2248                                   "CMSIncrementalDutyCycle");
+2249       status = status &amp;&amp; verify_percentage(CMSIncrementalDutyCycleMin,
+2250                                   "CMSIncrementalDutyCycleMin");
+2251       status = status &amp;&amp; verify_percentage(CMSIncrementalSafetyFactor,
+2252                                   "CMSIncrementalSafetyFactor");
+2253       status = status &amp;&amp; verify_percentage(CMSIncrementalOffset,
+2254                                   "CMSIncrementalOffset");
+2255       status = status &amp;&amp; verify_percentage(CMSExpAvgFactor,
+2256                                   "CMSExpAvgFactor");
+
+</pre><hr></hr><pre>
+2391   status = status &amp;&amp; verify_percentage(ParallelGCBufferWastePct, "ParallelGCBufferWastePct");
+2392   status = status &amp;&amp; verify_interval(TargetPLABWastePct, 1, 100, "TargetPLABWastePct");
+2393 
+2394   status = status &amp;&amp; verify_min_value(ParGCStridesPerThread, 1, "ParGCStridesPerThread");
+2395 
+2396   status = status &amp;&amp; verify_min_value(MinRAMFraction, 1, "MinRAMFraction");
+2397   status = status &amp;&amp; verify_min_value(InitialRAMFraction, 1, "InitialRAMFraction");
+2398   status = status &amp;&amp; verify_min_value(MaxRAMFraction, 1, "MaxRAMFraction");
+2399   status = status &amp;&amp; verify_min_value(DefaultMaxRAMFraction, 1, "DefaultMaxRAMFraction");
+2400 
+2401   status = status &amp;&amp; verify_interval(AdaptiveTimeWeight, 0, 100, "AdaptiveTimeWeight");
+2402   status = status &amp;&amp; verify_min_value(AdaptiveSizeDecrementScaleFactor, 1, "AdaptiveSizeDecrementScaleFactor");
+2403 
+2404   status = status &amp;&amp; verify_interval(TLABAllocationWeight, 0, 100, "TLABAllocationWeight");
+2405   status = status &amp;&amp; verify_min_value(MinTLABSize, 1, "MinTLABSize");
+2406   status = status &amp;&amp; verify_min_value(TLABRefillWasteFraction, 1, "TLABRefillWasteFraction");
+2407 
+2408   status = status &amp;&amp; verify_percentage(YoungGenerationSizeSupplement, "YoungGenerationSizeSupplement");
+2409   status = status &amp;&amp; verify_percentage(TenuredGenerationSizeSupplement, "TenuredGenerationSizeSupplement");
+2410 
+<span class="changed">2411   // the "age" field in the oop header is 4 bits; do not want to pull in markOop.hpp</span>
+<span class="changed">2412   // just for that, so hardcode here.</span>
+<span class="changed">2413   status = status &amp;&amp; verify_interval(MaxTenuringThreshold, 0, 15, "MaxTenuringThreshold");</span>
+<span class="changed">2414   status = status &amp;&amp; verify_interval(InitialTenuringThreshold, 0, MaxTenuringThreshold, "MaxTenuringThreshold");</span>
+<span class="changed">2415   status = status &amp;&amp; verify_percentage(TargetSurvivorRatio, "TargetSurvivorRatio");</span>
+<span class="changed">2416   status = status &amp;&amp; verify_percentage(MarkSweepDeadRatio, "MarkSweepDeadRatio");</span>
+
+
+
+
+2417 
+2418   status = status &amp;&amp; verify_min_value(MarkSweepAlwaysCompactCount, 1, "MarkSweepAlwaysCompactCount");
+2419 #ifdef COMPILER1
+2420   status = status &amp;&amp; verify_min_value(ValueMapInitialSize, 1, "ValueMapInitialSize");
+2421 #endif
+2422 
+2423   if (PrintNMTStatistics) {
+2424 #if INCLUDE_NMT
+2425     if (MemTracker::tracking_level() == NMT_off) {
+2426 #endif // INCLUDE_NMT
+2427       warning("PrintNMTStatistics is disabled, because native memory tracking is not enabled");
+2428       PrintNMTStatistics = false;
+2429 #if INCLUDE_NMT
+2430     }
+2431 #endif
+2432   }
+2433 
+2434   // Need to limit the extent of the padding to reasonable size.
+2435   // 8K is well beyond the reasonable HW cache line size, even with the
+2436   // aggressive prefetching, while still leaving the room for segregating
+
+</pre><hr></hr><pre>
+3820     if (match_option(option, "-XX:Flags=", &amp;tail)) {
+3821       flags_file = tail;
+3822       settings_file_specified = true;
+3823     }
+3824     if (match_option(option, "-XX:+PrintVMOptions", &amp;tail)) {
+3825       PrintVMOptions = true;
+3826     }
+3827     if (match_option(option, "-XX:-PrintVMOptions", &amp;tail)) {
+3828       PrintVMOptions = false;
+3829     }
+3830     if (match_option(option, "-XX:+IgnoreUnrecognizedVMOptions", &amp;tail)) {
+3831       IgnoreUnrecognizedVMOptions = true;
+3832     }
+3833     if (match_option(option, "-XX:-IgnoreUnrecognizedVMOptions", &amp;tail)) {
+3834       IgnoreUnrecognizedVMOptions = false;
+3835     }
+3836     if (match_option(option, "-XX:+PrintFlagsInitial", &amp;tail)) {
+3837       CommandLineFlags::printFlags(tty, false);
+3838       vm_exit(0);
+3839     }
+<span class="removed">3840     if (match_option(option, "-XX:NativeMemoryTracking", &amp;tail)) {</span>
+3841 #if INCLUDE_NMT
+
+3842       // The launcher did not setup nmt environment variable properly.
+3843       if (!MemTracker::check_launcher_nmt_support(tail)) {
+3844         warning("Native Memory Tracking did not setup properly, using wrong launcher?");
+3845       }
+3846 
+3847       // Verify if nmt option is valid.
+3848       if (MemTracker::verify_nmt_option()) {
+3849         // Late initialization, still in single-threaded mode.
+3850         if (MemTracker::tracking_level() &gt;= NMT_summary) {
+3851           MemTracker::init();
+3852         }
+3853       } else {
+3854         vm_exit_during_initialization("Syntax error, expecting -XX:NativeMemoryTracking=[off|summary|detail]", NULL);
+3855       }
+<span class="removed">3856 #else</span>
+<span class="removed">3857       jio_fprintf(defaultStream::error_stream(),</span>
+<span class="removed">3858         "Native Memory Tracking is not supported in this VM\n");</span>
+<span class="removed">3859       return JNI_ERR;</span>
+<span class="removed">3860 #endif</span>
+3861     }
+
+3862 
+3863 
+3864 #ifndef PRODUCT
+3865     if (match_option(option, "-XX:+PrintFlagsWithComments", &amp;tail)) {
+3866       CommandLineFlags::printFlags(tty, true);
+3867       vm_exit(0);
+3868     }
+3869 #endif
+3870   }
+3871 
+3872   if (IgnoreUnrecognizedVMOptions) {
+3873     // uncast const to modify the flag args-&gt;ignoreUnrecognized
+3874     *(jboolean*)(&amp;args-&gt;ignoreUnrecognized) = true;
+3875   }
+3876 
+3877   // Parse specified settings file
+3878   if (settings_file_specified) {
+3879     if (!process_settings_file(flags_file, true, args-&gt;ignoreUnrecognized)) {
+3880       return JNI_EINVAL;
+3881     }
+
+</pre><hr></hr><pre>
+3987 #endif // INCLUDE_ALL_GCS
+3988 #if !INCLUDE_CDS
+3989   if (DumpSharedSpaces || RequireSharedSpaces) {
+3990     jio_fprintf(defaultStream::error_stream(),
+3991       "Shared spaces are not supported in this VM\n");
+3992     return JNI_ERR;
+3993   }
+3994   if ((UseSharedSpaces &amp;&amp; FLAG_IS_CMDLINE(UseSharedSpaces)) || PrintSharedSpaces) {
+3995     warning("Shared spaces are not supported in this VM");
+3996     FLAG_SET_DEFAULT(UseSharedSpaces, false);
+3997     FLAG_SET_DEFAULT(PrintSharedSpaces, false);
+3998   }
+3999   no_shared_spaces("CDS Disabled");
+4000 #endif // INCLUDE_CDS
+4001 
+4002   return JNI_OK;
+4003 }
+4004 
+4005 jint Arguments::apply_ergo() {
+4006 
+
+
+
+
+4007   // Set flags based on ergonomics.
+4008   set_ergonomics_flags();
+4009 
+4010   set_shared_spaces_flags();
+4011 
+4012   // Check the GC selections again.
+<span class="changed">4013   if (!check_gc_consistency()) {</span>
+4014     return JNI_EINVAL;
+4015   }
+4016 
+4017   if (TieredCompilation) {
+4018     set_tiered_flags();
+4019   } else {
+4020     // Check if the policy is valid. Policies 0 and 1 are valid for non-tiered setup.
+4021     if (CompilationPolicyChoice &gt;= 2) {
+4022       vm_exit_during_initialization(
+4023         "Incompatible compilation policy selected", NULL);
+4024     }
+4025   }
+4026   // Set NmethodSweepFraction after the size of the code cache is adapted (in case of tiered)
+4027   if (FLAG_IS_DEFAULT(NmethodSweepFraction)) {
+4028     FLAG_SET_DEFAULT(NmethodSweepFraction, 1 + ReservedCodeCacheSize / (16 * M));
+4029   }
+4030 
+4031 
+4032   // Set heap size based on available physical memory
+4033   set_heap_size();
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+1237 
+1238   // If we are using CMS, we prefer to UseParNewGC,
+1239   // unless explicitly forbidden.
+1240   if (FLAG_IS_DEFAULT(UseParNewGC)) {
+1241     FLAG_SET_ERGO(bool, UseParNewGC, true);
+1242   }
+1243 
+1244   // Turn off AdaptiveSizePolicy by default for cms until it is complete.
+1245   disable_adaptive_size_policy("UseConcMarkSweepGC");
+1246 
+1247   // In either case, adjust ParallelGCThreads and/or UseParNewGC
+1248   // as needed.
+1249   if (UseParNewGC) {
+1250     set_parnew_gc_flags();
+1251   }
+1252 
+1253   size_t max_heap = align_size_down(MaxHeapSize,
+1254                                     CardTableRS::ct_max_alignment_constraint());
+1255 
+1256   // Now make adjustments for CMS
+<span class="changed">1257   uintx tenuring_default = (uintx) 3;</span>
+1258   size_t young_gen_per_worker = CMSYoungGenPerWorker;
+1259 
+1260   // Preferred young gen size for "short" pauses:
+1261   // upper bound depends on # of threads and NewRatio.
+1262   const uintx parallel_gc_threads =
+1263     (ParallelGCThreads == 0 ? 1 : ParallelGCThreads);
+1264   const size_t preferred_max_new_size_unaligned =
+1265     MIN2(max_heap/(NewRatio+1), ScaleForWordSize(young_gen_per_worker * parallel_gc_threads));
+1266   size_t preferred_max_new_size =
+1267     align_size_up(preferred_max_new_size_unaligned, os::vm_page_size());
+1268 
+1269   // Unless explicitly requested otherwise, size young gen
+1270   // for "short" pauses ~ CMSYoungGenPerWorker*ParallelGCThreads
+1271 
+1272   // If either MaxNewSize or NewRatio is set on the command line,
+1273   // assume the user is trying to set the size of the young gen.
+1274   if (FLAG_IS_DEFAULT(MaxNewSize) &amp;&amp; FLAG_IS_DEFAULT(NewRatio)) {
+1275 
+1276     // Set MaxNewSize to our calculated preferred_max_new_size unless
+1277     // NewSize was set on the command line and it is larger than
+
+</pre><hr></hr><pre>
+1555   }
+1556 #endif // INCLUDE_ALL_GCS
+1557   _conservative_max_heap_alignment = MAX4(heap_alignment,
+1558                                           (size_t)os::vm_allocation_granularity(),
+1559                                           os::max_page_size(),
+1560                                           CollectorPolicy::compute_heap_alignment());
+1561 }
+1562 
+1563 void Arguments::select_gc_ergonomically() {
+1564   if (os::is_server_class_machine()) {
+1565     if (should_auto_select_low_pause_collector()) {
+1566       FLAG_SET_ERGO(bool, UseConcMarkSweepGC, true);
+1567     } else {
+1568       FLAG_SET_ERGO(bool, UseParallelGC, true);
+1569     }
+1570   }
+1571 }
+1572 
+1573 void Arguments::select_gc() {
+1574   if (!gc_selected()) {
+<span class="changed">1575     ArgumentsExt::select_gc_ergonomically();</span>
+1576   }
+1577 }
+1578 
+1579 void Arguments::set_ergonomics_flags() {
+1580   select_gc();
+1581 
+1582 #ifdef COMPILER2
+1583   // Shared spaces work fine with other GCs but causes bytecode rewriting
+1584   // to be disabled, which hurts interpreter performance and decreases
+1585   // server performance.  When -server is specified, keep the default off
+1586   // unless it is asked for.  Future work: either add bytecode rewriting
+1587   // at link time, or rewrite bytecodes in non-shared methods.
+1588   if (!DumpSharedSpaces &amp;&amp; !RequireSharedSpaces &amp;&amp;
+1589       (FLAG_IS_DEFAULT(UseSharedSpaces) || !UseSharedSpaces)) {
+1590     no_shared_spaces("COMPILER2 default: -Xshare:auto | off, have to manually setup to on.");
+1591   }
+1592 #endif
+1593 
+1594   set_conservative_max_heap_alignment();
+1595 
+1596 #ifndef ZERO
+1597 #ifdef _LP64
+1598   set_use_compressed_oops();
+1599 
+1600   // set_use_compressed_klass_ptrs() must be called after calling
+1601   // set_use_compressed_oops().
+1602   set_use_compressed_klass_ptrs();
+1603 
+1604   // Also checks that certain machines are slower with compressed oops
+1605   // in vm_version initialization code.
+1606 #endif // _LP64
+1607 #endif // !ZERO
+1608 }
+1609 
+1610 void Arguments::set_parallel_gc_flags() {
+1611   assert(UseParallelGC || UseParallelOldGC, "Error");
+1612   // Enable ParallelOld unless it was explicitly disabled (cmd line or rc file).
+1613   if (FLAG_IS_DEFAULT(UseParallelOldGC)) {
+<span class="changed">1614     FLAG_SET_DEFAULT(UseParallelOldGC, false);</span>
+1615   }
+1616   FLAG_SET_DEFAULT(UseParallelGC, true);
+1617 
+1618   // If no heap maximum was requested explicitly, use some reasonable fraction
+1619   // of the physical memory, up to a maximum of 1GB.
+1620   FLAG_SET_DEFAULT(ParallelGCThreads,
+1621                    Abstract_VM_Version::parallel_worker_threads());
+1622   if (ParallelGCThreads == 0) {
+1623     jio_fprintf(defaultStream::error_stream(),
+1624         "The Parallel GC can not be combined with -XX:ParallelGCThreads=0\n");
+1625     vm_exit(1);
+1626   }
+1627 
+1628   if (UseAdaptiveSizePolicy) {
+1629     // We don't want to limit adaptive heap sizing's freedom to adjust the heap
+1630     // unless the user actually sets these flags.
+1631     if (FLAG_IS_DEFAULT(MinHeapFreeRatio)) {
+1632       FLAG_SET_DEFAULT(MinHeapFreeRatio, 0);
+1633       _min_heap_free_ratio = MinHeapFreeRatio;
+1634     }
+
+</pre><hr></hr><pre>
+1697     FLAG_SET_DEFAULT(GCTimeRatio, 9);
+1698   }
+1699 
+1700   if (PrintGCDetails &amp;&amp; Verbose) {
+1701     tty-&gt;print_cr("MarkStackSize: %uk  MarkStackSizeMax: %uk",
+1702       (unsigned int) (MarkStackSize / K), (uint) (MarkStackSizeMax / K));
+1703     tty-&gt;print_cr("ConcGCThreads: %u", (uint) ConcGCThreads);
+1704   }
+1705 }
+1706 
+1707 #if !INCLUDE_ALL_GCS
+1708 #ifdef ASSERT
+1709 static bool verify_serial_gc_flags() {
+1710   return (UseSerialGC &amp;&amp;
+1711         !(UseParNewGC || (UseConcMarkSweepGC || CMSIncrementalMode) || UseG1GC ||
+1712           UseParallelGC || UseParallelOldGC));
+1713 }
+1714 #endif // ASSERT
+1715 #endif // INCLUDE_ALL_GCS
+1716 
+<span class="new">1717 void Arguments::set_object_layout_flags() {</span>
+<span class="new">1718     if (UseObjectLayoutIntrinsics) {</span>
+<span class="new">1719       FLAG_SET_DEFAULT(UseParallelGC,true);</span>
+<span class="new">1720       FLAG_SET_DEFAULT(UseParallelOldGC,false);</span>
+<span class="new">1721       FLAG_SET_DEFAULT(UseCompressedOops, false);</span>
+<span class="new">1722       FLAG_SET_DEFAULT(UseBiasedLocking, false);</span>
+<span class="new">1723     }</span>
+<span class="new">1724 }</span>
+<span class="new">1725 </span>
+<span class="new">1726 </span>
+<span class="new">1727 </span>
+1728 void Arguments::set_gc_specific_flags() {
+1729 #if INCLUDE_ALL_GCS
+1730   // Set per-collector flags
+1731   if (UseParallelGC || UseParallelOldGC) {
+1732     set_parallel_gc_flags();
+1733   } else if (UseConcMarkSweepGC) { // Should be done before ParNew check below
+1734     set_cms_and_parnew_gc_flags();
+1735   } else if (UseParNewGC) {  // Skipped if CMS is set above
+1736     set_parnew_gc_flags();
+1737   } else if (UseG1GC) {
+1738     set_g1_gc_flags();
+1739   }
+1740   check_deprecated_gcs();
+1741   check_deprecated_gc_flags();
+1742   if (AssumeMP &amp;&amp; !UseSerialGC) {
+1743     if (FLAG_IS_DEFAULT(ParallelGCThreads) &amp;&amp; ParallelGCThreads == 1) {
+1744       warning("If the number of processors is expected to increase from one, then"
+1745               " you should configure the number of parallel GC threads appropriately"
+1746               " using -XX:ParallelGCThreads=N");
+1747     }
+
+</pre><hr></hr><pre>
+2061   return true;
+2062 }
+2063 
+2064 bool Arguments::verify_MaxHeapFreeRatio(FormatBuffer&lt;80&gt;&amp; err_msg, uintx max_heap_free_ratio) {
+2065   if (!is_percentage(max_heap_free_ratio)) {
+2066     err_msg.print("MaxHeapFreeRatio must have a value between 0 and 100");
+2067     return false;
+2068   }
+2069   if (max_heap_free_ratio &lt; MinHeapFreeRatio) {
+2070     err_msg.print("MaxHeapFreeRatio (" UINTX_FORMAT ") must be greater than or "
+2071                   "equal to MinHeapFreeRatio (" UINTX_FORMAT ")", max_heap_free_ratio,
+2072                   MinHeapFreeRatio);
+2073     return false;
+2074   }
+2075   // This does not set the flag itself, but stores the value in a safe place for later usage.
+2076   _max_heap_free_ratio = max_heap_free_ratio;
+2077   return true;
+2078 }
+2079 
+2080 // Check consistency of GC selection
+<span class="changed">2081 bool Arguments::check_gc_consistency_user() {</span>
+2082   check_gclog_consistency();
+2083   bool status = true;
+2084   // Ensure that the user has not selected conflicting sets
+2085   // of collectors. [Note: this check is merely a user convenience;
+2086   // collectors over-ride each other so that only a non-conflicting
+2087   // set is selected; however what the user gets is not what they
+2088   // may have expected from the combination they asked for. It's
+2089   // better to reduce user confusion by not allowing them to
+2090   // select conflicting combinations.
+2091   uint i = 0;
+2092   if (UseSerialGC)                       i++;
+2093   if (UseConcMarkSweepGC || UseParNewGC) i++;
+2094   if (UseParallelGC || UseParallelOldGC) i++;
+2095   if (UseG1GC)                           i++;
+2096   if (i &gt; 1) {
+2097     jio_fprintf(defaultStream::error_stream(),
+2098                 "Conflicting collector combinations in option list; "
+2099                 "please refer to the release notes for the combinations "
+2100                 "allowed\n");
+2101     status = false;
+
+</pre><hr></hr><pre>
+2227     MarkSweepAlwaysCompactCount = 1;  // Move objects every gc.
+2228   }
+2229 
+2230   if (UseParallelOldGC &amp;&amp; ParallelOldGCSplitALot) {
+2231     // Settings to encourage splitting.
+2232     if (!FLAG_IS_CMDLINE(NewRatio)) {
+2233       FLAG_SET_CMDLINE(uintx, NewRatio, 2);
+2234     }
+2235     if (!FLAG_IS_CMDLINE(ScavengeBeforeFullGC)) {
+2236       FLAG_SET_CMDLINE(bool, ScavengeBeforeFullGC, false);
+2237     }
+2238   }
+2239 
+2240   status = status &amp;&amp; verify_percentage(GCHeapFreeLimit, "GCHeapFreeLimit");
+2241   status = status &amp;&amp; verify_percentage(GCTimeLimit, "GCTimeLimit");
+2242   if (GCTimeLimit == 100) {
+2243     // Turn off gc-overhead-limit-exceeded checks
+2244     FLAG_SET_DEFAULT(UseGCOverheadLimit, false);
+2245   }
+2246 
+<span class="changed">2247   status = status &amp;&amp; check_gc_consistency_user();</span>
+2248   status = status &amp;&amp; check_stack_pages();
+2249 
+2250   if (CMSIncrementalMode) {
+2251     if (!UseConcMarkSweepGC) {
+2252       jio_fprintf(defaultStream::error_stream(),
+2253                   "error:  invalid argument combination.\n"
+2254                   "The CMS collector (-XX:+UseConcMarkSweepGC) must be "
+2255                   "selected in order\nto use CMSIncrementalMode.\n");
+2256       status = false;
+2257     } else {
+2258       status = status &amp;&amp; verify_percentage(CMSIncrementalDutyCycle,
+2259                                   "CMSIncrementalDutyCycle");
+2260       status = status &amp;&amp; verify_percentage(CMSIncrementalDutyCycleMin,
+2261                                   "CMSIncrementalDutyCycleMin");
+2262       status = status &amp;&amp; verify_percentage(CMSIncrementalSafetyFactor,
+2263                                   "CMSIncrementalSafetyFactor");
+2264       status = status &amp;&amp; verify_percentage(CMSIncrementalOffset,
+2265                                   "CMSIncrementalOffset");
+2266       status = status &amp;&amp; verify_percentage(CMSExpAvgFactor,
+2267                                   "CMSExpAvgFactor");
+
+</pre><hr></hr><pre>
+2402   status = status &amp;&amp; verify_percentage(ParallelGCBufferWastePct, "ParallelGCBufferWastePct");
+2403   status = status &amp;&amp; verify_interval(TargetPLABWastePct, 1, 100, "TargetPLABWastePct");
+2404 
+2405   status = status &amp;&amp; verify_min_value(ParGCStridesPerThread, 1, "ParGCStridesPerThread");
+2406 
+2407   status = status &amp;&amp; verify_min_value(MinRAMFraction, 1, "MinRAMFraction");
+2408   status = status &amp;&amp; verify_min_value(InitialRAMFraction, 1, "InitialRAMFraction");
+2409   status = status &amp;&amp; verify_min_value(MaxRAMFraction, 1, "MaxRAMFraction");
+2410   status = status &amp;&amp; verify_min_value(DefaultMaxRAMFraction, 1, "DefaultMaxRAMFraction");
+2411 
+2412   status = status &amp;&amp; verify_interval(AdaptiveTimeWeight, 0, 100, "AdaptiveTimeWeight");
+2413   status = status &amp;&amp; verify_min_value(AdaptiveSizeDecrementScaleFactor, 1, "AdaptiveSizeDecrementScaleFactor");
+2414 
+2415   status = status &amp;&amp; verify_interval(TLABAllocationWeight, 0, 100, "TLABAllocationWeight");
+2416   status = status &amp;&amp; verify_min_value(MinTLABSize, 1, "MinTLABSize");
+2417   status = status &amp;&amp; verify_min_value(TLABRefillWasteFraction, 1, "TLABRefillWasteFraction");
+2418 
+2419   status = status &amp;&amp; verify_percentage(YoungGenerationSizeSupplement, "YoungGenerationSizeSupplement");
+2420   status = status &amp;&amp; verify_percentage(TenuredGenerationSizeSupplement, "TenuredGenerationSizeSupplement");
+2421 
+<span class="changed">2422   // The age field in the object header has 2 bits. We do not want to pull in</span>
+<span class="changed">2423   // markOop.hpp just for that, so hardcode here.</span>
+<span class="changed">2424   status = status &amp;&amp; verify_interval(MaxTenuringThreshold,</span>
+<span class="changed">2425       0, 3, "MaxTenuringThreshold");</span>
+<span class="changed">2426   status = status &amp;&amp; verify_interval(InitialTenuringThreshold,</span>
+<span class="changed">2427       0, MaxTenuringThreshold, "InitialTenuringThreshold");</span>
+<span class="changed">2428   status = status &amp;&amp; verify_percentage(TargetSurvivorRatio,</span>
+<span class="changed">2429       "TargetSurvivorRatio");</span>
+<span class="changed">2430   status = status &amp;&amp; verify_percentage(MarkSweepDeadRatio,</span>
+<span class="changed">2431       "MarkSweepDeadRatio");</span>
+2432 
+2433   status = status &amp;&amp; verify_min_value(MarkSweepAlwaysCompactCount, 1, "MarkSweepAlwaysCompactCount");
+2434 #ifdef COMPILER1
+2435   status = status &amp;&amp; verify_min_value(ValueMapInitialSize, 1, "ValueMapInitialSize");
+2436 #endif
+2437 
+2438   if (PrintNMTStatistics) {
+2439 #if INCLUDE_NMT
+2440     if (MemTracker::tracking_level() == NMT_off) {
+2441 #endif // INCLUDE_NMT
+2442       warning("PrintNMTStatistics is disabled, because native memory tracking is not enabled");
+2443       PrintNMTStatistics = false;
+2444 #if INCLUDE_NMT
+2445     }
+2446 #endif
+2447   }
+2448 
+2449   // Need to limit the extent of the padding to reasonable size.
+2450   // 8K is well beyond the reasonable HW cache line size, even with the
+2451   // aggressive prefetching, while still leaving the room for segregating
+
+</pre><hr></hr><pre>
+3835     if (match_option(option, "-XX:Flags=", &amp;tail)) {
+3836       flags_file = tail;
+3837       settings_file_specified = true;
+3838     }
+3839     if (match_option(option, "-XX:+PrintVMOptions", &amp;tail)) {
+3840       PrintVMOptions = true;
+3841     }
+3842     if (match_option(option, "-XX:-PrintVMOptions", &amp;tail)) {
+3843       PrintVMOptions = false;
+3844     }
+3845     if (match_option(option, "-XX:+IgnoreUnrecognizedVMOptions", &amp;tail)) {
+3846       IgnoreUnrecognizedVMOptions = true;
+3847     }
+3848     if (match_option(option, "-XX:-IgnoreUnrecognizedVMOptions", &amp;tail)) {
+3849       IgnoreUnrecognizedVMOptions = false;
+3850     }
+3851     if (match_option(option, "-XX:+PrintFlagsInitial", &amp;tail)) {
+3852       CommandLineFlags::printFlags(tty, false);
+3853       vm_exit(0);
+3854     }
+
+3855 #if INCLUDE_NMT
+<span class="new">3856     if (match_option(option, "-XX:NativeMemoryTracking", &amp;tail)) {</span>
+3857       // The launcher did not setup nmt environment variable properly.
+3858       if (!MemTracker::check_launcher_nmt_support(tail)) {
+3859         warning("Native Memory Tracking did not setup properly, using wrong launcher?");
+3860       }
+3861 
+3862       // Verify if nmt option is valid.
+3863       if (MemTracker::verify_nmt_option()) {
+3864         // Late initialization, still in single-threaded mode.
+3865         if (MemTracker::tracking_level() &gt;= NMT_summary) {
+3866           MemTracker::init();
+3867         }
+3868       } else {
+3869         vm_exit_during_initialization("Syntax error, expecting -XX:NativeMemoryTracking=[off|summary|detail]", NULL);
+3870       }
+
+
+
+
+
+3871     }
+<span class="new">3872 #endif</span>
+3873 
+3874 
+3875 #ifndef PRODUCT
+3876     if (match_option(option, "-XX:+PrintFlagsWithComments", &amp;tail)) {
+3877       CommandLineFlags::printFlags(tty, true);
+3878       vm_exit(0);
+3879     }
+3880 #endif
+3881   }
+3882 
+3883   if (IgnoreUnrecognizedVMOptions) {
+3884     // uncast const to modify the flag args-&gt;ignoreUnrecognized
+3885     *(jboolean*)(&amp;args-&gt;ignoreUnrecognized) = true;
+3886   }
+3887 
+3888   // Parse specified settings file
+3889   if (settings_file_specified) {
+3890     if (!process_settings_file(flags_file, true, args-&gt;ignoreUnrecognized)) {
+3891       return JNI_EINVAL;
+3892     }
+
+</pre><hr></hr><pre>
+3998 #endif // INCLUDE_ALL_GCS
+3999 #if !INCLUDE_CDS
+4000   if (DumpSharedSpaces || RequireSharedSpaces) {
+4001     jio_fprintf(defaultStream::error_stream(),
+4002       "Shared spaces are not supported in this VM\n");
+4003     return JNI_ERR;
+4004   }
+4005   if ((UseSharedSpaces &amp;&amp; FLAG_IS_CMDLINE(UseSharedSpaces)) || PrintSharedSpaces) {
+4006     warning("Shared spaces are not supported in this VM");
+4007     FLAG_SET_DEFAULT(UseSharedSpaces, false);
+4008     FLAG_SET_DEFAULT(PrintSharedSpaces, false);
+4009   }
+4010   no_shared_spaces("CDS Disabled");
+4011 #endif // INCLUDE_CDS
+4012 
+4013   return JNI_OK;
+4014 }
+4015 
+4016 jint Arguments::apply_ergo() {
+4017 
+<span class="new">4018   // We need to set all object layout flags</span>
+<span class="new">4019   // before ergonomics possibly enables CompressedOops</span>
+<span class="new">4020   set_object_layout_flags();</span>
+<span class="new">4021   </span>
+4022   // Set flags based on ergonomics.
+4023   set_ergonomics_flags();
+4024 
+4025   set_shared_spaces_flags();
+4026 
+4027   // Check the GC selections again.
+<span class="changed">4028   if (!ArgumentsExt::check_gc_consistency_ergo()) {</span>
+4029     return JNI_EINVAL;
+4030   }
+4031 
+4032   if (TieredCompilation) {
+4033     set_tiered_flags();
+4034   } else {
+4035     // Check if the policy is valid. Policies 0 and 1 are valid for non-tiered setup.
+4036     if (CompilationPolicyChoice &gt;= 2) {
+4037       vm_exit_during_initialization(
+4038         "Incompatible compilation policy selected", NULL);
+4039     }
+4040   }
+4041   // Set NmethodSweepFraction after the size of the code cache is adapted (in case of tiered)
+4042   if (FLAG_IS_DEFAULT(NmethodSweepFraction)) {
+4043     FLAG_SET_DEFAULT(NmethodSweepFraction, 1 + ReservedCodeCacheSize / (16 * M));
+4044   }
+4045 
+4046 
+4047   // Set heap size based on available physical memory
+4048   set_heap_size();
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

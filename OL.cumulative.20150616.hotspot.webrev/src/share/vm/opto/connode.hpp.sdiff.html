@@ -1,0 +1,347 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/opto </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/opto/connode.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 249   virtual uint cmp( const Node &amp;n ) const;
+ 250   virtual uint size_of() const;
+ 251 
+ 252 public:
+ 253   CastIINode(Node *n, const Type *t, bool carry_dependency = false)
+ 254     : ConstraintCastNode(n,t), _carry_dependency(carry_dependency) {}
+ 255   virtual int Opcode() const;
+ 256   virtual uint ideal_reg() const { return Op_RegI; }
+ 257   virtual Node *Identity( PhaseTransform *phase );
+ 258   virtual const Type *Value( PhaseTransform *phase ) const;
+ 259   virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+ 260 #ifndef PRODUCT
+ 261   virtual void dump_spec(outputStream *st) const;
+ 262 #endif
+ 263 };
+ 264 
+ 265 //------------------------------CastPPNode-------------------------------------
+ 266 // cast pointer to pointer (different type)
+ 267 class CastPPNode: public ConstraintCastNode {
+ 268 public:
+<span class="changed"> 269   CastPPNode (Node *n, const Type *t ): ConstraintCastNode(n, t) {}</span>
+ 270   virtual int Opcode() const;
+ 271   virtual uint ideal_reg() const { return Op_RegP; }
+ 272   virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+ 273 };
+ 274 
+
+
+
+
+
+
+
+
+
+
+
+ 275 //------------------------------CheckCastPPNode--------------------------------
+ 276 // for _checkcast, cast pointer to pointer (different type), without JOIN,
+ 277 class CheckCastPPNode: public TypeNode {
+ 278 public:
+ 279   CheckCastPPNode( Node *c, Node *n, const Type *t ) : TypeNode(t,2) {
+ 280     init_class_id(Class_CheckCastPP);
+ 281     init_req(0, c);
+ 282     init_req(1, n);
+ 283   }
+ 284 
+ 285   virtual Node *Identity( PhaseTransform *phase );
+ 286   virtual const Type *Value( PhaseTransform *phase ) const;
+ 287   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 288   virtual int   Opcode() const;
+ 289   virtual uint  ideal_reg() const { return Op_RegP; }
+ 290   // No longer remove CheckCast after CCP as it gives me a place to hang
+ 291   // the proper address type - which is required to compute anti-deps.
+ 292   //virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+ 293 };
+ 294 
+
+</pre><hr></hr><pre>
+ 652     // Put it on the Macro nodes list to removed during macro nodes expansion.
+ 653     init_flags(Flag_is_macro);
+ 654     C-&gt;add_macro_node(this);
+ 655   }
+ 656   virtual int Opcode() const;
+ 657   virtual const Type *bottom_type() const { return TypeInt::INT; }
+ 658 };
+ 659 
+ 660 //------------------------------Opaque3Node------------------------------------
+ 661 // A node to prevent unwanted optimizations. Will be optimized only during
+ 662 // macro nodes expansion.
+ 663 class Opaque3Node : public Opaque2Node {
+ 664   int _opt; // what optimization it was used for
+ 665 public:
+ 666   enum { RTM_OPT };
+ 667   Opaque3Node(Compile* C, Node *n, int opt) : Opaque2Node(C, n), _opt(opt) {}
+ 668   virtual int Opcode() const;
+ 669   bool rtm_opt() const { return (_opt == RTM_OPT); }
+ 670 };
+ 671 
+<span class="removed"> 672 //------------------------------ProfileBooleanNode-------------------------------</span>
+<span class="removed"> 673 // A node represents value profile for a boolean during parsing.</span>
+<span class="removed"> 674 // Once parsing is over, the node goes away (during IGVN).</span>
+<span class="removed"> 675 // It is used to override branch frequencies from MDO (see has_injected_profile in parse2.cpp).</span>
+<span class="removed"> 676 class ProfileBooleanNode : public Node {</span>
+<span class="removed"> 677   uint _false_cnt;</span>
+<span class="removed"> 678   uint _true_cnt;</span>
+<span class="removed"> 679   bool _consumed;</span>
+<span class="removed"> 680   bool _delay_removal;</span>
+<span class="removed"> 681   virtual uint hash() const ;                  // { return NO_HASH; }</span>
+<span class="removed"> 682   virtual uint cmp( const Node &amp;n ) const;</span>
+<span class="removed"> 683   public:</span>
+<span class="removed"> 684   ProfileBooleanNode(Node *n, uint false_cnt, uint true_cnt) : Node(0, n),</span>
+<span class="removed"> 685           _false_cnt(false_cnt), _true_cnt(true_cnt), _delay_removal(true), _consumed(false) {}</span>
+<span class="removed"> 686 </span>
+<span class="removed"> 687   uint false_count() const { return _false_cnt; }</span>
+<span class="removed"> 688   uint  true_count() const { return  _true_cnt; }</span>
+<span class="removed"> 689 </span>
+<span class="removed"> 690   void consume() { _consumed = true;  }</span>
+<span class="removed"> 691 </span>
+<span class="removed"> 692   virtual int Opcode() const;</span>
+<span class="removed"> 693   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);</span>
+<span class="removed"> 694   virtual Node *Identity(PhaseTransform *phase);</span>
+<span class="removed"> 695   virtual const Type *bottom_type() const { return TypeInt::BOOL; }</span>
+<span class="removed"> 696 };</span>
+ 697 
+ 698 //----------------------PartialSubtypeCheckNode--------------------------------
+ 699 // The 2nd slow-half of a subtype check.  Scan the subklass's 2ndary superklass
+ 700 // array for an instance of the superklass.  Set a hidden internal cache on a
+ 701 // hit (cache is checked with exposed code in gen_subtype_check()).  Return
+ 702 // not zero for a miss or zero for a hit.
+ 703 class PartialSubtypeCheckNode : public Node {
+ 704 public:
+ 705   PartialSubtypeCheckNode(Node* c, Node* sub, Node* super) : Node(c,sub,super) {}
+ 706   virtual int Opcode() const;
+ 707   virtual const Type *bottom_type() const { return TypeRawPtr::BOTTOM; }
+ 708   virtual uint ideal_reg() const { return Op_RegP; }
+ 709 };
+ 710 
+ 711 //
+ 712 class MoveI2FNode : public Node {
+ 713  public:
+ 714   MoveI2FNode( Node *value ) : Node(0,value) {}
+ 715   virtual int Opcode() const;
+ 716   virtual const Type *bottom_type() const { return Type::FLOAT; }
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 249   virtual uint cmp( const Node &amp;n ) const;
+ 250   virtual uint size_of() const;
+ 251 
+ 252 public:
+ 253   CastIINode(Node *n, const Type *t, bool carry_dependency = false)
+ 254     : ConstraintCastNode(n,t), _carry_dependency(carry_dependency) {}
+ 255   virtual int Opcode() const;
+ 256   virtual uint ideal_reg() const { return Op_RegI; }
+ 257   virtual Node *Identity( PhaseTransform *phase );
+ 258   virtual const Type *Value( PhaseTransform *phase ) const;
+ 259   virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+ 260 #ifndef PRODUCT
+ 261   virtual void dump_spec(outputStream *st) const;
+ 262 #endif
+ 263 };
+ 264 
+ 265 //------------------------------CastPPNode-------------------------------------
+ 266 // cast pointer to pointer (different type)
+ 267 class CastPPNode: public ConstraintCastNode {
+ 268 public:
+<span class="changed"> 269   CastPPNode (Node *n, const Type *t ): ConstraintCastNode(n, t) { init_class_id(Class_CastPP); }</span>
+ 270   virtual int Opcode() const;
+ 271   virtual uint ideal_reg() const { return Op_RegP; }
+ 272   virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+ 273 };
+ 274 
+<span class="new"> 275 //------------------------------CastDerivedNode-------------------------------------</span>
+<span class="new"> 276 // cast pointer of a container object with offset to a pointer of a contained object</span>
+<span class="new"> 277 class CastDerivedNode: public CastPPNode {</span>
+<span class="new"> 278 public:</span>
+<span class="new"> 279   CastDerivedNode(Node* n, const Type* t): CastPPNode(n, t) { init_class_id(Class_CastDerived); }</span>
+<span class="new"> 280   virtual const Type* Value(PhaseTransform* phase) const { return _type; }</span>
+<span class="new"> 281   virtual Node* Ideal(PhaseGVN* phase, bool can_reshape) { return NULL; } // don't optimize away</span>
+<span class="new"> 282   virtual int Opcode() const;</span>
+<span class="new"> 283   virtual Node* Ideal_DU_postCCP(PhaseCCP* ccp) { return this; } // don't optimize away</span>
+<span class="new"> 284 };</span>
+<span class="new"> 285 </span>
+ 286 //------------------------------CheckCastPPNode--------------------------------
+ 287 // for _checkcast, cast pointer to pointer (different type), without JOIN,
+ 288 class CheckCastPPNode: public TypeNode {
+ 289 public:
+ 290   CheckCastPPNode( Node *c, Node *n, const Type *t ) : TypeNode(t,2) {
+ 291     init_class_id(Class_CheckCastPP);
+ 292     init_req(0, c);
+ 293     init_req(1, n);
+ 294   }
+ 295 
+ 296   virtual Node *Identity( PhaseTransform *phase );
+ 297   virtual const Type *Value( PhaseTransform *phase ) const;
+ 298   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+ 299   virtual int   Opcode() const;
+ 300   virtual uint  ideal_reg() const { return Op_RegP; }
+ 301   // No longer remove CheckCast after CCP as it gives me a place to hang
+ 302   // the proper address type - which is required to compute anti-deps.
+ 303   //virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+ 304 };
+ 305 
+
+</pre><hr></hr><pre>
+ 663     // Put it on the Macro nodes list to removed during macro nodes expansion.
+ 664     init_flags(Flag_is_macro);
+ 665     C-&gt;add_macro_node(this);
+ 666   }
+ 667   virtual int Opcode() const;
+ 668   virtual const Type *bottom_type() const { return TypeInt::INT; }
+ 669 };
+ 670 
+ 671 //------------------------------Opaque3Node------------------------------------
+ 672 // A node to prevent unwanted optimizations. Will be optimized only during
+ 673 // macro nodes expansion.
+ 674 class Opaque3Node : public Opaque2Node {
+ 675   int _opt; // what optimization it was used for
+ 676 public:
+ 677   enum { RTM_OPT };
+ 678   Opaque3Node(Compile* C, Node *n, int opt) : Opaque2Node(C, n), _opt(opt) {}
+ 679   virtual int Opcode() const;
+ 680   bool rtm_opt() const { return (_opt == RTM_OPT); }
+ 681 };
+ 682 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 683 
+ 684 //----------------------PartialSubtypeCheckNode--------------------------------
+ 685 // The 2nd slow-half of a subtype check.  Scan the subklass's 2ndary superklass
+ 686 // array for an instance of the superklass.  Set a hidden internal cache on a
+ 687 // hit (cache is checked with exposed code in gen_subtype_check()).  Return
+ 688 // not zero for a miss or zero for a hit.
+ 689 class PartialSubtypeCheckNode : public Node {
+ 690 public:
+ 691   PartialSubtypeCheckNode(Node* c, Node* sub, Node* super) : Node(c,sub,super) {}
+ 692   virtual int Opcode() const;
+ 693   virtual const Type *bottom_type() const { return TypeRawPtr::BOTTOM; }
+ 694   virtual uint ideal_reg() const { return Op_RegP; }
+ 695 };
+ 696 
+ 697 //
+ 698 class MoveI2FNode : public Node {
+ 699  public:
+ 700   MoveI2FNode( Node *value ) : Node(0,value) {}
+ 701   virtual int Opcode() const;
+ 702   virtual const Type *bottom_type() const { return Type::FLOAT; }
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

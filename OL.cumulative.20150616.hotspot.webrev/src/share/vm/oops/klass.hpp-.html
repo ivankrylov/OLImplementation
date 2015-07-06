@@ -1,0 +1,803 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>Old src/share/vm/oops/klass.hpp</title>
+<body id="SUNWwebrev">
+<pre>
+   1 /*
+   2  * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #ifndef SHARE_VM_OOPS_KLASS_HPP
+  26 #define SHARE_VM_OOPS_KLASS_HPP
+  27 
+  28 #include "memory/genOopClosures.hpp"
+  29 #include "memory/iterator.hpp"
+  30 #include "memory/memRegion.hpp"
+  31 #include "memory/specialized_oop_closures.hpp"
+  32 #include "oops/klassPS.hpp"
+  33 #include "oops/metadata.hpp"
+  34 #include "oops/oop.hpp"
+  35 #include "trace/traceMacros.hpp"
+  36 #include "utilities/accessFlags.hpp"
+  37 #include "utilities/macros.hpp"
+  38 #if INCLUDE_ALL_GCS
+  39 #include "gc_implementation/concurrentMarkSweep/cmsOopClosures.hpp"
+  40 #include "gc_implementation/g1/g1OopClosures.hpp"
+  41 #include "gc_implementation/parNew/parOopClosures.hpp"
+  42 #endif // INCLUDE_ALL_GCS
+  43 
+  44 //
+  45 // A Klass provides:
+  46 //  1: language level class object (method dictionary etc.)
+  47 //  2: provide vm dispatch behavior for the object
+  48 // Both functions are combined into one C++ class.
+  49 
+  50 // One reason for the oop/klass dichotomy in the implementation is
+  51 // that we don't want a C++ vtbl pointer in every object.  Thus,
+  52 // normal oops don't have any virtual functions.  Instead, they
+  53 // forward all "virtual" functions to their klass, which does have
+  54 // a vtbl and does the C++ dispatch depending on the object's
+  55 // actual type.  (See oop.inline.hpp for some of the forwarding code.)
+  56 // ALL FUNCTIONS IMPLEMENTING THIS DISPATCH ARE PREFIXED WITH "oop_"!
+  57 
+  58 //  Klass layout:
+  59 //    [C++ vtbl ptr  ] (contained in Metadata)
+  60 //    [layout_helper ]
+  61 //    [super_check_offset   ] for fast subtype checks
+  62 //    [name          ]
+  63 //    [secondary_super_cache] for fast subtype checks
+  64 //    [secondary_supers     ] array of 2ndary supertypes
+  65 //    [primary_supers 0]
+  66 //    [primary_supers 1]
+  67 //    [primary_supers 2]
+  68 //    ...
+  69 //    [primary_supers 7]
+  70 //    [java_mirror   ]
+  71 //    [super         ]
+  72 //    [subklass      ] first subclass
+  73 //    [next_sibling  ] link to chain additional subklasses
+  74 //    [next_link     ]
+  75 //    [class_loader_data]
+  76 //    [modifier_flags]
+  77 //    [access_flags  ]
+  78 //    [last_biased_lock_bulk_revocation_time] (64 bits)
+  79 //    [prototype_header]
+  80 //    [biased_lock_revocation_count]
+  81 //    [_modified_oops]
+  82 //    [_accumulated_modified_oops]
+  83 //    [trace_id]
+  84 
+  85 
+  86 // Forward declarations.
+  87 template &lt;class T&gt; class Array;
+  88 template &lt;class T&gt; class GrowableArray;
+  89 class ClassLoaderData;
+  90 class klassVtable;
+  91 class ParCompactionManager;
+  92 class KlassSizeStats;
+  93 class fieldDescriptor;
+  94 
+  95 class Klass : public Metadata {
+  96   friend class VMStructs;
+  97  protected:
+  98   // note: put frequently-used fields together at start of klass structure
+  99   // for better cache behavior (may not make much of a difference but sure won't hurt)
+ 100   enum { _primary_super_limit = 8 };
+ 101 
+ 102   // The "layout helper" is a combined descriptor of object layout.
+ 103   // For klasses which are neither instance nor array, the value is zero.
+ 104   //
+ 105   // For instances, layout helper is a positive number, the instance size.
+ 106   // This size is already passed through align_object_size and scaled to bytes.
+ 107   // The low order bit is set if instances of this class cannot be
+ 108   // allocated using the fastpath.
+ 109   //
+ 110   // For arrays, layout helper is a negative number, containing four
+ 111   // distinct bytes, as follows:
+ 112   //    MSB:[tag, hsz, ebt, log2(esz)]:LSB
+ 113   // where:
+ 114   //    tag is 0x80 if the elements are oops, 0xC0 if non-oops
+ 115   //    hsz is array header size in bytes (i.e., offset of first element)
+ 116   //    ebt is the BasicType of the elements
+ 117   //    esz is the element size in bytes
+ 118   // This packed word is arranged so as to be quickly unpacked by the
+ 119   // various fast paths that use the various subfields.
+ 120   //
+ 121   // The esz bits can be used directly by a SLL instruction, without masking.
+ 122   //
+ 123   // Note that the array-kind tag looks like 0x00 for instance klasses,
+ 124   // since their length in bytes is always less than 24Mb.
+ 125   //
+ 126   // Final note:  This comes first, immediately after C++ vtable,
+ 127   // because it is frequently queried.
+ 128   jint        _layout_helper;
+ 129 
+ 130   // The fields _super_check_offset, _secondary_super_cache, _secondary_supers
+ 131   // and _primary_supers all help make fast subtype checks.  See big discussion
+ 132   // in doc/server_compiler/checktype.txt
+ 133   //
+ 134   // Where to look to observe a supertype (it is &amp;_secondary_super_cache for
+ 135   // secondary supers, else is &amp;_primary_supers[depth()].
+ 136   juint       _super_check_offset;
+ 137 
+ 138   // Class name.  Instance classes: java/lang/String, etc.  Array classes: [I,
+ 139   // [Ljava/lang/String;, etc.  Set to zero for all other kinds of classes.
+ 140   Symbol*     _name;
+ 141 
+ 142   // Cache of last observed secondary supertype
+ 143   Klass*      _secondary_super_cache;
+ 144   // Array of all secondary supertypes
+ 145   Array&lt;Klass*&gt;* _secondary_supers;
+ 146   // Ordered list of all primary supertypes
+ 147   Klass*      _primary_supers[_primary_super_limit];
+ 148   // java/lang/Class instance mirroring this class
+ 149   oop       _java_mirror;
+ 150   // Superclass
+ 151   Klass*      _super;
+ 152   // First subclass (NULL if none); _subklass-&gt;next_sibling() is next one
+ 153   Klass*      _subklass;
+ 154   // Sibling link (or NULL); links all subklasses of a klass
+ 155   Klass*      _next_sibling;
+ 156 
+ 157   // All klasses loaded by a class loader are chained through these links
+ 158   Klass*      _next_link;
+ 159 
+ 160   // The VM's representation of the ClassLoader used to load this class.
+ 161   // Provide access the corresponding instance java.lang.ClassLoader.
+ 162   ClassLoaderData* _class_loader_data;
+ 163 
+ 164   jint        _modifier_flags;  // Processed access flags, for use by Class.getModifiers.
+ 165   AccessFlags _access_flags;    // Access flags. The class/interface distinction is stored here.
+ 166 
+ 167   // Biased locking implementation and statistics
+ 168   // (the 64-bit chunk goes first, to avoid some fragmentation)
+ 169   jlong    _last_biased_lock_bulk_revocation_time;
+ 170   markOop  _prototype_header;   // Used when biased locking is both enabled and disabled for this type
+ 171   jint     _biased_lock_revocation_count;
+ 172 
+ 173   TRACE_DEFINE_KLASS_TRACE_ID;
+ 174 
+ 175   // Remembered sets support for the oops in the klasses.
+ 176   jbyte _modified_oops;             // Card Table Equivalent (YC/CMS support)
+ 177   jbyte _accumulated_modified_oops; // Mod Union Equivalent (CMS support)
+ 178 
+ 179 private:
+ 180   // This is an index into FileMapHeader::_classpath_entry_table[], to
+ 181   // associate this class with the JAR file where it's loaded from during
+ 182   // dump time. If a class is not loaded from the shared archive, this field is
+ 183   // -1.
+ 184   jshort _shared_class_path_index;
+ 185 
+ 186   friend class SharedClassUtil;
+ 187 protected:
+ 188 
+ 189   // Constructor
+ 190   Klass();
+ 191 
+ 192   void* operator new(size_t size, ClassLoaderData* loader_data, size_t word_size, TRAPS) throw();
+ 193 
+ 194  public:
+ 195   enum MethodLookupMode { normal, skip_overpass, skip_defaults };
+ 196 
+ 197   bool is_klass() const volatile { return true; }
+ 198 
+ 199   // super
+ 200   Klass* super() const               { return _super; }
+ 201   void set_super(Klass* k)           { _super = k; }
+ 202 
+ 203   // initializes _super link, _primary_supers &amp; _secondary_supers arrays
+ 204   void initialize_supers(Klass* k, TRAPS);
+ 205   void initialize_supers_impl1(Klass* k);
+ 206   void initialize_supers_impl2(Klass* k);
+ 207 
+ 208   // klass-specific helper for initializing _secondary_supers
+ 209   virtual GrowableArray&lt;Klass*&gt;* compute_secondary_supers(int num_extra_slots);
+ 210 
+ 211   // java_super is the Java-level super type as specified by Class.getSuperClass.
+ 212   virtual Klass* java_super() const  { return NULL; }
+ 213 
+ 214   juint    super_check_offset() const  { return _super_check_offset; }
+ 215   void set_super_check_offset(juint o) { _super_check_offset = o; }
+ 216 
+ 217   Klass* secondary_super_cache() const     { return _secondary_super_cache; }
+ 218   void set_secondary_super_cache(Klass* k) { _secondary_super_cache = k; }
+ 219 
+ 220   Array&lt;Klass*&gt;* secondary_supers() const { return _secondary_supers; }
+ 221   void set_secondary_supers(Array&lt;Klass*&gt;* k) { _secondary_supers = k; }
+ 222 
+ 223   // Return the element of the _super chain of the given depth.
+ 224   // If there is no such element, return either NULL or this.
+ 225   Klass* primary_super_of_depth(juint i) const {
+ 226     assert(i &lt; primary_super_limit(), "oob");
+ 227     Klass* super = _primary_supers[i];
+ 228     assert(super == NULL || super-&gt;super_depth() == i, "correct display");
+ 229     return super;
+ 230   }
+ 231 
+ 232   // Can this klass be a primary super?  False for interfaces and arrays of
+ 233   // interfaces.  False also for arrays or classes with long super chains.
+ 234   bool can_be_primary_super() const {
+ 235     const juint secondary_offset = in_bytes(secondary_super_cache_offset());
+ 236     return super_check_offset() != secondary_offset;
+ 237   }
+ 238   virtual bool can_be_primary_super_slow() const;
+ 239 
+ 240   // Returns number of primary supers; may be a number in the inclusive range [0, primary_super_limit].
+ 241   juint super_depth() const {
+ 242     if (!can_be_primary_super()) {
+ 243       return primary_super_limit();
+ 244     } else {
+ 245       juint d = (super_check_offset() - in_bytes(primary_supers_offset())) / sizeof(Klass*);
+ 246       assert(d &lt; primary_super_limit(), "oob");
+ 247       assert(_primary_supers[d] == this, "proper init");
+ 248       return d;
+ 249     }
+ 250   }
+ 251 
+ 252   // store an oop into a field of a Klass
+ 253   void klass_oop_store(oop* p, oop v);
+ 254   void klass_oop_store(volatile oop* p, oop v);
+ 255 
+ 256   // java mirror
+ 257   oop java_mirror() const              { return _java_mirror; }
+ 258   void set_java_mirror(oop m) { klass_oop_store(&amp;_java_mirror, m); }
+ 259 
+ 260   // modifier flags
+ 261   jint modifier_flags() const          { return _modifier_flags; }
+ 262   void set_modifier_flags(jint flags)  { _modifier_flags = flags; }
+ 263 
+ 264   // size helper
+ 265   int layout_helper() const            { return _layout_helper; }
+ 266   void set_layout_helper(int lh)       { _layout_helper = lh; }
+ 267 
+ 268   // Note: for instances layout_helper() may include padding.
+ 269   // Use InstanceKlass::contains_field_offset to classify field offsets.
+ 270 
+ 271   // sub/superklass links
+ 272   InstanceKlass* superklass() const;
+ 273   Klass* subklass() const;
+ 274   Klass* next_sibling() const;
+ 275   void append_to_sibling_list();           // add newly created receiver to superklass' subklass list
+ 276 
+ 277   void set_next_link(Klass* k) { _next_link = k; }
+ 278   Klass* next_link() const { return _next_link; }   // The next klass defined by the class loader.
+ 279 
+ 280   // class loader data
+ 281   ClassLoaderData* class_loader_data() const               { return _class_loader_data; }
+ 282   void set_class_loader_data(ClassLoaderData* loader_data) {  _class_loader_data = loader_data; }
+ 283 
+ 284   // The Klasses are not placed in the Heap, so the Card Table or
+ 285   // the Mod Union Table can't be used to mark when klasses have modified oops.
+ 286   // The CT and MUT bits saves this information for the individual Klasses.
+ 287   void record_modified_oops()            { _modified_oops = 1; }
+ 288   void clear_modified_oops()             { _modified_oops = 0; }
+ 289   bool has_modified_oops()               { return _modified_oops == 1; }
+ 290 
+ 291   void accumulate_modified_oops()        { if (has_modified_oops()) _accumulated_modified_oops = 1; }
+ 292   void clear_accumulated_modified_oops() { _accumulated_modified_oops = 0; }
+ 293   bool has_accumulated_modified_oops()   { return _accumulated_modified_oops == 1; }
+ 294 
+ 295   int shared_classpath_index() const   {
+ 296     return _shared_class_path_index;
+ 297   };
+ 298 
+ 299   void set_shared_classpath_index(int index) {
+ 300     _shared_class_path_index = index;
+ 301   };
+ 302 
+ 303 
+ 304  protected:                                // internal accessors
+ 305   Klass* subklass_oop() const            { return _subklass; }
+ 306   Klass* next_sibling_oop() const        { return _next_sibling; }
+ 307   void     set_subklass(Klass* s);
+ 308   void     set_next_sibling(Klass* s);
+ 309 
+ 310  public:
+ 311 
+ 312   // Compiler support
+ 313   static ByteSize super_offset()                 { return in_ByteSize(offset_of(Klass, _super)); }
+ 314   static ByteSize super_check_offset_offset()    { return in_ByteSize(offset_of(Klass, _super_check_offset)); }
+ 315   static ByteSize primary_supers_offset()        { return in_ByteSize(offset_of(Klass, _primary_supers)); }
+ 316   static ByteSize secondary_super_cache_offset() { return in_ByteSize(offset_of(Klass, _secondary_super_cache)); }
+ 317   static ByteSize secondary_supers_offset()      { return in_ByteSize(offset_of(Klass, _secondary_supers)); }
+ 318   static ByteSize java_mirror_offset()           { return in_ByteSize(offset_of(Klass, _java_mirror)); }
+ 319   static ByteSize modifier_flags_offset()        { return in_ByteSize(offset_of(Klass, _modifier_flags)); }
+ 320   static ByteSize layout_helper_offset()         { return in_ByteSize(offset_of(Klass, _layout_helper)); }
+ 321   static ByteSize access_flags_offset()          { return in_ByteSize(offset_of(Klass, _access_flags)); }
+ 322 
+ 323   // Unpacking layout_helper:
+ 324   enum {
+ 325     _lh_neutral_value           = 0,  // neutral non-array non-instance value
+ 326     _lh_instance_slow_path_bit  = 0x01,
+ 327     _lh_log2_element_size_shift = BitsPerByte*0,
+ 328     _lh_log2_element_size_mask  = BitsPerLong-1,
+ 329     _lh_element_type_shift      = BitsPerByte*1,
+ 330     _lh_element_type_mask       = right_n_bits(BitsPerByte),  // shifted mask
+ 331     _lh_header_size_shift       = BitsPerByte*2,
+ 332     _lh_header_size_mask        = right_n_bits(BitsPerByte),  // shifted mask
+ 333     _lh_array_tag_bits          = 2,
+ 334     _lh_array_tag_shift         = BitsPerInt - _lh_array_tag_bits,
+ 335     _lh_array_tag_type_value    = ~0x00,  // 0xC0000000 &gt;&gt; 30
+ 336     _lh_array_tag_obj_value     = ~0x01   // 0x80000000 &gt;&gt; 30
+ 337   };
+ 338 
+ 339   static int layout_helper_size_in_bytes(jint lh) {
+ 340     assert(lh &gt; (jint)_lh_neutral_value, "must be instance");
+ 341     return (int) lh &amp; ~_lh_instance_slow_path_bit;
+ 342   }
+ 343   static bool layout_helper_needs_slow_path(jint lh) {
+ 344     assert(lh &gt; (jint)_lh_neutral_value, "must be instance");
+ 345     return (lh &amp; _lh_instance_slow_path_bit) != 0;
+ 346   }
+ 347   static bool layout_helper_is_instance(jint lh) {
+ 348     return (jint)lh &gt; (jint)_lh_neutral_value;
+ 349   }
+ 350   static bool layout_helper_is_array(jint lh) {
+ 351     return (jint)lh &lt; (jint)_lh_neutral_value;
+ 352   }
+ 353   static bool layout_helper_is_typeArray(jint lh) {
+ 354     // _lh_array_tag_type_value == (lh &gt;&gt; _lh_array_tag_shift);
+ 355     return (juint)lh &gt;= (juint)(_lh_array_tag_type_value &lt;&lt; _lh_array_tag_shift);
+ 356   }
+ 357   static bool layout_helper_is_objArray(jint lh) {
+ 358     // _lh_array_tag_obj_value == (lh &gt;&gt; _lh_array_tag_shift);
+ 359     return (jint)lh &lt; (jint)(_lh_array_tag_type_value &lt;&lt; _lh_array_tag_shift);
+ 360   }
+ 361   static int layout_helper_header_size(jint lh) {
+ 362     assert(lh &lt; (jint)_lh_neutral_value, "must be array");
+ 363     int hsize = (lh &gt;&gt; _lh_header_size_shift) &amp; _lh_header_size_mask;
+ 364     assert(hsize &gt; 0 &amp;&amp; hsize &lt; (int)sizeof(oopDesc)*3, "sanity");
+ 365     return hsize;
+ 366   }
+ 367   static BasicType layout_helper_element_type(jint lh) {
+ 368     assert(lh &lt; (jint)_lh_neutral_value, "must be array");
+ 369     int btvalue = (lh &gt;&gt; _lh_element_type_shift) &amp; _lh_element_type_mask;
+ 370     assert(btvalue &gt;= T_BOOLEAN &amp;&amp; btvalue &lt;= T_OBJECT, "sanity");
+ 371     return (BasicType) btvalue;
+ 372   }
+ 373   static int layout_helper_log2_element_size(jint lh) {
+ 374     assert(lh &lt; (jint)_lh_neutral_value, "must be array");
+ 375     int l2esz = (lh &gt;&gt; _lh_log2_element_size_shift) &amp; _lh_log2_element_size_mask;
+ 376     assert(l2esz &lt;= LogBitsPerLong,
+ 377         err_msg("sanity. l2esz: 0x%x for lh: 0x%x", (uint)l2esz, (uint)lh));
+ 378     return l2esz;
+ 379   }
+ 380   static jint array_layout_helper(jint tag, int hsize, BasicType etype, int log2_esize) {
+ 381     return (tag        &lt;&lt; _lh_array_tag_shift)
+ 382       |    (hsize      &lt;&lt; _lh_header_size_shift)
+ 383       |    ((int)etype &lt;&lt; _lh_element_type_shift)
+ 384       |    (log2_esize &lt;&lt; _lh_log2_element_size_shift);
+ 385   }
+ 386   static jint instance_layout_helper(jint size, bool slow_path_flag) {
+ 387     return (size &lt;&lt; LogHeapWordSize)
+ 388       |    (slow_path_flag ? _lh_instance_slow_path_bit : 0);
+ 389   }
+ 390   static int layout_helper_to_size_helper(jint lh) {
+ 391     assert(lh &gt; (jint)_lh_neutral_value, "must be instance");
+ 392     // Note that the following expression discards _lh_instance_slow_path_bit.
+ 393     return lh &gt;&gt; LogHeapWordSize;
+ 394   }
+ 395   // Out-of-line version computes everything based on the etype:
+ 396   static jint array_layout_helper(BasicType etype);
+ 397 
+ 398   // What is the maximum number of primary superclasses any klass can have?
+ 399 #ifdef PRODUCT
+ 400   static juint primary_super_limit()         { return _primary_super_limit; }
+ 401 #else
+ 402   static juint primary_super_limit() {
+ 403     assert(FastSuperclassLimit &lt;= _primary_super_limit, "parameter oob");
+ 404     return FastSuperclassLimit;
+ 405   }
+ 406 #endif
+ 407 
+ 408   // vtables
+ 409   virtual klassVtable* vtable() const        { return NULL; }
+ 410   virtual int vtable_length() const          { return 0; }
+ 411 
+ 412   // subclass check
+ 413   bool is_subclass_of(const Klass* k) const;
+ 414   // subtype check: true if is_subclass_of, or if k is interface and receiver implements it
+ 415   bool is_subtype_of(Klass* k) const {
+ 416     juint    off = k-&gt;super_check_offset();
+ 417     Klass* sup = *(Klass**)( (address)this + off );
+ 418     const juint secondary_offset = in_bytes(secondary_super_cache_offset());
+ 419     if (sup == k) {
+ 420       return true;
+ 421     } else if (off != secondary_offset) {
+ 422       return false;
+ 423     } else {
+ 424       return search_secondary_supers(k);
+ 425     }
+ 426   }
+ 427   bool search_secondary_supers(Klass* k) const;
+ 428 
+ 429   // Find LCA in class hierarchy
+ 430   Klass *LCA( Klass *k );
+ 431 
+ 432   // Check whether reflection/jni/jvm code is allowed to instantiate this class;
+ 433   // if not, throw either an Error or an Exception.
+ 434   virtual void check_valid_for_instantiation(bool throwError, TRAPS);
+ 435 
+ 436   // array copying
+ 437   virtual void  copy_array(arrayOop s, int src_pos, arrayOop d, int dst_pos, int length, TRAPS);
+ 438 
+ 439   // tells if the class should be initialized
+ 440   virtual bool should_be_initialized() const    { return false; }
+ 441   // initializes the klass
+ 442   virtual void initialize(TRAPS);
+ 443   // lookup operation for MethodLookupCache
+ 444   friend class MethodLookupCache;
+ 445   virtual Klass* find_field(Symbol* name, Symbol* signature, fieldDescriptor* fd) const;
+ 446   virtual Method* uncached_lookup_method(Symbol* name, Symbol* signature, MethodLookupMode mode) const;
+ 447  public:
+ 448   Method* lookup_method(Symbol* name, Symbol* signature) const {
+ 449     return uncached_lookup_method(name, signature, normal);
+ 450   }
+ 451 
+ 452   // array class with specific rank
+ 453   Klass* array_klass(int rank, TRAPS)         {  return array_klass_impl(false, rank, THREAD); }
+ 454 
+ 455   // array class with this klass as element type
+ 456   Klass* array_klass(TRAPS)                   {  return array_klass_impl(false, THREAD); }
+ 457 
+ 458   // These will return NULL instead of allocating on the heap:
+ 459   // NB: these can block for a mutex, like other functions with TRAPS arg.
+ 460   Klass* array_klass_or_null(int rank);
+ 461   Klass* array_klass_or_null();
+ 462 
+ 463   virtual oop protection_domain() const = 0;
+ 464 
+ 465   oop class_loader() const;
+ 466 
+ 467   virtual oop klass_holder() const      { return class_loader(); }
+ 468 
+ 469  protected:
+ 470   virtual Klass* array_klass_impl(bool or_null, int rank, TRAPS);
+ 471   virtual Klass* array_klass_impl(bool or_null, TRAPS);
+ 472 
+ 473  public:
+ 474   // CDS support - remove and restore oops from metadata. Oops are not shared.
+ 475   virtual void remove_unshareable_info();
+ 476   virtual void restore_unshareable_info(ClassLoaderData* loader_data, Handle protection_domain, TRAPS);
+ 477 
+ 478  protected:
+ 479   // computes the subtype relationship
+ 480   virtual bool compute_is_subtype_of(Klass* k);
+ 481  public:
+ 482   // subclass accessor (here for convenience; undefined for non-klass objects)
+ 483   virtual bool is_leaf_class() const { fatal("not a class"); return false; }
+ 484  public:
+ 485   // ALL FUNCTIONS BELOW THIS POINT ARE DISPATCHED FROM AN OOP
+ 486   // These functions describe behavior for the oop not the KLASS.
+ 487 
+ 488   // actual oop size of obj in memory
+ 489   virtual int oop_size(oop obj) const = 0;
+ 490 
+ 491   // Size of klass in word size.
+ 492   virtual int size() const = 0;
+ 493 #if INCLUDE_SERVICES
+ 494   virtual void collect_statistics(KlassSizeStats *sz) const;
+ 495 #endif
+ 496 
+ 497   // Returns the Java name for a class (Resource allocated)
+ 498   // For arrays, this returns the name of the element with a leading '['.
+ 499   // For classes, this returns the name with the package separators
+ 500   //     turned into '.'s.
+ 501   const char* external_name() const;
+ 502   // Returns the name for a class (Resource allocated) as the class
+ 503   // would appear in a signature.
+ 504   // For arrays, this returns the name of the element with a leading '['.
+ 505   // For classes, this returns the name with a leading 'L' and a trailing ';'
+ 506   //     and the package separators as '/'.
+ 507   virtual const char* signature_name() const;
+ 508 
+ 509   // garbage collection support
+ 510   virtual void oop_follow_contents(oop obj) = 0;
+ 511   virtual int  oop_adjust_pointers(oop obj) = 0;
+ 512 
+ 513   // Parallel Scavenge and Parallel Old
+ 514   PARALLEL_GC_DECLS_PV
+ 515 
+ 516   // type testing operations
+ 517  protected:
+ 518   virtual bool oop_is_instance_slow()       const { return false; }
+ 519   virtual bool oop_is_array_slow()          const { return false; }
+ 520   virtual bool oop_is_objArray_slow()       const { return false; }
+ 521   virtual bool oop_is_typeArray_slow()      const { return false; }
+ 522  public:
+ 523   virtual bool oop_is_instanceClassLoader() const { return false; }
+ 524   virtual bool oop_is_instanceMirror()      const { return false; }
+ 525   virtual bool oop_is_instanceRef()         const { return false; }
+ 526 
+ 527   // Fast non-virtual versions
+ 528   #ifndef ASSERT
+ 529   #define assert_same_query(xval, xcheck) xval
+ 530   #else
+ 531  private:
+ 532   static bool assert_same_query(bool xval, bool xslow) {
+ 533     assert(xval == xslow, "slow and fast queries agree");
+ 534     return xval;
+ 535   }
+ 536  public:
+ 537   #endif
+ 538   inline  bool oop_is_instance()            const { return assert_same_query(
+ 539                                                     layout_helper_is_instance(layout_helper()),
+ 540                                                     oop_is_instance_slow()); }
+ 541   inline  bool oop_is_array()               const { return assert_same_query(
+ 542                                                     layout_helper_is_array(layout_helper()),
+ 543                                                     oop_is_array_slow()); }
+ 544   inline  bool oop_is_objArray()            const { return assert_same_query(
+ 545                                                     layout_helper_is_objArray(layout_helper()),
+ 546                                                     oop_is_objArray_slow()); }
+ 547   inline  bool oop_is_typeArray()           const { return assert_same_query(
+ 548                                                     layout_helper_is_typeArray(layout_helper()),
+ 549                                                     oop_is_typeArray_slow()); }
+ 550   #undef assert_same_query
+ 551 
+ 552   // Access flags
+ 553   AccessFlags access_flags() const         { return _access_flags;  }
+ 554   void set_access_flags(AccessFlags flags) { _access_flags = flags; }
+ 555 
+ 556   bool is_public() const                { return _access_flags.is_public(); }
+ 557   bool is_final() const                 { return _access_flags.is_final(); }
+ 558   bool is_interface() const             { return _access_flags.is_interface(); }
+ 559   bool is_abstract() const              { return _access_flags.is_abstract(); }
+ 560   bool is_super() const                 { return _access_flags.is_super(); }
+ 561   bool is_synthetic() const             { return _access_flags.is_synthetic(); }
+ 562   void set_is_synthetic()               { _access_flags.set_is_synthetic(); }
+ 563   bool has_finalizer() const            { return _access_flags.has_finalizer(); }
+ 564   bool has_final_method() const         { return _access_flags.has_final_method(); }
+ 565   void set_has_finalizer()              { _access_flags.set_has_finalizer(); }
+ 566   void set_has_final_method()           { _access_flags.set_has_final_method(); }
+ 567   bool is_cloneable() const             { return _access_flags.is_cloneable(); }
+ 568   void set_is_cloneable()               { _access_flags.set_is_cloneable(); }
+ 569   bool has_vanilla_constructor() const  { return _access_flags.has_vanilla_constructor(); }
+ 570   void set_has_vanilla_constructor()    { _access_flags.set_has_vanilla_constructor(); }
+ 571   bool has_miranda_methods () const     { return access_flags().has_miranda_methods(); }
+ 572   void set_has_miranda_methods()        { _access_flags.set_has_miranda_methods(); }
+ 573 
+ 574   // Biased locking support
+ 575   // Note: the prototype header is always set up to be at least the
+ 576   // prototype markOop. If biased locking is enabled it may further be
+ 577   // biasable and have an epoch.
+ 578   markOop prototype_header() const      { return _prototype_header; }
+ 579   // NOTE: once instances of this klass are floating around in the
+ 580   // system, this header must only be updated at a safepoint.
+ 581   // NOTE 2: currently we only ever set the prototype header to the
+ 582   // biasable prototype for instanceKlasses. There is no technical
+ 583   // reason why it could not be done for arrayKlasses aside from
+ 584   // wanting to reduce the initial scope of this optimization. There
+ 585   // are potential problems in setting the bias pattern for
+ 586   // JVM-internal oops.
+ 587   inline void set_prototype_header(markOop header);
+ 588   static ByteSize prototype_header_offset() { return in_ByteSize(offset_of(Klass, _prototype_header)); }
+ 589 
+ 590   int  biased_lock_revocation_count() const { return (int) _biased_lock_revocation_count; }
+ 591   // Atomically increments biased_lock_revocation_count and returns updated value
+ 592   int atomic_incr_biased_lock_revocation_count();
+ 593   void set_biased_lock_revocation_count(int val) { _biased_lock_revocation_count = (jint) val; }
+ 594   jlong last_biased_lock_bulk_revocation_time() { return _last_biased_lock_bulk_revocation_time; }
+ 595   void  set_last_biased_lock_bulk_revocation_time(jlong cur_time) { _last_biased_lock_bulk_revocation_time = cur_time; }
+ 596 
+ 597   TRACE_DEFINE_KLASS_METHODS;
+ 598 
+ 599   // garbage collection support
+ 600   virtual void oops_do(OopClosure* cl);
+ 601 
+ 602   // Iff the class loader (or mirror for anonymous classes) is alive the
+ 603   // Klass is considered alive.
+ 604   // The is_alive closure passed in depends on the Garbage Collector used.
+ 605   bool is_loader_alive(BoolObjectClosure* is_alive);
+ 606 
+ 607   static void clean_weak_klass_links(BoolObjectClosure* is_alive, bool clean_alive_klasses = true);
+ 608   static void clean_subklass_tree(BoolObjectClosure* is_alive) {
+ 609     clean_weak_klass_links(is_alive, false /* clean_alive_klasses */);
+ 610   }
+ 611 
+ 612   // iterators
+ 613   virtual int oop_oop_iterate(oop obj, ExtendedOopClosure* blk) = 0;
+ 614   virtual int oop_oop_iterate_v(oop obj, ExtendedOopClosure* blk) {
+ 615     return oop_oop_iterate(obj, blk);
+ 616   }
+ 617 
+ 618 #if INCLUDE_ALL_GCS
+ 619   // In case we don't have a specialized backward scanner use forward
+ 620   // iteration.
+ 621   virtual int oop_oop_iterate_backwards_v(oop obj, ExtendedOopClosure* blk) {
+ 622     return oop_oop_iterate_v(obj, blk);
+ 623   }
+ 624 #endif // INCLUDE_ALL_GCS
+ 625 
+ 626   // Iterates "blk" over all the oops in "obj" (of type "this") within "mr".
+ 627   // (I don't see why the _m should be required, but without it the Solaris
+ 628   // C++ gives warning messages about overridings of the "oop_oop_iterate"
+ 629   // defined above "hiding" this virtual function.  (DLD, 6/20/00)) */
+ 630   virtual int oop_oop_iterate_m(oop obj, ExtendedOopClosure* blk, MemRegion mr) = 0;
+ 631   virtual int oop_oop_iterate_v_m(oop obj, ExtendedOopClosure* blk, MemRegion mr) {
+ 632     return oop_oop_iterate_m(obj, blk, mr);
+ 633   }
+ 634 
+ 635   // Versions of the above iterators specialized to particular subtypes
+ 636   // of OopClosure, to avoid closure virtual calls.
+ 637 #define Klass_OOP_OOP_ITERATE_DECL(OopClosureType, nv_suffix)                \
+ 638   virtual int oop_oop_iterate##nv_suffix(oop obj, OopClosureType* blk) {     \
+ 639     /* Default implementation reverts to general version. */                 \
+ 640     return oop_oop_iterate(obj, blk);                                        \
+ 641   }                                                                          \
+ 642                                                                              \
+ 643   /* Iterates "blk" over all the oops in "obj" (of type "this") within "mr". \
+ 644      (I don't see why the _m should be required, but without it the Solaris  \
+ 645      C++ gives warning messages about overridings of the "oop_oop_iterate"   \
+ 646      defined above "hiding" this virtual function.  (DLD, 6/20/00)) */       \
+ 647   virtual int oop_oop_iterate##nv_suffix##_m(oop obj,                        \
+ 648                                              OopClosureType* blk,            \
+ 649                                              MemRegion mr) {                 \
+ 650     return oop_oop_iterate_m(obj, blk, mr);                                  \
+ 651   }
+ 652 
+ 653   SPECIALIZED_OOP_OOP_ITERATE_CLOSURES_1(Klass_OOP_OOP_ITERATE_DECL)
+ 654   SPECIALIZED_OOP_OOP_ITERATE_CLOSURES_2(Klass_OOP_OOP_ITERATE_DECL)
+ 655 
+ 656 #if INCLUDE_ALL_GCS
+ 657 #define Klass_OOP_OOP_ITERATE_BACKWARDS_DECL(OopClosureType, nv_suffix)      \
+ 658   virtual int oop_oop_iterate_backwards##nv_suffix(oop obj,                  \
+ 659                                                    OopClosureType* blk) {    \
+ 660     /* Default implementation reverts to general version. */                 \
+ 661     return oop_oop_iterate_backwards_v(obj, blk);                            \
+ 662   }
+ 663 
+ 664   SPECIALIZED_OOP_OOP_ITERATE_CLOSURES_1(Klass_OOP_OOP_ITERATE_BACKWARDS_DECL)
+ 665   SPECIALIZED_OOP_OOP_ITERATE_CLOSURES_2(Klass_OOP_OOP_ITERATE_BACKWARDS_DECL)
+ 666 #endif // INCLUDE_ALL_GCS
+ 667 
+ 668   virtual void array_klasses_do(void f(Klass* k)) {}
+ 669 
+ 670   // Return self, except for abstract classes with exactly 1
+ 671   // implementor.  Then return the 1 concrete implementation.
+ 672   Klass *up_cast_abstract();
+ 673 
+ 674   // klass name
+ 675   Symbol* name() const                   { return _name; }
+ 676   void set_name(Symbol* n);
+ 677 
+ 678  public:
+ 679   // jvm support
+ 680   virtual jint compute_modifier_flags(TRAPS) const;
+ 681 
+ 682   // JVMTI support
+ 683   virtual jint jvmti_class_status() const;
+ 684 
+ 685   // Printing
+ 686   virtual void print_on(outputStream* st) const;
+ 687 
+ 688   virtual void oop_print_value_on(oop obj, outputStream* st);
+ 689   virtual void oop_print_on      (oop obj, outputStream* st);
+ 690 
+ 691   virtual const char* internal_name() const = 0;
+ 692 
+ 693   // Verification
+ 694   virtual void verify_on(outputStream* st);
+ 695   void verify() { verify_on(tty); }
+ 696 
+ 697 #ifndef PRODUCT
+ 698   bool verify_vtable_index(int index);
+ 699   bool verify_itable_index(int index);
+ 700 #endif
+ 701 
+ 702   virtual void oop_verify_on(oop obj, outputStream* st);
+ 703 
+ 704   static bool is_null(narrowKlass obj);
+ 705   static bool is_null(Klass* obj);
+ 706 
+ 707   // klass encoding for klass pointer in objects.
+ 708   static narrowKlass encode_klass_not_null(Klass* v);
+ 709   static narrowKlass encode_klass(Klass* v);
+ 710 
+ 711   static Klass* decode_klass_not_null(narrowKlass v);
+ 712   static Klass* decode_klass(narrowKlass v);
+ 713 
+ 714  private:
+ 715   // barriers used by klass_oop_store
+ 716   void klass_update_barrier_set(oop v);
+ 717   void klass_update_barrier_set_pre(oop* p, oop v);
+ 718 };
+ 719 
+ 720 #endif // SHARE_VM_OOPS_KLASS_HPP
+</pre></body></html>

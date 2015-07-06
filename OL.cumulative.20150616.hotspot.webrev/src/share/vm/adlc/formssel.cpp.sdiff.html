@@ -1,0 +1,181 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/adlc </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/adlc/formssel.cpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 755       return MANY_MEMORY_OPERANDS;
+ 756     }
+ 757     if( is_ideal_load()  != Form::none ) {
+ 758       fprintf(stderr, "Warning: cannot find memory opnd in instr.\n");
+ 759       ((InstructForm*)this)-&gt;dump();
+ 760       // pretend it has multiple uses and no defs
+ 761       return MANY_MEMORY_OPERANDS;
+ 762     }
+ 763   }
+ 764 
+ 765   return NO_MEMORY_OPERAND;
+ 766 }
+ 767 
+ 768 
+ 769 // This instruction captures the machine-independent bottom_type
+ 770 // Expected use is for pointer vs oop determination for LoadP
+ 771 bool InstructForm::captures_bottom_type(FormDict &amp;globals) const {
+ 772   if( _matrule &amp;&amp; _matrule-&gt;_rChild &amp;&amp;
+ 773        (!strcmp(_matrule-&gt;_rChild-&gt;_opType,"CastPP")       ||  // new result type
+ 774         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"CastX2P")      ||  // new result type
+
+ 775         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"DecodeN")      ||
+ 776         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"EncodeP")      ||
+ 777         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"DecodeNKlass") ||
+ 778         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"EncodePKlass") ||
+ 779         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"LoadN")        ||
+ 780         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"LoadNKlass")   ||
+ 781         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"CreateEx")     ||  // type of exception
+ 782         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"CheckCastPP")  ||
+ 783         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"GetAndSetP")   ||
+ 784         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"GetAndSetN")) )  return true;
+ 785   else if ( is_ideal_load() == Form::idealP )                return true;
+ 786   else if ( is_ideal_store() != Form::none  )                return true;
+ 787 
+ 788   if (needs_base_oop_edge(globals)) return true;
+ 789 
+ 790   if (is_vector()) return true;
+ 791   if (is_mach_constant()) return true;
+ 792 
+ 793   return  false;
+ 794 }
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 755       return MANY_MEMORY_OPERANDS;
+ 756     }
+ 757     if( is_ideal_load()  != Form::none ) {
+ 758       fprintf(stderr, "Warning: cannot find memory opnd in instr.\n");
+ 759       ((InstructForm*)this)-&gt;dump();
+ 760       // pretend it has multiple uses and no defs
+ 761       return MANY_MEMORY_OPERANDS;
+ 762     }
+ 763   }
+ 764 
+ 765   return NO_MEMORY_OPERAND;
+ 766 }
+ 767 
+ 768 
+ 769 // This instruction captures the machine-independent bottom_type
+ 770 // Expected use is for pointer vs oop determination for LoadP
+ 771 bool InstructForm::captures_bottom_type(FormDict &amp;globals) const {
+ 772   if( _matrule &amp;&amp; _matrule-&gt;_rChild &amp;&amp;
+ 773        (!strcmp(_matrule-&gt;_rChild-&gt;_opType,"CastPP")       ||  // new result type
+ 774         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"CastX2P")      ||  // new result type
+<span class="new"> 775         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"CastDerived")  ||  // new result type</span>
+ 776         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"DecodeN")      ||
+ 777         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"EncodeP")      ||
+ 778         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"DecodeNKlass") ||
+ 779         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"EncodePKlass") ||
+ 780         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"LoadN")        ||
+ 781         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"LoadNKlass")   ||
+ 782         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"CreateEx")     ||  // type of exception
+ 783         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"CheckCastPP")  ||
+ 784         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"GetAndSetP")   ||
+ 785         !strcmp(_matrule-&gt;_rChild-&gt;_opType,"GetAndSetN")) )  return true;
+ 786   else if ( is_ideal_load() == Form::idealP )                return true;
+ 787   else if ( is_ideal_store() != Form::none  )                return true;
+ 788 
+ 789   if (needs_base_oop_edge(globals)) return true;
+ 790 
+ 791   if (is_vector()) return true;
+ 792   if (is_mach_constant()) return true;
+ 793 
+ 794   return  false;
+ 795 }
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

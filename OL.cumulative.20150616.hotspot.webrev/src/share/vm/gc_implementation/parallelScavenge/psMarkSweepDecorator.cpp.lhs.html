@@ -1,0 +1,683 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 2001, 2013, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #include "precompiled.hpp"
+  26 #include "classfile/systemDictionary.hpp"
+  27 #include "gc_implementation/parallelScavenge/objectStartArray.hpp"
+  28 #include "gc_implementation/parallelScavenge/parallelScavengeHeap.hpp"
+  29 #include "gc_implementation/parallelScavenge/psMarkSweep.hpp"
+  30 #include "gc_implementation/parallelScavenge/psMarkSweepDecorator.hpp"
+  31 #include "gc_implementation/shared/liveRange.hpp"
+  32 #include "gc_implementation/shared/markSweep.inline.hpp"
+  33 #include "gc_implementation/shared/spaceDecorator.hpp"
+  34 #include "oops/oop.inline.hpp"
+  35 #include "runtime/prefetch.inline.hpp"
+  36 
+  37 PSMarkSweepDecorator* PSMarkSweepDecorator::_destination_decorator = NULL;
+  38 
+  39 
+  40 void PSMarkSweepDecorator::set_destination_decorator_tenured() {
+  41   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+  42   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+  43 
+  44   _destination_decorator = heap-&gt;old_gen()-&gt;object_mark_sweep();
+  45 }
+  46 
+  47 void PSMarkSweepDecorator::advance_destination_decorator() {
+  48   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+  49   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+  50 
+  51   assert(_destination_decorator != NULL, "Sanity");
+  52 
+  53   PSMarkSweepDecorator* first = heap-&gt;old_gen()-&gt;object_mark_sweep();
+  54   PSMarkSweepDecorator* second = heap-&gt;young_gen()-&gt;eden_mark_sweep();
+  55   PSMarkSweepDecorator* third = heap-&gt;young_gen()-&gt;from_mark_sweep();
+  56   PSMarkSweepDecorator* fourth = heap-&gt;young_gen()-&gt;to_mark_sweep();
+  57 
+  58   if ( _destination_decorator == first ) {
+  59     _destination_decorator = second;
+  60   } else if ( _destination_decorator == second ) {
+  61     _destination_decorator = third;
+  62   } else if ( _destination_decorator == third ) {
+  63     _destination_decorator = fourth;
+  64   } else {
+  65     fatal("PSMarkSweep attempting to advance past last compaction area");
+  66   }
+  67 }
+  68 
+  69 PSMarkSweepDecorator* PSMarkSweepDecorator::destination_decorator() {
+  70   assert(_destination_decorator != NULL, "Sanity");
+  71 
+  72   return _destination_decorator;
+  73 }
+  74 
+<a name="1" id="anc1"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  75 // FIX ME FIX ME FIX ME FIX ME!!!!!!!!!
+  76 // The object forwarding code is duplicated. Factor this out!!!!!
+  77 //
+  78 // This method "precompacts" objects inside its space to dest. It places forwarding
+  79 // pointers into markOops for use by adjust_pointers. If "dest" should overflow, we
+  80 // finish by compacting into our own space.
+  81 
+  82 void PSMarkSweepDecorator::precompact() {
+  83   // Reset our own compact top.
+  84   set_compaction_top(space()-&gt;bottom());
+  85 
+  86   /* We allow some amount of garbage towards the bottom of the space, so
+  87    * we don't start compacting before there is a significant gain to be made.
+  88    * Occasionally, we want to ensure a full compaction, which is determined
+  89    * by the MarkSweepAlwaysCompactCount parameter. This is a significant
+  90    * performance improvement!
+  91    */
+  92   bool skip_dead = ((PSMarkSweep::total_invocations() % MarkSweepAlwaysCompactCount) != 0);
+  93 
+  94   size_t allowed_deadspace = 0;
+  95   if (skip_dead) {
+  96     const size_t ratio = allowed_dead_ratio();
+  97     allowed_deadspace = space()-&gt;capacity_in_words() * ratio / 100;
+  98   }
+  99 
+ 100   // Fetch the current destination decorator
+ 101   PSMarkSweepDecorator* dest = destination_decorator();
+ 102   ObjectStartArray* start_array = dest-&gt;start_array();
+ 103 
+ 104   HeapWord* compact_top = dest-&gt;compaction_top();
+ 105   HeapWord* compact_end = dest-&gt;space()-&gt;end();
+ 106 
+ 107   HeapWord* q = space()-&gt;bottom();
+ 108   HeapWord* t = space()-&gt;top();
+ 109 
+ 110   HeapWord*  end_of_live= q;    /* One byte beyond the last byte of the last
+ 111                                    live object. */
+ 112   HeapWord*  first_dead = space()-&gt;end(); /* The first dead object. */
+ 113   LiveRange* liveRange  = NULL; /* The current live range, recorded in the
+ 114                                    first header of preceding free area. */
+ 115   _first_dead = first_dead;
+ 116 
+ 117   const intx interval = PrefetchScanIntervalInBytes;
+ 118 
+ 119   while (q &lt; t) {
+ 120     assert(oop(q)-&gt;mark()-&gt;is_marked() || oop(q)-&gt;mark()-&gt;is_unlocked() ||
+ 121            oop(q)-&gt;mark()-&gt;has_bias_pattern(),
+ 122            "these are the only valid states during a mark sweep");
+ 123     if (oop(q)-&gt;is_gc_marked()) {
+ 124       /* prefetch beyond q */
+ 125       Prefetch::write(q, interval);
+ 126       size_t size = oop(q)-&gt;size();
+ 127 
+<a name="2" id="anc2"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 128       size_t compaction_max_size = pointer_delta(compact_end, compact_top);
+ 129 
+ 130       // This should only happen if a space in the young gen overflows the
+ 131       // old gen. If that should happen, we null out the start_array, because
+ 132       // the young spaces are not covered by one.
+ 133       while(size &gt; compaction_max_size) {
+ 134         // First record the last compact_top
+ 135         dest-&gt;set_compaction_top(compact_top);
+ 136 
+ 137         // Advance to the next compaction decorator
+ 138         advance_destination_decorator();
+ 139         dest = destination_decorator();
+ 140 
+ 141         // Update compaction info
+ 142         start_array = dest-&gt;start_array();
+ 143         compact_top = dest-&gt;compaction_top();
+ 144         compact_end = dest-&gt;space()-&gt;end();
+ 145         assert(compact_top == dest-&gt;space()-&gt;bottom(), "Advanced to space already in use");
+ 146         assert(compact_end &gt; compact_top, "Must always be space remaining");
+ 147         compaction_max_size =
+ 148           pointer_delta(compact_end, compact_top);
+ 149       }
+ 150 
+ 151       // store the forwarding pointer into the mark word
+<a name="3" id="anc3"></a><span class="changed"> 152       if (q != compact_top) {</span>
+
+
+
+
+ 153         oop(q)-&gt;forward_to(oop(compact_top));
+ 154         assert(oop(q)-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");
+<a name="4" id="anc4"></a><span class="changed"> 155       } else {</span>
+
+
+
+
+
+ 156         // if the object isn't moving we can just set the mark to the default
+ 157         // mark and handle it specially later on.
+<a name="5" id="anc5"></a>
+
+
+ 158         oop(q)-&gt;init_mark();
+ 159         assert(oop(q)-&gt;forwardee() == NULL, "should be forwarded to NULL");
+<a name="6" id="anc6"></a><span class="changed"> 160       }</span>
+
+ 161 
+ 162       // Update object start array
+ 163       if (start_array) {
+ 164         start_array-&gt;allocate_block(compact_top);
+ 165       }
+ 166 
+ 167       compact_top += size;
+ 168       assert(compact_top &lt;= dest-&gt;space()-&gt;end(),
+ 169         "Exceeding space in destination");
+ 170 
+ 171       q += size;
+ 172       end_of_live = q;
+ 173     } else {
+ 174       /* run over all the contiguous dead objects */
+ 175       HeapWord* end = q;
+ 176       do {
+ 177         /* prefetch beyond end */
+ 178         Prefetch::write(end, interval);
+ 179         end += oop(end)-&gt;size();
+ 180       } while (end &lt; t &amp;&amp; (!oop(end)-&gt;is_gc_marked()));
+ 181 
+ 182       /* see if we might want to pretend this object is alive so that
+ 183        * we don't have to compact quite as often.
+ 184        */
+ 185       if (allowed_deadspace &gt; 0 &amp;&amp; q == compact_top) {
+ 186         size_t sz = pointer_delta(end, q);
+ 187         if (insert_deadspace(allowed_deadspace, q, sz)) {
+ 188           size_t compaction_max_size = pointer_delta(compact_end, compact_top);
+ 189 
+ 190           // This should only happen if a space in the young gen overflows the
+ 191           // old gen. If that should happen, we null out the start_array, because
+ 192           // the young spaces are not covered by one.
+ 193           while (sz &gt; compaction_max_size) {
+ 194             // First record the last compact_top
+ 195             dest-&gt;set_compaction_top(compact_top);
+ 196 
+ 197             // Advance to the next compaction decorator
+ 198             advance_destination_decorator();
+ 199             dest = destination_decorator();
+ 200 
+ 201             // Update compaction info
+ 202             start_array = dest-&gt;start_array();
+ 203             compact_top = dest-&gt;compaction_top();
+ 204             compact_end = dest-&gt;space()-&gt;end();
+ 205             assert(compact_top == dest-&gt;space()-&gt;bottom(), "Advanced to space already in use");
+ 206             assert(compact_end &gt; compact_top, "Must always be space remaining");
+ 207             compaction_max_size =
+ 208               pointer_delta(compact_end, compact_top);
+ 209           }
+ 210 
+ 211           // store the forwarding pointer into the mark word
+<a name="7" id="anc7"></a><span class="changed"> 212           if (q != compact_top) {</span>
+
+
+
+
+ 213             oop(q)-&gt;forward_to(oop(compact_top));
+ 214             assert(oop(q)-&gt;is_gc_marked(), "encoding the pointer should preserve the mark");
+<a name="8" id="anc8"></a><span class="changed"> 215           } else {</span>
+
+
+
+
+
+ 216             // if the object isn't moving we can just set the mark to the default
+ 217             // mark and handle it specially later on.
+ 218             oop(q)-&gt;init_mark();
+ 219             assert(oop(q)-&gt;forwardee() == NULL, "should be forwarded to NULL");
+<a name="9" id="anc9"></a><span class="changed"> 220           }</span>
+ 221 
+ 222           // Update object start array
+ 223           if (start_array) {
+ 224             start_array-&gt;allocate_block(compact_top);
+ 225           }
+ 226 
+ 227           compact_top += sz;
+ 228           assert(compact_top &lt;= dest-&gt;space()-&gt;end(),
+ 229             "Exceeding space in destination");
+ 230 
+ 231           q = end;
+ 232           end_of_live = end;
+ 233           continue;
+ 234         }
+ 235       }
+ 236 
+ 237       /* for the previous LiveRange, record the end of the live objects. */
+ 238       if (liveRange) {
+ 239         liveRange-&gt;set_end(q);
+ 240       }
+ 241 
+ 242       /* record the current LiveRange object.
+ 243        * liveRange-&gt;start() is overlaid on the mark word.
+ 244        */
+ 245       liveRange = (LiveRange*)q;
+ 246       liveRange-&gt;set_start(end);
+ 247       liveRange-&gt;set_end(end);
+ 248 
+ 249       /* see if this is the first dead region. */
+ 250       if (q &lt; first_dead) {
+ 251         first_dead = q;
+ 252       }
+ 253 
+ 254       /* move on to the next object */
+ 255       q = end;
+ 256     }
+ 257   }
+ 258 
+ 259   assert(q == t, "just checking");
+ 260   if (liveRange != NULL) {
+ 261     liveRange-&gt;set_end(q);
+ 262   }
+ 263   _end_of_live = end_of_live;
+ 264   if (end_of_live &lt; first_dead) {
+ 265     first_dead = end_of_live;
+ 266   }
+ 267   _first_dead = first_dead;
+ 268 
+ 269   // Update compaction top
+ 270   dest-&gt;set_compaction_top(compact_top);
+ 271 }
+ 272 
+ 273 bool PSMarkSweepDecorator::insert_deadspace(size_t&amp; allowed_deadspace_words,
+ 274                                             HeapWord* q, size_t deadlength) {
+ 275   if (allowed_deadspace_words &gt;= deadlength) {
+ 276     allowed_deadspace_words -= deadlength;
+ 277     CollectedHeap::fill_with_object(q, deadlength);
+ 278     oop(q)-&gt;set_mark(oop(q)-&gt;mark()-&gt;set_marked());
+ 279     assert((int) deadlength == oop(q)-&gt;size(), "bad filler object size");
+ 280     // Recall that we required "q == compaction_top".
+ 281     return true;
+ 282   } else {
+ 283     allowed_deadspace_words = 0;
+ 284     return false;
+ 285   }
+ 286 }
+ 287 
+ 288 void PSMarkSweepDecorator::adjust_pointers() {
+ 289   // adjust all the interior pointers to point at the new locations of objects
+ 290   // Used by MarkSweep::mark_sweep_phase3()
+ 291 
+ 292   HeapWord* q = space()-&gt;bottom();
+ 293   HeapWord* t = _end_of_live;  // Established by "prepare_for_compaction".
+ 294 
+ 295   assert(_first_dead &lt;= _end_of_live, "Stands to reason, no?");
+ 296 
+ 297   if (q &lt; t &amp;&amp; _first_dead &gt; q &amp;&amp;
+ 298       !oop(q)-&gt;is_gc_marked()) {
+ 299     // we have a chunk of the space which hasn't moved and we've
+ 300     // reinitialized the mark word during the previous pass, so we can't
+ 301     // use is_gc_marked for the traversal.
+ 302     HeapWord* end = _first_dead;
+ 303 
+ 304     while (q &lt; end) {
+ 305       // point all the oops to the new location
+<a name="10" id="anc10"></a>
+
+
+
+ 306       size_t size = oop(q)-&gt;adjust_pointers();
+ 307       q += size;
+ 308     }
+ 309 
+ 310     if (_first_dead == t) {
+ 311       q = t;
+ 312     } else {
+ 313       // $$$ This is funky.  Using this to read the previously written
+ 314       // LiveRange.  See also use below.
+ 315       q = (HeapWord*)oop(_first_dead)-&gt;mark()-&gt;decode_pointer();
+ 316     }
+ 317   }
+ 318   const intx interval = PrefetchScanIntervalInBytes;
+ 319 
+ 320   debug_only(HeapWord* prev_q = NULL);
+ 321   while (q &lt; t) {
+ 322     // prefetch beyond q
+ 323     Prefetch::write(q, interval);
+ 324     if (oop(q)-&gt;is_gc_marked()) {
+ 325       // q is alive
+ 326       // point all the oops to the new location
+<a name="11" id="anc11"></a>
+
+
+
+ 327       size_t size = oop(q)-&gt;adjust_pointers();
+ 328       debug_only(prev_q = q);
+ 329       q += size;
+ 330     } else {
+ 331       // q is not a live object, so its mark should point at the next
+ 332       // live object
+ 333       debug_only(prev_q = q);
+ 334       q = (HeapWord*) oop(q)-&gt;mark()-&gt;decode_pointer();
+ 335       assert(q &gt; prev_q, "we should be moving forward through memory");
+ 336     }
+ 337   }
+ 338 
+ 339   assert(q == t, "just checking");
+ 340 }
+ 341 
+ 342 void PSMarkSweepDecorator::compact(bool mangle_free_space ) {
+ 343   // Copy all live objects to their new location
+ 344   // Used by MarkSweep::mark_sweep_phase4()
+ 345 
+ 346   HeapWord*       q = space()-&gt;bottom();
+ 347   HeapWord* const t = _end_of_live;
+ 348   debug_only(HeapWord* prev_q = NULL);
+ 349 
+ 350   if (q &lt; t &amp;&amp; _first_dead &gt; q &amp;&amp;
+ 351       !oop(q)-&gt;is_gc_marked()) {
+ 352 #ifdef ASSERT
+ 353     // we have a chunk of the space which hasn't moved and we've reinitialized the
+ 354     // mark word during the previous pass, so we can't use is_gc_marked for the
+ 355     // traversal.
+ 356     HeapWord* const end = _first_dead;
+ 357 
+ 358     while (q &lt; end) {
+ 359       size_t size = oop(q)-&gt;size();
+ 360       assert(!oop(q)-&gt;is_gc_marked(), "should be unmarked (special dense prefix handling)");
+ 361       debug_only(prev_q = q);
+ 362       q += size;
+ 363     }
+ 364 #endif
+ 365 
+ 366     if (_first_dead == t) {
+ 367       q = t;
+ 368     } else {
+ 369       // $$$ Funky
+ 370       q = (HeapWord*) oop(_first_dead)-&gt;mark()-&gt;decode_pointer();
+ 371     }
+ 372   }
+ 373 
+ 374   const intx scan_interval = PrefetchScanIntervalInBytes;
+ 375   const intx copy_interval = PrefetchCopyIntervalInBytes;
+ 376 
+ 377   while (q &lt; t) {
+ 378     if (!oop(q)-&gt;is_gc_marked()) {
+ 379       // mark is pointer to next marked oop
+ 380       debug_only(prev_q = q);
+ 381       q = (HeapWord*) oop(q)-&gt;mark()-&gt;decode_pointer();
+ 382       assert(q &gt; prev_q, "we should be moving forward through memory");
+ 383     } else {
+ 384       // prefetch beyond q
+ 385       Prefetch::read(q, scan_interval);
+ 386 
+ 387       // size and destination
+ 388       size_t size = oop(q)-&gt;size();
+ 389       HeapWord* compaction_top = (HeapWord*)oop(q)-&gt;forwardee();
+ 390 
+ 391       // prefetch beyond compaction_top
+ 392       Prefetch::write(compaction_top, copy_interval);
+ 393 
+ 394       // copy object and reinit its mark
+<a name="12" id="anc12"></a><span class="changed"> 395       assert(q != compaction_top, "everything in this pass should be moving");</span>
+
+
+
+
+ 396       Copy::aligned_conjoint_words(q, compaction_top, size);
+<a name="13" id="anc13"></a><span class="removed"> 397       oop(compaction_top)-&gt;init_mark();</span>
+ 398       assert(oop(compaction_top)-&gt;klass() != NULL, "should have a class");
+<a name="14" id="anc14"></a>
+
+ 399 
+ 400       debug_only(prev_q = q);
+ 401       q += size;
+ 402     }
+ 403   }
+ 404 
+ 405   assert(compaction_top() &gt;= space()-&gt;bottom() &amp;&amp; compaction_top() &lt;= space()-&gt;end(),
+ 406          "should point inside space");
+ 407   space()-&gt;set_top(compaction_top());
+ 408 
+ 409   if (mangle_free_space) {
+ 410     space()-&gt;mangle_unused_area();
+ 411   }
+ 412 }
+<a name="15" id="anc15"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="15" type="hidden" /></form></body></html>

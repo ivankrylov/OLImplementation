@@ -1,0 +1,21 @@
+--- old/src/share/vm/oops/oop.psgc.inline.hpp	2015-06-16 10:25:46.866376166 -0700
++++ new/src/share/vm/oops/oop.psgc.inline.hpp	2015-06-16 10:25:46.790378000 -0700
+@@ -32,15 +32,15 @@
+ #include "gc_implementation/parallelScavenge/psScavenge.inline.hpp"
+ #endif // INCLUDE_ALL_GCS
+ 
+-// ParallelScavengeHeap methods
++// Parallel Scavenge GC related methods
+ 
+ inline void oopDesc::push_contents(PSPromotionManager* pm) {
+   Klass* k = klass();
+   if (!k->oop_is_typeArray()) {
+-    // It might contain oops beyond the header, so take the virtual call.
++    // It might contain oops beyond the header, so take the virtual call
+     k->oop_push_contents(pm, this);
+   }
+-  // Else skip it.  The TypeArrayKlass in the header never needs scavenging.
++  // Else skip it. TypeArrayKlass instances never need scavenging.
+ }
+ 
+ #endif // SHARE_VM_OOPS_OOP_PSGC_INLINE_HPP

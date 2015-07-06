@@ -1,0 +1,10 @@
+--- old/src/share/vm/opto/memnode.cpp	2015-06-16 10:25:47.986349073 -0700
++++ new/src/share/vm/opto/memnode.cpp	2015-06-16 10:25:47.914350815 -0700
+@@ -756,6 +756,7 @@
+         return n;
+ 
+       case Op_CastPP:
++      case Op_CastDerived:
+         // If the CastPP is useless, just peek on through it.
+         if( ccp->type(adr) == ccp->type(adr->in(1)) ) {
+           // Remember the cast that we've peeked though. If we peek

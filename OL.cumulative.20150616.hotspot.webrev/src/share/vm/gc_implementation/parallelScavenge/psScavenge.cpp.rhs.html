@@ -1,0 +1,1055 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 2002, 2014, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #include "precompiled.hpp"
+  26 #include "classfile/symbolTable.hpp"
+  27 #include "code/codeCache.hpp"
+  28 #include "gc_implementation/parallelScavenge/cardTableExtension.hpp"
+  29 #include "gc_implementation/parallelScavenge/gcTaskManager.hpp"
+  30 #include "gc_implementation/parallelScavenge/parallelScavengeHeap.hpp"
+  31 #include "gc_implementation/parallelScavenge/psAdaptiveSizePolicy.hpp"
+  32 #include "gc_implementation/parallelScavenge/psMarkSweep.hpp"
+  33 #include "gc_implementation/parallelScavenge/psParallelCompact.hpp"
+  34 #include "gc_implementation/parallelScavenge/psScavenge.inline.hpp"
+  35 #include "gc_implementation/parallelScavenge/psTasks.hpp"
+  36 #include "gc_implementation/shared/gcHeapSummary.hpp"
+  37 #include "gc_implementation/shared/gcTimer.hpp"
+  38 #include "gc_implementation/shared/gcTrace.hpp"
+  39 #include "gc_implementation/shared/gcTraceTime.hpp"
+  40 #include "gc_implementation/shared/isGCActiveMark.hpp"
+  41 #include "gc_implementation/shared/spaceDecorator.hpp"
+  42 #include "gc_interface/gcCause.hpp"
+  43 #include "memory/collectorPolicy.hpp"
+  44 #include "memory/gcLocker.inline.hpp"
+  45 #include "memory/referencePolicy.hpp"
+  46 #include "memory/referenceProcessor.hpp"
+  47 #include "memory/resourceArea.hpp"
+  48 #include "oops/oop.inline.hpp"
+  49 #include "oops/oop.psgc.inline.hpp"
+  50 #include "runtime/biasedLocking.hpp"
+  51 #include "runtime/fprofiler.hpp"
+  52 #include "runtime/handles.inline.hpp"
+  53 #include "runtime/threadCritical.hpp"
+  54 #include "runtime/vmThread.hpp"
+  55 #include "runtime/vm_operations.hpp"
+  56 #include "services/memoryService.hpp"
+  57 #include "utilities/stack.inline.hpp"
+  58 
+  59 PRAGMA_FORMAT_MUTE_WARNINGS_FOR_GCC
+  60 
+  61 HeapWord*                  PSScavenge::_to_space_top_before_gc = NULL;
+  62 int                        PSScavenge::_consecutive_skipped_scavenges = 0;
+  63 ReferenceProcessor*        PSScavenge::_ref_processor = NULL;
+  64 CardTableExtension*        PSScavenge::_card_table = NULL;
+  65 bool                       PSScavenge::_survivor_overflow = false;
+  66 uint                       PSScavenge::_tenuring_threshold = 0;
+  67 HeapWord*                  PSScavenge::_young_generation_boundary = NULL;
+  68 uintptr_t                  PSScavenge::_young_generation_boundary_compressed = 0;
+  69 elapsedTimer               PSScavenge::_accumulated_time;
+  70 STWGCTimer                 PSScavenge::_gc_timer;
+  71 ParallelScavengeTracer     PSScavenge::_gc_tracer;
+  72 Stack&lt;markOop, mtGC&gt;       PSScavenge::_preserved_mark_stack;
+  73 Stack&lt;oop, mtGC&gt;           PSScavenge::_preserved_oop_stack;
+  74 CollectorCounters*         PSScavenge::_counters = NULL;
+  75 
+  76 // Define before use
+  77 class PSIsAliveClosure: public BoolObjectClosure {
+  78 public:
+  79   bool do_object_b(oop p) {
+  80     return (!PSScavenge::is_obj_in_young(p)) || p-&gt;is_forwarded();
+  81   }
+  82 };
+  83 
+  84 PSIsAliveClosure PSScavenge::_is_alive_closure;
+  85 
+  86 class PSKeepAliveClosure: public OopClosure {
+  87 protected:
+  88   MutableSpace* _to_space;
+  89   PSPromotionManager* _promotion_manager;
+  90 
+  91 public:
+  92   PSKeepAliveClosure(PSPromotionManager* pm) : _promotion_manager(pm) {
+  93     ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+  94     assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+  95     _to_space = heap-&gt;young_gen()-&gt;to_space();
+  96 
+  97     assert(_promotion_manager != NULL, "Sanity");
+  98   }
+  99 
+ 100   template &lt;class T&gt; void do_oop_work(T* p) {
+ 101     assert (!oopDesc::is_null(*p), "expected non-null ref");
+ 102     assert ((oopDesc::load_decode_heap_oop_not_null(p))-&gt;is_oop(),
+ 103             "expected an oop while scanning weak refs");
+ 104 
+ 105     // Weak refs may be visited more than once.
+ 106     if (PSScavenge::should_scavenge(p, _to_space)) {
+ 107       PSScavenge::copy_and_push_safe_barrier&lt;T, /*promote_immediately=*/false&gt;(_promotion_manager, p);
+ 108     }
+ 109   }
+ 110   virtual void do_oop(oop* p)       { PSKeepAliveClosure::do_oop_work(p); }
+ 111   virtual void do_oop(narrowOop* p) { PSKeepAliveClosure::do_oop_work(p); }
+ 112 };
+ 113 
+ 114 class PSEvacuateFollowersClosure: public VoidClosure {
+ 115  private:
+ 116   PSPromotionManager* _promotion_manager;
+ 117  public:
+ 118   PSEvacuateFollowersClosure(PSPromotionManager* pm) : _promotion_manager(pm) {}
+ 119 
+ 120   virtual void do_void() {
+ 121     assert(_promotion_manager != NULL, "Sanity");
+ 122     _promotion_manager-&gt;drain_stacks(true);
+ 123     guarantee(_promotion_manager-&gt;stacks_empty(),
+ 124               "stacks should be empty at this point");
+ 125   }
+ 126 };
+ 127 
+ 128 class PSPromotionFailedClosure : public ObjectClosure {
+<a name="1" id="anc1"></a><span class="new"> 129  public:</span>
+ 130   virtual void do_object(oop obj) {
+ 131     if (obj-&gt;is_forwarded()) {
+<a name="2" id="anc2"></a><span class="changed"> 132       obj-&gt;convert_to_unmarked();</span>
+ 133     }
+ 134   }
+ 135 };
+ 136 
+ 137 class PSRefProcTaskProxy: public GCTask {
+ 138   typedef AbstractRefProcTaskExecutor::ProcessTask ProcessTask;
+ 139   ProcessTask &amp; _rp_task;
+ 140   uint          _work_id;
+ 141 public:
+ 142   PSRefProcTaskProxy(ProcessTask &amp; rp_task, uint work_id)
+ 143     : _rp_task(rp_task),
+ 144       _work_id(work_id)
+ 145   { }
+ 146 
+ 147 private:
+ 148   virtual char* name() { return (char *)"Process referents by policy in parallel"; }
+ 149   virtual void do_it(GCTaskManager* manager, uint which);
+ 150 };
+ 151 
+ 152 void PSRefProcTaskProxy::do_it(GCTaskManager* manager, uint which)
+ 153 {
+ 154   PSPromotionManager* promotion_manager =
+ 155     PSPromotionManager::gc_thread_promotion_manager(which);
+ 156   assert(promotion_manager != NULL, "sanity check");
+ 157   PSKeepAliveClosure keep_alive(promotion_manager);
+ 158   PSEvacuateFollowersClosure evac_followers(promotion_manager);
+ 159   PSIsAliveClosure is_alive;
+ 160   _rp_task.work(_work_id, is_alive, keep_alive, evac_followers);
+ 161 }
+ 162 
+ 163 class PSRefEnqueueTaskProxy: public GCTask {
+ 164   typedef AbstractRefProcTaskExecutor::EnqueueTask EnqueueTask;
+ 165   EnqueueTask&amp; _enq_task;
+ 166   uint         _work_id;
+ 167 
+ 168 public:
+ 169   PSRefEnqueueTaskProxy(EnqueueTask&amp; enq_task, uint work_id)
+ 170     : _enq_task(enq_task),
+ 171       _work_id(work_id)
+ 172   { }
+ 173 
+ 174   virtual char* name() { return (char *)"Enqueue reference objects in parallel"; }
+ 175   virtual void do_it(GCTaskManager* manager, uint which)
+ 176   {
+ 177     _enq_task.work(_work_id);
+ 178   }
+ 179 };
+ 180 
+ 181 class PSRefProcTaskExecutor: public AbstractRefProcTaskExecutor {
+ 182   virtual void execute(ProcessTask&amp; task);
+ 183   virtual void execute(EnqueueTask&amp; task);
+ 184 };
+ 185 
+ 186 void PSRefProcTaskExecutor::execute(ProcessTask&amp; task)
+ 187 {
+ 188   GCTaskQueue* q = GCTaskQueue::create();
+ 189   GCTaskManager* manager = ParallelScavengeHeap::gc_task_manager();
+ 190   for(uint i=0; i &lt; manager-&gt;active_workers(); i++) {
+ 191     q-&gt;enqueue(new PSRefProcTaskProxy(task, i));
+ 192   }
+ 193   ParallelTaskTerminator terminator(manager-&gt;active_workers(),
+ 194                  (TaskQueueSetSuper*) PSPromotionManager::stack_array_depth());
+ 195   if (task.marks_oops_alive() &amp;&amp; manager-&gt;active_workers() &gt; 1) {
+ 196     for (uint j = 0; j &lt; manager-&gt;active_workers(); j++) {
+ 197       q-&gt;enqueue(new StealTask(&amp;terminator));
+ 198     }
+ 199   }
+ 200   manager-&gt;execute_and_wait(q);
+ 201 }
+ 202 
+ 203 
+ 204 void PSRefProcTaskExecutor::execute(EnqueueTask&amp; task)
+ 205 {
+ 206   GCTaskQueue* q = GCTaskQueue::create();
+ 207   GCTaskManager* manager = ParallelScavengeHeap::gc_task_manager();
+ 208   for(uint i=0; i &lt; manager-&gt;active_workers(); i++) {
+ 209     q-&gt;enqueue(new PSRefEnqueueTaskProxy(task, i));
+ 210   }
+ 211   manager-&gt;execute_and_wait(q);
+ 212 }
+ 213 
+ 214 // This method contains all heap specific policy for invoking scavenge.
+ 215 // PSScavenge::invoke_no_policy() will do nothing but attempt to
+ 216 // scavenge. It will not clean up after failed promotions, bail out if
+ 217 // we've exceeded policy time limits, or any other special behavior.
+ 218 // All such policy should be placed here.
+ 219 //
+ 220 // Note that this method should only be called from the vm_thread while
+ 221 // at a safepoint!
+ 222 bool PSScavenge::invoke() {
+ 223   assert(SafepointSynchronize::is_at_safepoint(), "should be at safepoint");
+ 224   assert(Thread::current() == (Thread*)VMThread::vm_thread(), "should be in vm thread");
+ 225   assert(!Universe::heap()-&gt;is_gc_active(), "not reentrant");
+ 226 
+ 227   ParallelScavengeHeap* const heap = (ParallelScavengeHeap*)Universe::heap();
+ 228   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 229 
+ 230   PSAdaptiveSizePolicy* policy = heap-&gt;size_policy();
+ 231   IsGCActiveMark mark;
+ 232 
+ 233   const bool scavenge_done = PSScavenge::invoke_no_policy();
+ 234   const bool need_full_gc = !scavenge_done ||
+ 235       policy-&gt;should_full_GC(heap-&gt;old_gen()-&gt;free_in_bytes());
+ 236   bool full_gc_done = false;
+ 237 
+ 238   if (UsePerfData) {
+ 239     PSGCAdaptivePolicyCounters* const counters = heap-&gt;gc_policy_counters();
+ 240     const int ffs_val = need_full_gc ? full_follows_scavenge : not_skipped;
+ 241     counters-&gt;update_full_follows_scavenge(ffs_val);
+ 242   }
+ 243 
+ 244   if (need_full_gc) {
+ 245     GCCauseSetter gccs(heap, GCCause::_adaptive_size_policy);
+ 246     CollectorPolicy* cp = heap-&gt;collector_policy();
+ 247     const bool clear_all_softrefs = cp-&gt;should_clear_all_soft_refs();
+ 248 
+ 249     if (UseParallelOldGC) {
+ 250       full_gc_done = PSParallelCompact::invoke_no_policy(clear_all_softrefs);
+ 251     } else {
+ 252       full_gc_done = PSMarkSweep::invoke_no_policy(clear_all_softrefs);
+ 253     }
+ 254   }
+ 255 
+ 256   return full_gc_done;
+ 257 }
+ 258 
+ 259 // This method contains no policy. You should probably
+ 260 // be calling invoke() instead.
+ 261 bool PSScavenge::invoke_no_policy() {
+ 262   assert(SafepointSynchronize::is_at_safepoint(), "should be at safepoint");
+ 263   assert(Thread::current() == (Thread*)VMThread::vm_thread(), "should be in vm thread");
+ 264 
+ 265   assert(_preserved_mark_stack.is_empty(), "should be empty");
+ 266   assert(_preserved_oop_stack.is_empty(), "should be empty");
+ 267 
+ 268   _gc_timer.register_gc_start();
+ 269 
+ 270   TimeStamp scavenge_entry;
+ 271   TimeStamp scavenge_midpoint;
+ 272   TimeStamp scavenge_exit;
+ 273 
+ 274   scavenge_entry.update();
+ 275 
+ 276   if (GC_locker::check_active_before_gc()) {
+ 277     return false;
+ 278   }
+ 279 
+ 280   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+ 281   GCCause::Cause gc_cause = heap-&gt;gc_cause();
+ 282   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 283 
+ 284   // Check for potential problems.
+ 285   if (!should_attempt_scavenge()) {
+ 286     return false;
+ 287   }
+ 288 
+ 289   _gc_tracer.report_gc_start(heap-&gt;gc_cause(), _gc_timer.gc_start());
+ 290 
+ 291   bool promotion_failure_occurred = false;
+ 292 
+ 293   PSYoungGen* young_gen = heap-&gt;young_gen();
+ 294   PSOldGen* old_gen = heap-&gt;old_gen();
+ 295   PSAdaptiveSizePolicy* size_policy = heap-&gt;size_policy();
+ 296 
+ 297   heap-&gt;increment_total_collections();
+ 298 
+ 299   AdaptiveSizePolicyOutput(size_policy, heap-&gt;total_collections());
+ 300 
+ 301   if ((gc_cause != GCCause::_java_lang_system_gc) ||
+ 302        UseAdaptiveSizePolicyWithSystemGC) {
+ 303     // Gather the feedback data for eden occupancy.
+ 304     young_gen-&gt;eden_space()-&gt;accumulate_statistics();
+ 305   }
+ 306 
+ 307   if (ZapUnusedHeapArea) {
+ 308     // Save information needed to minimize mangling
+ 309     heap-&gt;record_gen_tops_before_GC();
+ 310   }
+ 311 
+ 312   heap-&gt;print_heap_before_gc();
+ 313   heap-&gt;trace_heap_before_gc(&amp;_gc_tracer);
+ 314 
+ 315   assert(!NeverTenure || _tenuring_threshold == markOopDesc::max_age + 1, "Sanity");
+ 316   assert(!AlwaysTenure || _tenuring_threshold == 0, "Sanity");
+ 317 
+ 318   size_t prev_used = heap-&gt;used();
+ 319 
+ 320   // Fill in TLABs
+ 321   heap-&gt;accumulate_statistics_all_tlabs();
+ 322   heap-&gt;ensure_parsability(true);  // retire TLABs
+ 323 
+ 324   if (VerifyBeforeGC &amp;&amp; heap-&gt;total_collections() &gt;= VerifyGCStartAt) {
+ 325     HandleMark hm;  // Discard invalid handles created during verification
+ 326     Universe::verify(" VerifyBeforeGC:");
+ 327   }
+ 328 
+ 329   {
+ 330     ResourceMark rm;
+ 331     HandleMark hm;
+ 332 
+<a name="3" id="anc3"></a><span class="new"> 333     gclog_or_tty-&gt;date_stamp(PrintGC &amp;&amp; PrintGCDateStamps);</span>
+ 334     TraceCPUTime tcpu(PrintGCDetails, true, gclog_or_tty);
+ 335     GCTraceTime t1(GCCauseString("GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer.gc_id());
+ 336     TraceCollectorStats tcs(counters());
+ 337     TraceMemoryManagerStats tms(false /* not full GC */,gc_cause);
+ 338 
+<a name="4" id="anc4"></a><span class="changed"> 339     if (TraceGen0Time) {</span>
+<span class="changed"> 340       accumulated_time()-&gt;start();</span>
+<span class="changed"> 341     }</span>
+<span class="changed"> 342 </span>
+<span class="changed"> 343     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="changed"> 344       tty-&gt;print_cr("PSScavenge::invoke_no_policy: Starting minor GC...");</span>
+<span class="changed"> 345     }</span>
+ 346 
+ 347     // Let the size policy know we're starting
+ 348     size_policy-&gt;minor_collection_begin();
+ 349 
+ 350     // Verify the object start arrays.
+ 351     if (VerifyObjectStartArray &amp;&amp;
+ 352         VerifyBeforeGC) {
+ 353       old_gen-&gt;verify_object_start_array();
+ 354     }
+ 355 
+ 356     // Verify no unmarked old-&gt;young roots
+ 357     if (VerifyRememberedSets) {
+ 358       CardTableExtension::verify_all_young_refs_imprecise();
+ 359     }
+ 360 
+ 361     if (!ScavengeWithObjectsInToSpace) {
+ 362       assert(young_gen-&gt;to_space()-&gt;is_empty(),
+ 363              "Attempt to scavenge with live objects in to_space");
+ 364       young_gen-&gt;to_space()-&gt;clear(SpaceDecorator::Mangle);
+ 365     } else if (ZapUnusedHeapArea) {
+ 366       young_gen-&gt;to_space()-&gt;mangle_unused_area();
+ 367     }
+ 368     save_to_space_top_before_gc();
+ 369 
+ 370     COMPILER2_PRESENT(DerivedPointerTable::clear());
+ 371 
+ 372     reference_processor()-&gt;enable_discovery(true /*verify_disabled*/, true /*verify_no_refs*/);
+ 373     reference_processor()-&gt;setup_policy(false);
+ 374 
+ 375     // We track how much was promoted to the next generation for
+ 376     // the AdaptiveSizePolicy.
+ 377     size_t old_gen_used_before = old_gen-&gt;used_in_bytes();
+ 378 
+ 379     // For PrintGCDetails
+ 380     size_t young_gen_used_before = young_gen-&gt;used_in_bytes();
+ 381 
+ 382     // Reset our survivor overflow.
+ 383     set_survivor_overflow(false);
+ 384 
+ 385     // We need to save the old top values before
+ 386     // creating the promotion_manager. We pass the top
+ 387     // values to the card_table, to prevent it from
+ 388     // straying into the promotion labs.
+ 389     HeapWord* old_top = old_gen-&gt;object_space()-&gt;top();
+ 390 
+ 391     // Release all previously held resources
+ 392     gc_task_manager()-&gt;release_all_resources();
+ 393 
+ 394     // Set the number of GC threads to be used in this collection
+ 395     gc_task_manager()-&gt;set_active_gang();
+ 396     gc_task_manager()-&gt;task_idle_workers();
+ 397     // Get the active number of workers here and use that value
+ 398     // throughout the methods.
+ 399     uint active_workers = gc_task_manager()-&gt;active_workers();
+ 400     heap-&gt;set_par_threads(active_workers);
+ 401 
+ 402     PSPromotionManager::pre_scavenge();
+ 403 
+ 404     // We'll use the promotion manager again later.
+ 405     PSPromotionManager* promotion_manager = PSPromotionManager::vm_thread_promotion_manager();
+ 406     {
+ 407       GCTraceTime tm("Scavenge", false, false, &amp;_gc_timer, _gc_tracer.gc_id());
+ 408       ParallelScavengeHeap::ParStrongRootsScope psrs;
+ 409 
+ 410       GCTaskQueue* q = GCTaskQueue::create();
+ 411 
+ 412       if (!old_gen-&gt;object_space()-&gt;is_empty()) {
+ 413         // There are only old-to-young pointers if there are objects
+ 414         // in the old gen.
+ 415         uint stripe_total = active_workers;
+ 416         for(uint i=0; i &lt; stripe_total; i++) {
+ 417           q-&gt;enqueue(new OldToYoungRootsTask(old_gen, old_top, i, stripe_total));
+ 418         }
+ 419       }
+ 420 
+ 421       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::universe));
+ 422       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::jni_handles));
+ 423       // We scan the thread roots in parallel
+ 424       Threads::create_thread_roots_tasks(q);
+ 425       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::object_synchronizer));
+ 426       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::flat_profiler));
+ 427       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::management));
+ 428       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::system_dictionary));
+ 429       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::class_loader_data));
+ 430       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::jvmti));
+ 431       q-&gt;enqueue(new ScavengeRootsTask(ScavengeRootsTask::code_cache));
+ 432 
+ 433       ParallelTaskTerminator terminator(
+ 434         active_workers,
+ 435                   (TaskQueueSetSuper*) promotion_manager-&gt;stack_array_depth());
+ 436       if (active_workers &gt; 1) {
+ 437         for (uint j = 0; j &lt; active_workers; j++) {
+ 438           q-&gt;enqueue(new StealTask(&amp;terminator));
+ 439         }
+ 440       }
+ 441 
+ 442       gc_task_manager()-&gt;execute_and_wait(q);
+ 443     }
+ 444 
+ 445     scavenge_midpoint.update();
+ 446 
+<a name="5" id="anc5"></a><span class="changed"> 447     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="changed"> 448       tty-&gt;print_cr("PSScavenge::invoke_no_policy: Midpoint of minor GC...");</span>
+<span class="changed"> 449     }</span>
+<span class="changed"> 450 </span>
+<span class="changed"> 451     // Process discovered reference objects</span>
+ 452     {
+ 453       GCTraceTime tm("References", false, false, &amp;_gc_timer, _gc_tracer.gc_id());
+ 454 
+ 455       reference_processor()-&gt;setup_policy(false); // not always_clear
+ 456       reference_processor()-&gt;set_active_mt_degree(active_workers);
+ 457       PSKeepAliveClosure keep_alive(promotion_manager);
+ 458       PSEvacuateFollowersClosure evac_followers(promotion_manager);
+ 459       ReferenceProcessorStats stats;
+ 460       if (reference_processor()-&gt;processing_is_mt()) {
+ 461         PSRefProcTaskExecutor task_executor;
+ 462         stats = reference_processor()-&gt;process_discovered_references(
+ 463           &amp;_is_alive_closure, &amp;keep_alive, &amp;evac_followers, &amp;task_executor,
+ 464           &amp;_gc_timer, _gc_tracer.gc_id());
+ 465       } else {
+ 466         stats = reference_processor()-&gt;process_discovered_references(
+ 467           &amp;_is_alive_closure, &amp;keep_alive, &amp;evac_followers, NULL, &amp;_gc_timer, _gc_tracer.gc_id());
+ 468       }
+ 469 
+ 470       _gc_tracer.report_gc_reference_stats(stats);
+ 471 
+ 472       // Enqueue reference objects discovered during scavenge.
+ 473       if (reference_processor()-&gt;processing_is_mt()) {
+ 474         PSRefProcTaskExecutor task_executor;
+ 475         reference_processor()-&gt;enqueue_discovered_references(&amp;task_executor);
+ 476       } else {
+ 477         reference_processor()-&gt;enqueue_discovered_references(NULL);
+ 478       }
+ 479     }
+ 480 
+ 481     {
+ 482       GCTraceTime tm("StringTable", false, false, &amp;_gc_timer, _gc_tracer.gc_id());
+ 483       // Unlink any dead interned Strings and process the remaining live ones.
+ 484       PSScavengeRootsClosure root_closure(promotion_manager);
+ 485       StringTable::unlink_or_oops_do(&amp;_is_alive_closure, &amp;root_closure);
+ 486     }
+ 487 
+ 488     // Finally, flush the promotion_manager's labs, and deallocate its stacks.
+ 489     promotion_failure_occurred = PSPromotionManager::post_scavenge(_gc_tracer);
+ 490     if (promotion_failure_occurred) {
+ 491       clean_up_failed_promotion();
+ 492       if (PrintGC) {
+ 493         gclog_or_tty-&gt;print("--");
+ 494       }
+ 495     }
+ 496 
+ 497     // Let the size policy know we're done.  Note that we count promotion
+ 498     // failure cleanup time as part of the collection (otherwise, we're
+ 499     // implicitly saying it's mutator time).
+ 500     size_policy-&gt;minor_collection_end(gc_cause);
+ 501 
+ 502     if (!promotion_failure_occurred) {
+ 503       // Swap the survivor spaces.
+ 504       young_gen-&gt;eden_space()-&gt;clear(SpaceDecorator::Mangle);
+ 505       young_gen-&gt;from_space()-&gt;clear(SpaceDecorator::Mangle);
+ 506       young_gen-&gt;swap_spaces();
+ 507 
+ 508       size_t survived = young_gen-&gt;from_space()-&gt;used_in_bytes();
+ 509       size_t promoted = old_gen-&gt;used_in_bytes() - old_gen_used_before;
+ 510       size_policy-&gt;update_averages(_survivor_overflow, survived, promoted);
+ 511 
+ 512       // A successful scavenge should restart the GC time limit count which is
+ 513       // for full GC's.
+ 514       size_policy-&gt;reset_gc_overhead_limit_count();
+ 515       if (UseAdaptiveSizePolicy) {
+ 516         // Calculate the new survivor size and tenuring threshold
+ 517 
+ 518         if (PrintAdaptiveSizePolicy) {
+ 519           gclog_or_tty-&gt;print("AdaptiveSizeStart: ");
+ 520           gclog_or_tty-&gt;stamp();
+ 521           gclog_or_tty-&gt;print_cr(" collection: %d ",
+ 522                          heap-&gt;total_collections());
+ 523 
+ 524           if (Verbose) {
+ 525             gclog_or_tty-&gt;print("old_gen_capacity: %d young_gen_capacity: %d",
+ 526               old_gen-&gt;capacity_in_bytes(), young_gen-&gt;capacity_in_bytes());
+ 527           }
+ 528         }
+ 529 
+ 530 
+ 531         if (UsePerfData) {
+ 532           PSGCAdaptivePolicyCounters* counters = heap-&gt;gc_policy_counters();
+ 533           counters-&gt;update_old_eden_size(
+ 534             size_policy-&gt;calculated_eden_size_in_bytes());
+ 535           counters-&gt;update_old_promo_size(
+ 536             size_policy-&gt;calculated_promo_size_in_bytes());
+ 537           counters-&gt;update_old_capacity(old_gen-&gt;capacity_in_bytes());
+ 538           counters-&gt;update_young_capacity(young_gen-&gt;capacity_in_bytes());
+ 539           counters-&gt;update_survived(survived);
+ 540           counters-&gt;update_promoted(promoted);
+ 541           counters-&gt;update_survivor_overflowed(_survivor_overflow);
+ 542         }
+ 543 
+ 544         size_t max_young_size = young_gen-&gt;max_size();
+ 545 
+ 546         // Deciding a free ratio in the young generation is tricky, so if
+ 547         // MinHeapFreeRatio or MaxHeapFreeRatio are in use (implicating
+ 548         // that the old generation size may have been limited because of them) we
+ 549         // should then limit our young generation size using NewRatio to have it
+ 550         // follow the old generation size.
+ 551         if (MinHeapFreeRatio != 0 || MaxHeapFreeRatio != 100) {
+ 552           max_young_size = MIN2(old_gen-&gt;capacity_in_bytes() / NewRatio, young_gen-&gt;max_size());
+ 553         }
+ 554 
+ 555         size_t survivor_limit =
+ 556           size_policy-&gt;max_survivor_size(max_young_size);
+ 557         _tenuring_threshold =
+ 558           size_policy-&gt;compute_survivor_space_size_and_threshold(
+ 559                                                            _survivor_overflow,
+ 560                                                            _tenuring_threshold,
+ 561                                                            survivor_limit);
+ 562 
+ 563        if (PrintTenuringDistribution) {
+ 564          gclog_or_tty-&gt;cr();
+ 565          gclog_or_tty-&gt;print_cr("Desired survivor size " SIZE_FORMAT " bytes, new threshold %u (max %u)",
+ 566                                 size_policy-&gt;calculated_survivor_size_in_bytes(),
+ 567                                 _tenuring_threshold, MaxTenuringThreshold);
+ 568        }
+ 569 
+ 570         if (UsePerfData) {
+ 571           PSGCAdaptivePolicyCounters* counters = heap-&gt;gc_policy_counters();
+ 572           counters-&gt;update_tenuring_threshold(_tenuring_threshold);
+ 573           counters-&gt;update_survivor_size_counters();
+ 574         }
+ 575 
+ 576         // Do call at minor collections?
+ 577         // Don't check if the size_policy is ready at this
+ 578         // level.  Let the size_policy check that internally.
+ 579         if (UseAdaptiveGenerationSizePolicyAtMinorCollection &amp;&amp;
+ 580             ((gc_cause != GCCause::_java_lang_system_gc) ||
+ 581               UseAdaptiveSizePolicyWithSystemGC)) {
+ 582 
+ 583           // Calculate optimial free space amounts
+ 584           assert(young_gen-&gt;max_size() &gt;
+ 585             young_gen-&gt;from_space()-&gt;capacity_in_bytes() +
+ 586             young_gen-&gt;to_space()-&gt;capacity_in_bytes(),
+ 587             "Sizes of space in young gen are out-of-bounds");
+ 588 
+ 589           size_t young_live = young_gen-&gt;used_in_bytes();
+ 590           size_t eden_live = young_gen-&gt;eden_space()-&gt;used_in_bytes();
+ 591           size_t cur_eden = young_gen-&gt;eden_space()-&gt;capacity_in_bytes();
+ 592           size_t max_old_gen_size = old_gen-&gt;max_gen_size();
+ 593           size_t max_eden_size = max_young_size -
+ 594             young_gen-&gt;from_space()-&gt;capacity_in_bytes() -
+ 595             young_gen-&gt;to_space()-&gt;capacity_in_bytes();
+ 596 
+ 597           // Used for diagnostics
+ 598           size_policy-&gt;clear_generation_free_space_flags();
+ 599 
+ 600           size_policy-&gt;compute_eden_space_size(young_live,
+ 601                                                eden_live,
+ 602                                                cur_eden,
+ 603                                                max_eden_size,
+ 604                                                false /* not full gc*/);
+ 605 
+ 606           size_policy-&gt;check_gc_overhead_limit(young_live,
+ 607                                                eden_live,
+ 608                                                max_old_gen_size,
+ 609                                                max_eden_size,
+ 610                                                false /* not full gc*/,
+ 611                                                gc_cause,
+ 612                                                heap-&gt;collector_policy());
+ 613 
+ 614           size_policy-&gt;decay_supplemental_growth(false /* not full gc*/);
+ 615         }
+ 616         // Resize the young generation at every collection
+ 617         // even if new sizes have not been calculated.  This is
+ 618         // to allow resizes that may have been inhibited by the
+ 619         // relative location of the "to" and "from" spaces.
+ 620 
+ 621         // Resizing the old gen at minor collects can cause increases
+ 622         // that don't feed back to the generation sizing policy until
+ 623         // a major collection.  Don't resize the old gen here.
+ 624 
+ 625         heap-&gt;resize_young_gen(size_policy-&gt;calculated_eden_size_in_bytes(),
+ 626                         size_policy-&gt;calculated_survivor_size_in_bytes());
+ 627 
+ 628         if (PrintAdaptiveSizePolicy) {
+ 629           gclog_or_tty-&gt;print_cr("AdaptiveSizeStop: collection: %d ",
+ 630                          heap-&gt;total_collections());
+ 631         }
+ 632       }
+ 633 
+ 634       // Update the structure of the eden. With NUMA-eden CPU hotplugging or offlining can
+ 635       // cause the change of the heap layout. Make sure eden is reshaped if that's the case.
+ 636       // Also update() will case adaptive NUMA chunk resizing.
+ 637       assert(young_gen-&gt;eden_space()-&gt;is_empty(), "eden space should be empty now");
+ 638       young_gen-&gt;eden_space()-&gt;update();
+ 639 
+ 640       heap-&gt;gc_policy_counters()-&gt;update_counters();
+ 641 
+ 642       heap-&gt;resize_all_tlabs();
+ 643 
+ 644       assert(young_gen-&gt;to_space()-&gt;is_empty(), "to space should be empty now");
+ 645     }
+ 646 
+ 647     COMPILER2_PRESENT(DerivedPointerTable::update_pointers());
+ 648 
+ 649     NOT_PRODUCT(reference_processor()-&gt;verify_no_references_recorded());
+ 650 
+ 651     {
+ 652       GCTraceTime tm("Prune Scavenge Root Methods", false, false, &amp;_gc_timer, _gc_tracer.gc_id());
+ 653 
+ 654       CodeCache::prune_scavenge_root_nmethods();
+ 655     }
+ 656 
+ 657     // Re-verify object start arrays
+ 658     if (VerifyObjectStartArray &amp;&amp;
+ 659         VerifyAfterGC) {
+ 660       old_gen-&gt;verify_object_start_array();
+ 661     }
+ 662 
+ 663     // Verify all old -&gt; young cards are now precise
+ 664     if (VerifyRememberedSets) {
+ 665       // Precise verification will give false positives. Until this is fixed,
+ 666       // use imprecise verification.
+ 667       // CardTableExtension::verify_all_young_refs_precise();
+ 668       CardTableExtension::verify_all_young_refs_imprecise();
+ 669     }
+ 670 
+<a name="6" id="anc6"></a><span class="changed"> 671     if (TraceObjectLayoutIntrinsics &amp;&amp; ObjectLayoutIntrinsicsTraceLevel &gt;= 1) {</span>
+<span class="changed"> 672       tty-&gt;print_cr("PSScavenge::invoke_no_policy: Finished minor GC");</span>
+<span class="changed"> 673     }</span>
+<span class="changed"> 674 </span>
+<span class="changed"> 675     if (TraceGen0Time) {</span>
+<span class="changed"> 676       accumulated_time()-&gt;stop();</span>
+<span class="changed"> 677     }</span>
+ 678 
+ 679     if (PrintGC) {
+ 680       if (PrintGCDetails) {
+ 681         // Don't print a GC timestamp here.  This is after the GC so
+ 682         // would be confusing.
+ 683         young_gen-&gt;print_used_change(young_gen_used_before);
+ 684       }
+ 685       heap-&gt;print_heap_change(prev_used);
+ 686     }
+ 687 
+ 688     // Track memory usage and detect low memory
+ 689     MemoryService::track_memory_usage();
+ 690     heap-&gt;update_counters();
+ 691 
+ 692     gc_task_manager()-&gt;release_idle_workers();
+ 693   }
+ 694 
+ 695   if (VerifyAfterGC &amp;&amp; heap-&gt;total_collections() &gt;= VerifyGCStartAt) {
+ 696     HandleMark hm;  // Discard invalid handles created during verification
+ 697     Universe::verify(" VerifyAfterGC:");
+ 698   }
+ 699 
+ 700   heap-&gt;print_heap_after_gc();
+ 701   heap-&gt;trace_heap_after_gc(&amp;_gc_tracer);
+ 702   _gc_tracer.report_tenuring_threshold(tenuring_threshold());
+ 703 
+ 704   if (ZapUnusedHeapArea) {
+ 705     young_gen-&gt;eden_space()-&gt;check_mangled_unused_area_complete();
+ 706     young_gen-&gt;from_space()-&gt;check_mangled_unused_area_complete();
+ 707     young_gen-&gt;to_space()-&gt;check_mangled_unused_area_complete();
+ 708   }
+ 709 
+ 710   scavenge_exit.update();
+ 711 
+ 712   if (PrintGCTaskTimeStamps) {
+ 713     tty-&gt;print_cr("VM-Thread " INT64_FORMAT " " INT64_FORMAT " " INT64_FORMAT,
+ 714                   scavenge_entry.ticks(), scavenge_midpoint.ticks(),
+ 715                   scavenge_exit.ticks());
+ 716     gc_task_manager()-&gt;print_task_time_stamps();
+ 717   }
+ 718 
+ 719 #ifdef TRACESPINNING
+ 720   ParallelTaskTerminator::print_termination_counts();
+ 721 #endif
+ 722 
+ 723 
+ 724   _gc_timer.register_gc_end();
+ 725 
+ 726   _gc_tracer.report_gc_end(_gc_timer.gc_end(), _gc_timer.time_partitions());
+ 727 
+ 728   return !promotion_failure_occurred;
+ 729 }
+ 730 
+ 731 // This method iterates over all objects in the young generation,
+ 732 // unforwarding markOops. It then restores any preserved mark oops,
+ 733 // and clears the _preserved_mark_stack.
+ 734 void PSScavenge::clean_up_failed_promotion() {
+ 735   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+ 736   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 737 
+ 738   PSYoungGen* young_gen = heap-&gt;young_gen();
+ 739 
+ 740   {
+ 741     ResourceMark rm;
+ 742 
+ 743     // Unforward all pointers in the young gen.
+ 744     PSPromotionFailedClosure unforward_closure;
+ 745     young_gen-&gt;object_iterate(&amp;unforward_closure);
+ 746 
+ 747     if (PrintGC &amp;&amp; Verbose) {
+ 748       gclog_or_tty-&gt;print_cr("Restoring %d marks", _preserved_oop_stack.size());
+ 749     }
+ 750 
+ 751     // Restore any saved marks.
+ 752     while (!_preserved_oop_stack.is_empty()) {
+ 753       oop obj      = _preserved_oop_stack.pop();
+ 754       markOop mark = _preserved_mark_stack.pop();
+ 755       obj-&gt;set_mark(mark);
+ 756     }
+ 757 
+ 758     // Clear the preserved mark and oop stack caches.
+ 759     _preserved_mark_stack.clear(true);
+ 760     _preserved_oop_stack.clear(true);
+ 761   }
+ 762 
+ 763   // Reset the PromotionFailureALot counters.
+ 764   NOT_PRODUCT(Universe::heap()-&gt;reset_promotion_should_fail();)
+ 765 }
+ 766 
+ 767 // This method is called whenever an attempt to promote an object
+ 768 // fails. Some markOops will need preservation, some will not. Note
+ 769 // that the entire eden is traversed after a failed promotion, with
+ 770 // all forwarded headers replaced by the default markOop. This means
+ 771 // it is not necessary to preserve most markOops.
+ 772 void PSScavenge::oop_promotion_failed(oop obj, markOop obj_mark) {
+ 773   if (obj_mark-&gt;must_be_preserved_for_promotion_failure(obj)) {
+ 774     // Should use per-worker private stacks here rather than
+ 775     // locking a common pair of stacks.
+ 776     ThreadCritical tc;
+ 777     _preserved_oop_stack.push(obj);
+ 778     _preserved_mark_stack.push(obj_mark);
+ 779   }
+ 780 }
+ 781 
+ 782 bool PSScavenge::should_attempt_scavenge() {
+ 783   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+ 784   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 785   PSGCAdaptivePolicyCounters* counters = heap-&gt;gc_policy_counters();
+ 786 
+ 787   if (UsePerfData) {
+ 788     counters-&gt;update_scavenge_skipped(not_skipped);
+ 789   }
+ 790 
+ 791   PSYoungGen* young_gen = heap-&gt;young_gen();
+ 792   PSOldGen* old_gen = heap-&gt;old_gen();
+ 793 
+ 794   if (!ScavengeWithObjectsInToSpace) {
+ 795     // Do not attempt to promote unless to_space is empty
+ 796     if (!young_gen-&gt;to_space()-&gt;is_empty()) {
+ 797       _consecutive_skipped_scavenges++;
+ 798       if (UsePerfData) {
+ 799         counters-&gt;update_scavenge_skipped(to_space_not_empty);
+ 800       }
+ 801       return false;
+ 802     }
+ 803   }
+ 804 
+ 805   // Test to see if the scavenge will likely fail.
+ 806   PSAdaptiveSizePolicy* policy = heap-&gt;size_policy();
+ 807 
+ 808   // A similar test is done in the policy's should_full_GC().  If this is
+ 809   // changed, decide if that test should also be changed.
+ 810   size_t avg_promoted = (size_t) policy-&gt;padded_average_promoted_in_bytes();
+ 811   size_t promotion_estimate = MIN2(avg_promoted, young_gen-&gt;used_in_bytes());
+ 812   bool result = promotion_estimate &lt; old_gen-&gt;free_in_bytes();
+ 813 
+ 814   if (PrintGCDetails &amp;&amp; Verbose) {
+ 815     gclog_or_tty-&gt;print(result ? "  do scavenge: " : "  skip scavenge: ");
+ 816     gclog_or_tty-&gt;print_cr(" average_promoted " SIZE_FORMAT
+ 817       " padded_average_promoted " SIZE_FORMAT
+ 818       " free in old gen " SIZE_FORMAT,
+ 819       (size_t) policy-&gt;average_promoted_in_bytes(),
+ 820       (size_t) policy-&gt;padded_average_promoted_in_bytes(),
+ 821       old_gen-&gt;free_in_bytes());
+ 822     if (young_gen-&gt;used_in_bytes() &lt;
+ 823         (size_t) policy-&gt;padded_average_promoted_in_bytes()) {
+ 824       gclog_or_tty-&gt;print_cr(" padded_promoted_average is greater"
+ 825         " than maximum promotion = " SIZE_FORMAT, young_gen-&gt;used_in_bytes());
+ 826     }
+ 827   }
+ 828 
+ 829   if (result) {
+ 830     _consecutive_skipped_scavenges = 0;
+ 831   } else {
+ 832     _consecutive_skipped_scavenges++;
+ 833     if (UsePerfData) {
+ 834       counters-&gt;update_scavenge_skipped(promoted_too_large);
+ 835     }
+ 836   }
+ 837   return result;
+ 838 }
+ 839 
+ 840   // Used to add tasks
+ 841 GCTaskManager* const PSScavenge::gc_task_manager() {
+ 842   assert(ParallelScavengeHeap::gc_task_manager() != NULL,
+ 843    "shouldn't return NULL");
+ 844   return ParallelScavengeHeap::gc_task_manager();
+ 845 }
+ 846 
+ 847 void PSScavenge::initialize() {
+ 848   // Arguments must have been parsed
+ 849 
+ 850   if (AlwaysTenure) {
+ 851     _tenuring_threshold = 0;
+ 852   } else if (NeverTenure) {
+ 853     _tenuring_threshold = markOopDesc::max_age + 1;
+ 854   } else {
+ 855     // We want to smooth out our startup times for the AdaptiveSizePolicy
+ 856     _tenuring_threshold = (UseAdaptiveSizePolicy) ? InitialTenuringThreshold :
+ 857                                                     MaxTenuringThreshold;
+ 858   }
+ 859 
+ 860   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+ 861   assert(heap-&gt;kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
+ 862 
+ 863   PSYoungGen* young_gen = heap-&gt;young_gen();
+ 864   PSOldGen* old_gen = heap-&gt;old_gen();
+ 865 
+ 866   // Set boundary between young_gen and old_gen
+ 867   assert(old_gen-&gt;reserved().end() &lt;= young_gen-&gt;eden_space()-&gt;bottom(),
+ 868          "old above young");
+ 869   set_young_generation_boundary(young_gen-&gt;eden_space()-&gt;bottom());
+ 870 
+ 871   // Initialize ref handling object for scavenging.
+ 872   MemRegion mr = young_gen-&gt;reserved();
+ 873 
+ 874   _ref_processor =
+ 875     new ReferenceProcessor(mr,                         // span
+ 876                            ParallelRefProcEnabled &amp;&amp; (ParallelGCThreads &gt; 1), // mt processing
+ 877                            (int) ParallelGCThreads,    // mt processing degree
+ 878                            true,                       // mt discovery
+ 879                            (int) ParallelGCThreads,    // mt discovery degree
+ 880                            true,                       // atomic_discovery
+ 881                            NULL);                      // header provides liveness info
+ 882 
+ 883   // Cache the cardtable
+ 884   BarrierSet* bs = Universe::heap()-&gt;barrier_set();
+ 885   assert(bs-&gt;kind() == BarrierSet::CardTableModRef, "Wrong barrier set kind");
+ 886   _card_table = (CardTableExtension*)bs;
+ 887 
+ 888   _counters = new CollectorCounters("PSScavenge", 0);
+ 889 }
+<a name="7" id="anc7"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="7" type="hidden" /></form></body></html>

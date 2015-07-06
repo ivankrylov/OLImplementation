@@ -1,0 +1,53 @@
+--- old/src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp	2015-06-16 10:25:42.798473910 -0700
++++ new/src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp	2015-06-16 10:25:42.726475629 -0700
+@@ -81,7 +81,6 @@
+   bool                                _old_gen_is_full;
+ 
+   OopStarTaskQueue                    _claimed_stack_depth;
+-  OverflowTaskQueue<oop, mtGC>        _claimed_stack_breadth;
+ 
+   bool                                _totally_drain;
+   uint                                _target_stack_size;
+@@ -96,7 +95,6 @@
+   static MutableSpace* young_space() { return _young_space; }
+ 
+   inline static PSPromotionManager* manager_array(int index);
+-  template <class T> inline void claim_or_forward_internal_depth(T* p);
+ 
+   // On the task queues we push reference locations as well as
+   // partially-scanned arrays (in the latter case, we push an oop to
+@@ -165,28 +163,26 @@
+   }
+ 
+   PSPromotionManager();
++  void reset();
+ 
+   // Accessors
+   OopStarTaskQueue* claimed_stack_depth() {
+     return &_claimed_stack_depth;
+   }
+ 
+-  bool young_gen_is_full()             { return _young_gen_is_full; }
+-
+-  bool old_gen_is_full()               { return _old_gen_is_full; }
+-  void set_old_gen_is_full(bool state) { _old_gen_is_full = state; }
+-
+   // Promotion methods
+   template<bool promote_immediately> oop copy_to_survivor_space(oop o);
+-  oop oop_promotion_failed(oop obj, markOop obj_mark);
+ 
+-  void reset();
++ private:
++  inline oop allocate_in_young_gen_slow(size_t size);
++  inline oop allocate_in_old_gen_slow(size_t size);
++  oop oop_promotion_failed(oop obj, markOop obj_mark);
+ 
++ public:
+   void flush_labs();
+   void drain_stacks(bool totally_drain) {
+     drain_stacks_depth(totally_drain);
+   }
+- public:
+   void drain_stacks_cond_depth() {
+     if (claimed_stack_depth()->size() > _target_stack_size) {
+       drain_stacks_depth(false);

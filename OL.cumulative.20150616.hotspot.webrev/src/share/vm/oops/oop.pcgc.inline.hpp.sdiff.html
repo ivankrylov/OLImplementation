@@ -1,0 +1,183 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/oops </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/oops/oop.pcgc.inline.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+  40   // can be done.
+  41   DEBUG_ONLY(Klass* original_klass = klass());
+  42 
+  43   Klass* new_klass = klass();
+  44   if (!new_klass-&gt;oop_is_typeArray()) {
+  45     // It might contain oops beyond the header, so take the virtual call.
+  46     new_klass-&gt;oop_update_pointers(cm, this);
+  47   }
+  48   // Else skip it.  The TypeArrayKlass in the header never needs scavenging.
+  49 }
+  50 
+  51 inline void oopDesc::follow_contents(ParCompactionManager* cm) {
+  52   assert (PSParallelCompact::mark_bitmap()-&gt;is_marked(this),
+  53     "should be marked");
+  54   klass()-&gt;oop_follow_contents(cm, this);
+  55 }
+  56 
+  57 inline oop oopDesc::forward_to_atomic(oop p) {
+  58   assert(ParNewGeneration::is_legal_forward_ptr(p),
+  59          "illegal forwarding pointer value.");
+
+  60   markOop oldMark = mark();
+<span class="changed">  61   markOop forwardPtrMark = markOopDesc::encode_pointer_as_mark(p);</span>
+
+  62   markOop curMark;
+  63 
+  64   assert(forwardPtrMark-&gt;decode_pointer() == p, "encoding must be reversable");
+  65   assert(sizeof(markOop) == sizeof(intptr_t), "CAS below requires this.");
+  66 
+  67   while (!oldMark-&gt;is_marked()) {
+  68     curMark = (markOop)Atomic::cmpxchg_ptr(forwardPtrMark, &amp;_mark, oldMark);
+  69     assert(is_forwarded(), "object should have been forwarded");
+  70     if (curMark == oldMark) {
+  71       return NULL;
+  72     }
+  73     // If the CAS was unsuccessful then curMark-&gt;is_marked()
+  74     // should return true as another thread has CAS'd in another
+  75     // forwarding pointer.
+  76     oldMark = curMark;
+  77   }
+  78   return forwardee();
+  79 }
+  80 
+  81 #endif // SHARE_VM_OOPS_OOP_PCGC_INLINE_HPP
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+  40   // can be done.
+  41   DEBUG_ONLY(Klass* original_klass = klass());
+  42 
+  43   Klass* new_klass = klass();
+  44   if (!new_klass-&gt;oop_is_typeArray()) {
+  45     // It might contain oops beyond the header, so take the virtual call.
+  46     new_klass-&gt;oop_update_pointers(cm, this);
+  47   }
+  48   // Else skip it.  The TypeArrayKlass in the header never needs scavenging.
+  49 }
+  50 
+  51 inline void oopDesc::follow_contents(ParCompactionManager* cm) {
+  52   assert (PSParallelCompact::mark_bitmap()-&gt;is_marked(this),
+  53     "should be marked");
+  54   klass()-&gt;oop_follow_contents(cm, this);
+  55 }
+  56 
+  57 inline oop oopDesc::forward_to_atomic(oop p) {
+  58   assert(ParNewGeneration::is_legal_forward_ptr(p),
+  59          "illegal forwarding pointer value.");
+<span class="new">  60 </span>
+  61   markOop oldMark = mark();
+<span class="changed">  62   markOop forwardPtrMark =</span>
+<span class="changed">  63       markOopDesc::encode_pointer_as_mark(p, /* is_contained = */ false);</span>
+  64   markOop curMark;
+  65 
+  66   assert(forwardPtrMark-&gt;decode_pointer() == p, "encoding must be reversable");
+  67   assert(sizeof(markOop) == sizeof(intptr_t), "CAS below requires this.");
+  68 
+  69   while (!oldMark-&gt;is_marked()) {
+  70     curMark = (markOop)Atomic::cmpxchg_ptr(forwardPtrMark, &amp;_mark, oldMark);
+  71     assert(is_forwarded(), "object should have been forwarded");
+  72     if (curMark == oldMark) {
+  73       return NULL;
+  74     }
+  75     // If the CAS was unsuccessful then curMark-&gt;is_marked()
+  76     // should return true as another thread has CAS'd in another
+  77     // forwarding pointer.
+  78     oldMark = curMark;
+  79   }
+  80   return forwardee();
+  81 }
+  82 
+  83 #endif // SHARE_VM_OOPS_OOP_PCGC_INLINE_HPP
+</pre></td>
+</tr></table>
+</body></html>

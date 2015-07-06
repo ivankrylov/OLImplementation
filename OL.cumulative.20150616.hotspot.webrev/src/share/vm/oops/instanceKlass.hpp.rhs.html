@@ -1,0 +1,1540 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+<a name="1" id="anc1"></a><span class="changed">   2  * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.</span>
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #ifndef SHARE_VM_OOPS_INSTANCEKLASS_HPP
+  26 #define SHARE_VM_OOPS_INSTANCEKLASS_HPP
+  27 
+  28 #include "classfile/classLoaderData.hpp"
+  29 #include "memory/referenceType.hpp"
+  30 #include "oops/annotations.hpp"
+  31 #include "oops/constMethod.hpp"
+  32 #include "oops/fieldInfo.hpp"
+  33 #include "oops/instanceOop.hpp"
+  34 #include "oops/klassVtable.hpp"
+  35 #include "runtime/atomic.hpp"
+  36 #include "runtime/handles.hpp"
+  37 #include "runtime/os.hpp"
+  38 #include "utilities/accessFlags.hpp"
+  39 #include "utilities/bitMap.inline.hpp"
+  40 #include "utilities/macros.hpp"
+  41 #include "trace/traceMacros.hpp"
+  42 
+  43 // An InstanceKlass is the VM level representation of a Java class.
+  44 // It contains all information needed for at class at execution runtime.
+  45 
+  46 //  InstanceKlass layout:
+  47 //    [C++ vtbl pointer           ] Klass
+  48 //    [subtype cache              ] Klass
+  49 //    [instance size              ] Klass
+  50 //    [java mirror                ] Klass
+  51 //    [super                      ] Klass
+  52 //    [access_flags               ] Klass
+  53 //    [name                       ] Klass
+  54 //    [first subklass             ] Klass
+  55 //    [next sibling               ] Klass
+  56 //    [array klasses              ]
+  57 //    [methods                    ]
+  58 //    [local interfaces           ]
+  59 //    [transitive interfaces      ]
+  60 //    [fields                     ]
+  61 //    [constants                  ]
+  62 //    [class loader               ]
+  63 //    [source file name           ]
+  64 //    [inner classes              ]
+  65 //    [static field size          ]
+  66 //    [nonstatic field size       ]
+  67 //    [static oop fields size     ]
+  68 //    [nonstatic oop maps size    ]
+  69 //    [has finalize method        ]
+  70 //    [deoptimization mark bit    ]
+  71 //    [initialization state       ]
+  72 //    [initializing thread        ]
+  73 //    [Java vtable length         ]
+  74 //    [oop map cache (stack maps) ]
+  75 //    [EMBEDDED Java vtable             ] size in words = vtable_len
+  76 //    [EMBEDDED nonstatic oop-map blocks] size in words = nonstatic_oop_map_size
+  77 //      The embedded nonstatic oop-map blocks are short pairs (offset, length)
+  78 //      indicating where oops are located in instances of this klass.
+  79 //    [EMBEDDED implementor of the interface] only exist for interface
+  80 //    [EMBEDDED host klass        ] only exist for an anonymous class (JSR 292 enabled)
+  81 
+  82 
+  83 // forward declaration for class -- see below for definition
+  84 class SuperTypeClosure;
+  85 class JNIid;
+  86 class jniIdMapBase;
+  87 class BreakpointInfo;
+  88 class fieldDescriptor;
+  89 class DepChange;
+  90 class nmethodBucket;
+  91 class PreviousVersionNode;
+  92 class JvmtiCachedClassFieldMap;
+  93 class MemberNameTable;
+  94 
+  95 // This is used in iterators below.
+  96 class FieldClosure: public StackObj {
+  97 public:
+  98   virtual void do_field(fieldDescriptor* fd) = 0;
+  99 };
+ 100 
+ 101 #ifndef PRODUCT
+ 102 // Print fields.
+ 103 // If "obj" argument to constructor is NULL, prints static fields, otherwise prints non-static fields.
+ 104 class FieldPrinter: public FieldClosure {
+ 105    oop _obj;
+ 106    outputStream* _st;
+ 107  public:
+ 108    FieldPrinter(outputStream* st, oop obj = NULL) : _obj(obj), _st(st) {}
+ 109    void do_field(fieldDescriptor* fd);
+ 110 };
+ 111 #endif  // !PRODUCT
+ 112 
+ 113 // ValueObjs embedded in klass. Describes where oops are located in instances of
+ 114 // this klass.
+ 115 class OopMapBlock VALUE_OBJ_CLASS_SPEC {
+ 116  public:
+ 117   // Byte offset of the first oop mapped by this block.
+ 118   int offset() const          { return _offset; }
+ 119   void set_offset(int offset) { _offset = offset; }
+ 120 
+ 121   // Number of oops in this block.
+ 122   uint count() const         { return _count; }
+ 123   void set_count(uint count) { _count = count; }
+ 124 
+ 125   // sizeof(OopMapBlock) in HeapWords.
+ 126   static const int size_in_words() {
+ 127     return align_size_up(int(sizeof(OopMapBlock)), HeapWordSize) &gt;&gt;
+ 128       LogHeapWordSize;
+ 129   }
+ 130 
+ 131  private:
+ 132   int  _offset;
+ 133   uint _count;
+ 134 };
+ 135 
+ 136 struct JvmtiCachedClassFileData;
+ 137 
+ 138 class InstanceKlass: public Klass {
+ 139   friend class VMStructs;
+ 140   friend class ClassFileParser;
+ 141   friend class CompileReplay;
+ 142 
+ 143  protected:
+ 144   // Constructor
+ 145   InstanceKlass(int vtable_len,
+ 146                 int itable_len,
+ 147                 int static_field_size,
+ 148                 int nonstatic_oop_map_size,
+ 149                 ReferenceType rt,
+ 150                 AccessFlags access_flags,
+ 151                 bool is_anonymous);
+ 152  public:
+ 153   static InstanceKlass* allocate_instance_klass(
+ 154                                           ClassLoaderData* loader_data,
+ 155                                           int vtable_len,
+ 156                                           int itable_len,
+ 157                                           int static_field_size,
+ 158                                           int nonstatic_oop_map_size,
+ 159                                           ReferenceType rt,
+ 160                                           AccessFlags access_flags,
+ 161                                           Symbol* name,
+ 162                                           Klass* super_klass,
+ 163                                           bool is_anonymous,
+ 164                                           TRAPS);
+ 165 
+ 166   InstanceKlass() { assert(DumpSharedSpaces || UseSharedSpaces, "only for CDS"); }
+ 167 
+ 168   // See "The Java Virtual Machine Specification" section 2.16.2-5 for a detailed description
+ 169   // of the class loading &amp; initialization procedure, and the use of the states.
+ 170   enum ClassState {
+ 171     allocated,                          // allocated (but not yet linked)
+ 172     loaded,                             // loaded and inserted in class hierarchy (but not linked yet)
+ 173     linked,                             // successfully linked/verified (but not initialized yet)
+ 174     being_initialized,                  // currently running class initializer
+ 175     fully_initialized,                  // initialized (successfull final state)
+ 176     initialization_error                // error happened during initialization
+ 177   };
+ 178 
+ 179   static int number_of_instance_classes() { return _total_instanceKlass_count; }
+ 180 
+ 181  private:
+ 182   static volatile int _total_instanceKlass_count;
+ 183 
+ 184  protected:
+ 185   // Annotations for this class
+ 186   Annotations*    _annotations;
+ 187   // Array classes holding elements of this class.
+ 188   Klass*          _array_klasses;
+ 189   // Constant pool for this class.
+ 190   ConstantPool* _constants;
+ 191   // The InnerClasses attribute and EnclosingMethod attribute. The
+ 192   // _inner_classes is an array of shorts. If the class has InnerClasses
+ 193   // attribute, then the _inner_classes array begins with 4-tuples of shorts
+ 194   // [inner_class_info_index, outer_class_info_index,
+ 195   // inner_name_index, inner_class_access_flags] for the InnerClasses
+ 196   // attribute. If the EnclosingMethod attribute exists, it occupies the
+ 197   // last two shorts [class_index, method_index] of the array. If only
+ 198   // the InnerClasses attribute exists, the _inner_classes array length is
+ 199   // number_of_inner_classes * 4. If the class has both InnerClasses
+ 200   // and EnclosingMethod attributes the _inner_classes array length is
+ 201   // number_of_inner_classes * 4 + enclosing_method_attribute_size.
+ 202   Array&lt;jushort&gt;* _inner_classes;
+ 203 
+ 204   // the source debug extension for this klass, NULL if not specified.
+ 205   // Specified as UTF-8 string without terminating zero byte in the classfile,
+ 206   // it is stored in the instanceklass as a NULL-terminated UTF-8 string
+ 207   char*           _source_debug_extension;
+ 208   // Array name derived from this class which needs unreferencing
+ 209   // if this class is unloaded.
+ 210   Symbol*         _array_name;
+ 211 
+ 212   // Number of heapOopSize words used by non-static fields in this klass
+ 213   // (including inherited fields but after header_size()).
+ 214   int             _nonstatic_field_size;
+ 215   int             _static_field_size;    // number words used by static fields (oop and non-oop) in this klass
+ 216   // Constant pool index to the utf8 entry of the Generic signature,
+ 217   // or 0 if none.
+ 218   u2              _generic_signature_index;
+ 219   // Constant pool index to the utf8 entry for the name of source file
+ 220   // containing this klass, 0 if not specified.
+ 221   u2              _source_file_name_index;
+ 222   u2              _static_oop_field_count;// number of static oop fields in this klass
+ 223   u2              _java_fields_count;    // The number of declared Java fields
+ 224   int             _nonstatic_oop_map_size;// size in words of nonstatic oop map blocks
+ 225 
+ 226   // _is_marked_dependent can be set concurrently, thus cannot be part of the
+ 227   // _misc_flags.
+ 228   bool            _is_marked_dependent;  // used for marking during flushing and deoptimization
+ 229   bool            _has_unloaded_dependent;
+ 230 
+ 231   enum {
+ 232     _misc_rewritten                = 1 &lt;&lt; 0, // methods rewritten.
+ 233     _misc_has_nonstatic_fields     = 1 &lt;&lt; 1, // for sizing with UseCompressedOops
+ 234     _misc_should_verify_class      = 1 &lt;&lt; 2, // allow caching of preverification
+ 235     _misc_is_anonymous             = 1 &lt;&lt; 3, // has embedded _host_klass field
+ 236     _misc_is_contended             = 1 &lt;&lt; 4, // marked with contended annotation
+ 237     _misc_has_default_methods      = 1 &lt;&lt; 5, // class/superclass/implemented interfaces has default methods
+ 238     _misc_declares_default_methods = 1 &lt;&lt; 6  // directly declares default methods (any access)
+ 239   };
+ 240   u2              _misc_flags;
+ 241   u2              _minor_version;        // minor version number of class file
+ 242   u2              _major_version;        // major version number of class file
+ 243   Thread*         _init_thread;          // Pointer to current thread doing initialization (to handle recusive initialization)
+ 244   int             _vtable_len;           // length of Java vtable (in words)
+ 245   int             _itable_len;           // length of Java itable (in words)
+ 246   OopMapCache*    volatile _oop_map_cache;   // OopMapCache for all methods in the klass (allocated lazily)
+ 247   MemberNameTable* _member_names;        // Member names
+ 248   JNIid*          _jni_ids;              // First JNI identifier for static fields in this class
+ 249   jmethodID*      _methods_jmethod_ids;  // jmethodIDs corresponding to method_idnum, or NULL if none
+ 250   nmethodBucket*  _dependencies;         // list of dependent nmethods
+ 251   nmethod*        _osr_nmethods_head;    // Head of list of on-stack replacement nmethods for this class
+ 252   BreakpointInfo* _breakpoints;          // bpt lists, managed by Method*
+ 253   // Array of interesting part(s) of the previous version(s) of this
+ 254   // InstanceKlass. See PreviousVersionWalker below.
+ 255   GrowableArray&lt;PreviousVersionNode *&gt;* _previous_versions;
+ 256   // JVMTI fields can be moved to their own structure - see 6315920
+ 257   // JVMTI: cached class file, before retransformable agent modified it in CFLH
+ 258   JvmtiCachedClassFileData* _cached_class_file;
+ 259 
+ 260   volatile u2     _idnum_allocated_count;         // JNI/JVMTI: increments with the addition of methods, old ids don't change
+ 261 
+ 262   // Class states are defined as ClassState (see above).
+ 263   // Place the _init_state here to utilize the unused 2-byte after
+ 264   // _idnum_allocated_count.
+ 265   u1              _init_state;                    // state of class
+ 266   u1              _reference_type;                // reference type
+ 267 
+ 268   JvmtiCachedClassFieldMap* _jvmti_cached_class_field_map;  // JVMTI: used during heap iteration
+ 269 
+ 270   NOT_PRODUCT(int _verify_count;)  // to avoid redundant verifies
+ 271 
+ 272   // Method array.
+ 273   Array&lt;Method*&gt;* _methods;
+ 274   // Default Method Array, concrete methods inherited from interfaces
+ 275   Array&lt;Method*&gt;* _default_methods;
+ 276   // Interface (Klass*s) this class declares locally to implement.
+ 277   Array&lt;Klass*&gt;* _local_interfaces;
+ 278   // Interface (Klass*s) this class implements transitively.
+ 279   Array&lt;Klass*&gt;* _transitive_interfaces;
+ 280   // Int array containing the original order of method in the class file (for JVMTI).
+ 281   Array&lt;int&gt;*     _method_ordering;
+ 282   // Int array containing the vtable_indices for default_methods
+ 283   // offset matches _default_methods offset
+ 284   Array&lt;int&gt;*     _default_vtable_indices;
+ 285 
+ 286   // Instance and static variable information, starts with 6-tuples of shorts
+ 287   // [access, name index, sig index, initval index, low_offset, high_offset]
+ 288   // for all fields, followed by the generic signature data at the end of
+ 289   // the array. Only fields with generic signature attributes have the generic
+ 290   // signature data set in the array. The fields array looks like following:
+ 291   //
+ 292   // f1: [access, name index, sig index, initial value index, low_offset, high_offset]
+ 293   // f2: [access, name index, sig index, initial value index, low_offset, high_offset]
+ 294   //      ...
+ 295   // fn: [access, name index, sig index, initial value index, low_offset, high_offset]
+ 296   //     [generic signature index]
+ 297   //     [generic signature index]
+ 298   //     ...
+ 299   Array&lt;u2&gt;*      _fields;
+ 300 
+ 301   // embedded Java vtable follows here
+ 302   // embedded Java itables follows here
+ 303   // embedded static fields follows here
+ 304   // embedded nonstatic oop-map blocks follows here
+ 305   // embedded implementor of this interface follows here
+ 306   //   The embedded implementor only exists if the current klass is an
+ 307   //   iterface. The possible values of the implementor fall into following
+ 308   //   three cases:
+ 309   //     NULL: no implementor.
+ 310   //     A Klass* that's not itself: one implementor.
+ 311   //     Itself: more than one implementors.
+ 312   // embedded host klass follows here
+ 313   //   The embedded host klass only exists in an anonymous class for
+ 314   //   dynamic language support (JSR 292 enabled). The host class grants
+ 315   //   its access privileges to this class also. The host class is either
+ 316   //   named, or a previously loaded anonymous class. A non-anonymous class
+ 317   //   or an anonymous class loaded through normal classloading does not
+ 318   //   have this embedded field.
+ 319   //
+ 320 
+ 321   friend class SystemDictionary;
+ 322 
+ 323  public:
+ 324   bool has_nonstatic_fields() const        {
+ 325     return (_misc_flags &amp; _misc_has_nonstatic_fields) != 0;
+ 326   }
+ 327   void set_has_nonstatic_fields(bool b)    {
+ 328     if (b) {
+ 329       _misc_flags |= _misc_has_nonstatic_fields;
+ 330     } else {
+ 331       _misc_flags &amp;= ~_misc_has_nonstatic_fields;
+ 332     }
+ 333   }
+ 334 
+ 335   // field sizes
+ 336   int nonstatic_field_size() const         { return _nonstatic_field_size; }
+ 337   void set_nonstatic_field_size(int size)  { _nonstatic_field_size = size; }
+ 338 
+ 339   int static_field_size() const            { return _static_field_size; }
+ 340   void set_static_field_size(int size)     { _static_field_size = size; }
+ 341 
+ 342   int static_oop_field_count() const       { return (int)_static_oop_field_count; }
+ 343   void set_static_oop_field_count(u2 size) { _static_oop_field_count = size; }
+ 344 
+ 345   // Java vtable
+ 346   int  vtable_length() const               { return _vtable_len; }
+ 347   void set_vtable_length(int len)          { _vtable_len = len; }
+ 348 
+ 349   // Java itable
+ 350   int  itable_length() const               { return _itable_len; }
+ 351   void set_itable_length(int len)          { _itable_len = len; }
+ 352 
+ 353   // array klasses
+ 354   Klass* array_klasses() const             { return _array_klasses; }
+ 355   void set_array_klasses(Klass* k)         { _array_klasses = k; }
+ 356 
+ 357   // methods
+ 358   Array&lt;Method*&gt;* methods() const          { return _methods; }
+ 359   void set_methods(Array&lt;Method*&gt;* a)      { _methods = a; }
+ 360   Method* method_with_idnum(int idnum);
+<a name="2" id="anc2"></a>
+
+ 361 
+ 362   // method ordering
+ 363   Array&lt;int&gt;* method_ordering() const     { return _method_ordering; }
+ 364   void set_method_ordering(Array&lt;int&gt;* m) { _method_ordering = m; }
+ 365   void copy_method_ordering(intArray* m, TRAPS);
+ 366 
+ 367   // default_methods
+ 368   Array&lt;Method*&gt;* default_methods() const  { return _default_methods; }
+ 369   void set_default_methods(Array&lt;Method*&gt;* a) { _default_methods = a; }
+ 370 
+ 371   // default method vtable_indices
+ 372   Array&lt;int&gt;* default_vtable_indices() const { return _default_vtable_indices; }
+ 373   void set_default_vtable_indices(Array&lt;int&gt;* v) { _default_vtable_indices = v; }
+ 374   Array&lt;int&gt;* create_new_default_vtable_indices(int len, TRAPS);
+ 375 
+ 376   // interfaces
+ 377   Array&lt;Klass*&gt;* local_interfaces() const          { return _local_interfaces; }
+ 378   void set_local_interfaces(Array&lt;Klass*&gt;* a)      {
+ 379     guarantee(_local_interfaces == NULL || a == NULL, "Just checking");
+ 380     _local_interfaces = a; }
+ 381 
+ 382   Array&lt;Klass*&gt;* transitive_interfaces() const     { return _transitive_interfaces; }
+ 383   void set_transitive_interfaces(Array&lt;Klass*&gt;* a) {
+ 384     guarantee(_transitive_interfaces == NULL || a == NULL, "Just checking");
+ 385     _transitive_interfaces = a;
+ 386   }
+ 387 
+ 388  private:
+ 389   friend class fieldDescriptor;
+ 390   FieldInfo* field(int index) const { return FieldInfo::from_field_array(_fields, index); }
+ 391 
+ 392  public:
+ 393   int     field_offset      (int index) const { return field(index)-&gt;offset(); }
+ 394   int     field_access_flags(int index) const { return field(index)-&gt;access_flags(); }
+ 395   Symbol* field_name        (int index) const { return field(index)-&gt;name(constants()); }
+ 396   Symbol* field_signature   (int index) const { return field(index)-&gt;signature(constants()); }
+ 397 
+ 398   // Number of Java declared fields
+ 399   int java_fields_count() const           { return (int)_java_fields_count; }
+ 400 
+ 401   Array&lt;u2&gt;* fields() const            { return _fields; }
+ 402   void set_fields(Array&lt;u2&gt;* f, u2 java_fields_count) {
+ 403     guarantee(_fields == NULL || f == NULL, "Just checking");
+ 404     _fields = f;
+ 405     _java_fields_count = java_fields_count;
+ 406   }
+ 407 
+ 408   // inner classes
+ 409   Array&lt;u2&gt;* inner_classes() const       { return _inner_classes; }
+ 410   void set_inner_classes(Array&lt;u2&gt;* f)   { _inner_classes = f; }
+ 411 
+ 412   enum InnerClassAttributeOffset {
+ 413     // From http://mirror.eng/products/jdk/1.1/docs/guide/innerclasses/spec/innerclasses.doc10.html#18814
+ 414     inner_class_inner_class_info_offset = 0,
+ 415     inner_class_outer_class_info_offset = 1,
+ 416     inner_class_inner_name_offset = 2,
+ 417     inner_class_access_flags_offset = 3,
+ 418     inner_class_next_offset = 4
+ 419   };
+ 420 
+ 421   enum EnclosingMethodAttributeOffset {
+ 422     enclosing_method_class_index_offset = 0,
+ 423     enclosing_method_method_index_offset = 1,
+ 424     enclosing_method_attribute_size = 2
+ 425   };
+ 426 
+ 427   // method override check
+ 428   bool is_override(methodHandle super_method, Handle targetclassloader, Symbol* targetclassname, TRAPS);
+ 429 
+ 430   // package
+ 431   bool is_same_class_package(Klass* class2);
+ 432   bool is_same_class_package(oop classloader2, Symbol* classname2);
+ 433   static bool is_same_class_package(oop class_loader1, Symbol* class_name1, oop class_loader2, Symbol* class_name2);
+ 434 
+ 435   // find an enclosing class (defined where original code was, in jvm.cpp!)
+ 436   Klass* compute_enclosing_class(bool* inner_is_member, TRAPS) {
+ 437     instanceKlassHandle self(THREAD, this);
+ 438     return compute_enclosing_class_impl(self, inner_is_member, THREAD);
+ 439   }
+ 440   static Klass* compute_enclosing_class_impl(instanceKlassHandle self,
+ 441                                                bool* inner_is_member, TRAPS);
+ 442 
+ 443   // tell if two classes have the same enclosing class (at package level)
+ 444   bool is_same_package_member(Klass* class2, TRAPS) {
+ 445     instanceKlassHandle self(THREAD, this);
+ 446     return is_same_package_member_impl(self, class2, THREAD);
+ 447   }
+ 448   static bool is_same_package_member_impl(instanceKlassHandle self,
+ 449                                           Klass* class2, TRAPS);
+ 450 
+ 451   // initialization state
+ 452   bool is_loaded() const                   { return _init_state &gt;= loaded; }
+ 453   bool is_linked() const                   { return _init_state &gt;= linked; }
+ 454   bool is_initialized() const              { return _init_state == fully_initialized; }
+ 455   bool is_not_initialized() const          { return _init_state &lt;  being_initialized; }
+ 456   bool is_being_initialized() const        { return _init_state == being_initialized; }
+ 457   bool is_in_error_state() const           { return _init_state == initialization_error; }
+ 458   bool is_reentrant_initialization(Thread *thread)  { return thread == _init_thread; }
+ 459   ClassState  init_state()                 { return (ClassState)_init_state; }
+ 460   bool is_rewritten() const                { return (_misc_flags &amp; _misc_rewritten) != 0; }
+ 461 
+ 462   // defineClass specified verification
+ 463   bool should_verify_class() const         {
+ 464     return (_misc_flags &amp; _misc_should_verify_class) != 0;
+ 465   }
+ 466   void set_should_verify_class(bool value) {
+ 467     if (value) {
+ 468       _misc_flags |= _misc_should_verify_class;
+ 469     } else {
+ 470       _misc_flags &amp;= ~_misc_should_verify_class;
+ 471     }
+ 472   }
+ 473 
+ 474   // marking
+ 475   bool is_marked_dependent() const         { return _is_marked_dependent; }
+ 476   void set_is_marked_dependent(bool value) { _is_marked_dependent = value; }
+ 477 
+ 478   bool has_unloaded_dependent() const         { return _has_unloaded_dependent; }
+ 479   void set_has_unloaded_dependent(bool value) { _has_unloaded_dependent = value; }
+ 480 
+ 481   // initialization (virtuals from Klass)
+ 482   bool should_be_initialized() const;  // means that initialize should be called
+ 483   void initialize(TRAPS);
+ 484   void link_class(TRAPS);
+ 485   bool link_class_or_fail(TRAPS); // returns false on failure
+ 486   void unlink_class();
+ 487   void rewrite_class(TRAPS);
+ 488   void link_methods(TRAPS);
+ 489   Method* class_initializer();
+ 490 
+ 491   // set the class to initialized if no static initializer is present
+ 492   void eager_initialize(Thread *thread);
+ 493 
+ 494   // reference type
+ 495   ReferenceType reference_type() const     { return (ReferenceType)_reference_type; }
+ 496   void set_reference_type(ReferenceType t) {
+ 497     assert(t == (u1)t, "overflow");
+ 498     _reference_type = (u1)t;
+ 499   }
+ 500 
+ 501   static ByteSize reference_type_offset() { return in_ByteSize(offset_of(InstanceKlass, _reference_type)); }
+ 502 
+ 503   // find local field, returns true if found
+ 504   bool find_local_field(Symbol* name, Symbol* sig, fieldDescriptor* fd) const;
+ 505   // find field in direct superinterfaces, returns the interface in which the field is defined
+ 506   Klass* find_interface_field(Symbol* name, Symbol* sig, fieldDescriptor* fd) const;
+ 507   // find field according to JVM spec 5.4.3.2, returns the klass in which the field is defined
+ 508   Klass* find_field(Symbol* name, Symbol* sig, fieldDescriptor* fd) const;
+ 509   // find instance or static fields according to JVM spec 5.4.3.2, returns the klass in which the field is defined
+ 510   Klass* find_field(Symbol* name, Symbol* sig, bool is_static, fieldDescriptor* fd) const;
+ 511 
+ 512   // find a non-static or static field given its offset within the class.
+ 513   bool contains_field_offset(int offset) {
+ 514     return instanceOopDesc::contains_field_offset(offset, nonstatic_field_size());
+ 515   }
+ 516 
+ 517   bool find_local_field_from_offset(int offset, bool is_static, fieldDescriptor* fd) const;
+ 518   bool find_field_from_offset(int offset, bool is_static, fieldDescriptor* fd) const;
+ 519 
+ 520   // find a local method (returns NULL if not found)
+ 521   Method* find_method(Symbol* name, Symbol* signature) const;
+ 522   static Method* find_method(Array&lt;Method*&gt;* methods, Symbol* name, Symbol* signature);
+ 523 
+ 524   // find a local method, but skip static methods
+ 525   Method* find_instance_method(Symbol* name, Symbol* signature);
+ 526   static Method* find_instance_method(Array&lt;Method*&gt;* methods, Symbol* name, Symbol* signature);
+ 527 
+ 528   // true if method matches signature and conforms to skipping_X conditions.
+ 529   static bool method_matches(Method* m, Symbol* signature, bool skipping_overpass, bool skipping_static);
+ 530 
+ 531   // find a local method index in default_methods (returns -1 if not found)
+ 532   static int find_method_index(Array&lt;Method*&gt;* methods, Symbol* name, Symbol* signature, bool skipping_overpass, bool skipping_static);
+ 533 
+ 534   // lookup operation (returns NULL if not found)
+ 535   Method* uncached_lookup_method(Symbol* name, Symbol* signature, MethodLookupMode mode) const;
+ 536 
+ 537   // lookup a method in all the interfaces that this class implements
+ 538   // (returns NULL if not found)
+ 539   Method* lookup_method_in_all_interfaces(Symbol* name, Symbol* signature, MethodLookupMode mode) const;
+ 540 
+ 541   // lookup a method in local defaults then in all interfaces
+ 542   // (returns NULL if not found)
+ 543   Method* lookup_method_in_ordered_interfaces(Symbol* name, Symbol* signature) const;
+ 544 
+ 545   // Find method indices by name.  If a method with the specified name is
+ 546   // found the index to the first method is returned, and 'end' is filled in
+ 547   // with the index of first non-name-matching method.  If no method is found
+ 548   // -1 is returned.
+ 549   int find_method_by_name(Symbol* name, int* end);
+ 550   static int find_method_by_name(Array&lt;Method*&gt;* methods, Symbol* name, int* end);
+ 551 
+ 552   // constant pool
+ 553   ConstantPool* constants() const        { return _constants; }
+ 554   void set_constants(ConstantPool* c)    { _constants = c; }
+ 555 
+ 556   // protection domain
+ 557   oop protection_domain() const;
+ 558 
+ 559   // signers
+ 560   objArrayOop signers() const;
+ 561 
+ 562   // host class
+ 563   Klass* host_klass() const              {
+ 564     Klass** hk = (Klass**)adr_host_klass();
+ 565     if (hk == NULL) {
+ 566       return NULL;
+ 567     } else {
+ 568       assert(*hk != NULL, "host klass should always be set if the address is not null");
+ 569       return *hk;
+ 570     }
+ 571   }
+ 572   void set_host_klass(Klass* host)            {
+ 573     assert(is_anonymous(), "not anonymous");
+ 574     Klass** addr = (Klass**)adr_host_klass();
+ 575     assert(addr != NULL, "no reversed space");
+ 576     if (addr != NULL) {
+ 577       *addr = host;
+ 578     }
+ 579   }
+ 580   bool is_anonymous() const                {
+ 581     return (_misc_flags &amp; _misc_is_anonymous) != 0;
+ 582   }
+ 583   void set_is_anonymous(bool value)        {
+ 584     if (value) {
+ 585       _misc_flags |= _misc_is_anonymous;
+ 586     } else {
+ 587       _misc_flags &amp;= ~_misc_is_anonymous;
+ 588     }
+ 589   }
+ 590 
+ 591   // Oop that keeps the metadata for this class from being unloaded
+ 592   // in places where the metadata is stored in other places, like nmethods
+ 593   oop klass_holder() const {
+ 594     return is_anonymous() ? java_mirror() : class_loader();
+ 595   }
+ 596 
+ 597   bool is_contended() const                {
+ 598     return (_misc_flags &amp; _misc_is_contended) != 0;
+ 599   }
+ 600   void set_is_contended(bool value)        {
+ 601     if (value) {
+ 602       _misc_flags |= _misc_is_contended;
+ 603     } else {
+ 604       _misc_flags &amp;= ~_misc_is_contended;
+ 605     }
+ 606   }
+ 607 
+ 608   // source file name
+ 609   Symbol* source_file_name() const               {
+ 610     return (_source_file_name_index == 0) ?
+ 611       (Symbol*)NULL : _constants-&gt;symbol_at(_source_file_name_index);
+ 612   }
+ 613   u2 source_file_name_index() const              {
+ 614     return _source_file_name_index;
+ 615   }
+ 616   void set_source_file_name_index(u2 sourcefile_index) {
+ 617     _source_file_name_index = sourcefile_index;
+ 618   }
+ 619 
+ 620   // minor and major version numbers of class file
+ 621   u2 minor_version() const                 { return _minor_version; }
+ 622   void set_minor_version(u2 minor_version) { _minor_version = minor_version; }
+ 623   u2 major_version() const                 { return _major_version; }
+ 624   void set_major_version(u2 major_version) { _major_version = major_version; }
+ 625 
+ 626   // source debug extension
+ 627   char* source_debug_extension() const     { return _source_debug_extension; }
+ 628   void set_source_debug_extension(char* array, int length);
+ 629 
+ 630   // symbol unloading support (refcount already added)
+ 631   Symbol* array_name()                     { return _array_name; }
+ 632   void set_array_name(Symbol* name)        { assert(_array_name == NULL  || name == NULL, "name already created"); _array_name = name; }
+ 633 
+ 634   // nonstatic oop-map blocks
+ 635   static int nonstatic_oop_map_size(unsigned int oop_map_count) {
+ 636     return oop_map_count * OopMapBlock::size_in_words();
+ 637   }
+ 638   unsigned int nonstatic_oop_map_count() const {
+ 639     return _nonstatic_oop_map_size / OopMapBlock::size_in_words();
+ 640   }
+ 641   int nonstatic_oop_map_size() const { return _nonstatic_oop_map_size; }
+ 642   void set_nonstatic_oop_map_size(int words) {
+ 643     _nonstatic_oop_map_size = words;
+ 644   }
+ 645 
+ 646   // RedefineClasses() support for previous versions:
+ 647   void add_previous_version(instanceKlassHandle ikh, BitMap *emcp_methods,
+ 648          int emcp_method_count);
+ 649   // If the _previous_versions array is non-NULL, then this klass
+ 650   // has been redefined at least once even if we aren't currently
+ 651   // tracking a previous version.
+ 652   bool has_been_redefined() const { return _previous_versions != NULL; }
+ 653   bool has_previous_version() const;
+ 654   void init_previous_versions() {
+ 655     _previous_versions = NULL;
+ 656   }
+ 657   GrowableArray&lt;PreviousVersionNode *&gt;* previous_versions() const {
+ 658     return _previous_versions;
+ 659   }
+ 660 
+<a name="3" id="anc3"></a>
+ 661   static void purge_previous_versions(InstanceKlass* ik);
+ 662 
+ 663   // JVMTI: Support for caching a class file before it is modified by an agent that can do retransformation
+ 664   void set_cached_class_file(JvmtiCachedClassFileData *data) {
+ 665     _cached_class_file = data;
+ 666   }
+ 667   JvmtiCachedClassFileData * get_cached_class_file() { return _cached_class_file; }
+ 668   jint get_cached_class_file_len();
+ 669   unsigned char * get_cached_class_file_bytes();
+ 670 
+ 671   // JVMTI: Support for caching of field indices, types, and offsets
+ 672   void set_jvmti_cached_class_field_map(JvmtiCachedClassFieldMap* descriptor) {
+ 673     _jvmti_cached_class_field_map = descriptor;
+ 674   }
+ 675   JvmtiCachedClassFieldMap* jvmti_cached_class_field_map() const {
+ 676     return _jvmti_cached_class_field_map;
+ 677   }
+ 678 
+ 679   bool has_default_methods() const {
+ 680     return (_misc_flags &amp; _misc_has_default_methods) != 0;
+ 681   }
+ 682   void set_has_default_methods(bool b) {
+ 683     if (b) {
+ 684       _misc_flags |= _misc_has_default_methods;
+ 685     } else {
+ 686       _misc_flags &amp;= ~_misc_has_default_methods;
+ 687     }
+ 688   }
+ 689 
+ 690   bool declares_default_methods() const {
+ 691     return (_misc_flags &amp; _misc_declares_default_methods) != 0;
+ 692   }
+ 693   void set_declares_default_methods(bool b) {
+ 694     if (b) {
+ 695       _misc_flags |= _misc_declares_default_methods;
+ 696     } else {
+ 697       _misc_flags &amp;= ~_misc_declares_default_methods;
+ 698     }
+ 699   }
+ 700 
+ 701   // for adding methods, ConstMethod::UNSET_IDNUM means no more ids available
+ 702   inline u2 next_method_idnum();
+ 703   void set_initial_method_idnum(u2 value)             { _idnum_allocated_count = value; }
+ 704 
+ 705   // generics support
+ 706   Symbol* generic_signature() const                   {
+ 707     return (_generic_signature_index == 0) ?
+ 708       (Symbol*)NULL : _constants-&gt;symbol_at(_generic_signature_index);
+ 709   }
+ 710   u2 generic_signature_index() const                  {
+ 711     return _generic_signature_index;
+ 712   }
+ 713   void set_generic_signature_index(u2 sig_index)      {
+ 714     _generic_signature_index = sig_index;
+ 715   }
+ 716 
+ 717   u2 enclosing_method_data(int offset);
+ 718   u2 enclosing_method_class_index() {
+ 719     return enclosing_method_data(enclosing_method_class_index_offset);
+ 720   }
+ 721   u2 enclosing_method_method_index() {
+ 722     return enclosing_method_data(enclosing_method_method_index_offset);
+ 723   }
+ 724   void set_enclosing_method_indices(u2 class_index,
+ 725                                     u2 method_index);
+ 726 
+ 727   // jmethodID support
+ 728   static jmethodID get_jmethod_id(instanceKlassHandle ik_h,
+ 729                      methodHandle method_h);
+ 730   static jmethodID get_jmethod_id_fetch_or_update(instanceKlassHandle ik_h,
+ 731                      size_t idnum, jmethodID new_id, jmethodID* new_jmeths,
+ 732                      jmethodID* to_dealloc_id_p,
+ 733                      jmethodID** to_dealloc_jmeths_p);
+ 734   static void get_jmethod_id_length_value(jmethodID* cache, size_t idnum,
+ 735                 size_t *length_p, jmethodID* id_p);
+ 736   jmethodID jmethod_id_or_null(Method* method);
+ 737 
+ 738   // annotations support
+ 739   Annotations* annotations() const          { return _annotations; }
+ 740   void set_annotations(Annotations* anno)   { _annotations = anno; }
+ 741 
+ 742   AnnotationArray* class_annotations() const {
+ 743     return (_annotations != NULL) ? _annotations-&gt;class_annotations() : NULL;
+ 744   }
+ 745   Array&lt;AnnotationArray*&gt;* fields_annotations() const {
+ 746     return (_annotations != NULL) ? _annotations-&gt;fields_annotations() : NULL;
+ 747   }
+ 748   AnnotationArray* class_type_annotations() const {
+ 749     return (_annotations != NULL) ? _annotations-&gt;class_type_annotations() : NULL;
+ 750   }
+ 751   Array&lt;AnnotationArray*&gt;* fields_type_annotations() const {
+ 752     return (_annotations != NULL) ? _annotations-&gt;fields_type_annotations() : NULL;
+ 753   }
+<a name="4" id="anc4"></a><span class="changed"> 754 </span>
+<span class="changed"> 755   // Instance allocation</span>
+ 756   instanceOop allocate_instance(TRAPS);
+<a name="5" id="anc5"></a><span class="new"> 757   instanceHandle allocate_instance_handle(TRAPS) {</span>
+<span class="new"> 758     return instanceHandle(THREAD, allocate_instance(THREAD));</span>
+<span class="new"> 759   }</span>
+<span class="new"> 760   instanceOop allocate_instance(int size, TRAPS);</span>
+<span class="new"> 761   instanceHandle allocate_instance_handle(int size, TRAPS) {</span>
+<span class="new"> 762     return instanceHandle(THREAD, allocate_instance(size, THREAD));</span>
+<span class="new"> 763   }</span>
+ 764 
+<a name="6" id="anc6"></a><span class="changed"> 765   // Instance allocation at the given address (in preallocated memory region)</span>
+<span class="changed"> 766   instanceOop allocate_instance_at(address obj_addr,</span>
+<span class="changed"> 767       bool is_contained, bool is_container, TRAPS);</span>
+<span class="changed"> 768   instanceHandle allocate_instance_at_handle(address obj_addr,</span>
+<span class="changed"> 769       bool is_contained, bool is_container, TRAPS) {</span>
+<span class="changed"> 770     return instanceHandle(THREAD, allocate_instance_at(obj_addr,</span>
+<span class="changed"> 771         is_contained, is_container, THREAD));</span>
+<span class="changed"> 772   }</span>
+ 773 
+ 774   objArrayOop allocate_objArray(int n, int length, TRAPS);
+ 775   // Helper function
+ 776   static instanceOop register_finalizer(instanceOop i, TRAPS);
+ 777 
+ 778   // Check whether reflection/jni/jvm code is allowed to instantiate this class;
+ 779   // if not, throw either an Error or an Exception.
+ 780   virtual void check_valid_for_instantiation(bool throwError, TRAPS);
+ 781 
+ 782   // initialization
+ 783   void call_class_initializer(TRAPS);
+ 784   void set_initialization_state_and_notify(ClassState state, TRAPS);
+ 785 
+ 786   // OopMapCache support
+ 787   OopMapCache* oop_map_cache()               { return _oop_map_cache; }
+ 788   void set_oop_map_cache(OopMapCache *cache) { _oop_map_cache = cache; }
+ 789   void mask_for(methodHandle method, int bci, InterpreterOopMap* entry);
+ 790 
+ 791   // JNI identifier support (for static fields - for jni performance)
+ 792   JNIid* jni_ids()                               { return _jni_ids; }
+ 793   void set_jni_ids(JNIid* ids)                   { _jni_ids = ids; }
+ 794   JNIid* jni_id_for(int offset);
+ 795 
+ 796   // maintenance of deoptimization dependencies
+ 797   int mark_dependent_nmethods(DepChange&amp; changes);
+ 798   void add_dependent_nmethod(nmethod* nm);
+ 799   void remove_dependent_nmethod(nmethod* nm);
+ 800 
+ 801   // On-stack replacement support
+ 802   nmethod* osr_nmethods_head() const         { return _osr_nmethods_head; };
+ 803   void set_osr_nmethods_head(nmethod* h)     { _osr_nmethods_head = h; };
+ 804   void add_osr_nmethod(nmethod* n);
+ 805   void remove_osr_nmethod(nmethod* n);
+ 806   int mark_osr_nmethods(const Method* m);
+ 807   nmethod* lookup_osr_nmethod(const Method* m, int bci, int level, bool match_level) const;
+ 808 
+ 809   // Breakpoint support (see methods on Method* for details)
+ 810   BreakpointInfo* breakpoints() const       { return _breakpoints; };
+ 811   void set_breakpoints(BreakpointInfo* bps) { _breakpoints = bps; };
+ 812 
+ 813   // support for stub routines
+ 814   static ByteSize init_state_offset()  { return in_ByteSize(offset_of(InstanceKlass, _init_state)); }
+ 815   TRACE_DEFINE_OFFSET;
+ 816   static ByteSize init_thread_offset() { return in_ByteSize(offset_of(InstanceKlass, _init_thread)); }
+ 817 
+ 818   // subclass/subinterface checks
+ 819   bool implements_interface(Klass* k) const;
+ 820   bool is_same_or_direct_interface(Klass* k) const;
+ 821 
+ 822   // Access to the implementor of an interface.
+ 823   Klass* implementor() const
+ 824   {
+ 825     Klass** k = adr_implementor();
+ 826     if (k == NULL) {
+ 827       return NULL;
+ 828     } else {
+ 829       return *k;
+ 830     }
+ 831   }
+ 832 
+ 833   void set_implementor(Klass* k) {
+ 834     assert(is_interface(), "not interface");
+ 835     Klass** addr = adr_implementor();
+ 836     assert(addr != NULL, "null addr");
+ 837     if (addr != NULL) {
+ 838       *addr = k;
+ 839     }
+ 840   }
+ 841 
+ 842   int  nof_implementors() const       {
+ 843     Klass* k = implementor();
+ 844     if (k == NULL) {
+ 845       return 0;
+ 846     } else if (k != this) {
+ 847       return 1;
+ 848     } else {
+ 849       return 2;
+ 850     }
+ 851   }
+ 852 
+ 853   void add_implementor(Klass* k);  // k is a new class that implements this interface
+ 854   void init_implementor();           // initialize
+ 855 
+ 856   // link this class into the implementors list of every interface it implements
+ 857   void process_interfaces(Thread *thread);
+ 858 
+ 859   // virtual operations from Klass
+ 860   bool is_leaf_class() const               { return _subklass == NULL; }
+ 861   GrowableArray&lt;Klass*&gt;* compute_secondary_supers(int num_extra_slots);
+ 862   bool compute_is_subtype_of(Klass* k);
+ 863   bool can_be_primary_super_slow() const;
+ 864   int oop_size(oop obj)  const             { return size_helper(); }
+ 865   bool oop_is_instance_slow() const        { return true; }
+ 866 
+ 867   // Iterators
+ 868   void do_local_static_fields(FieldClosure* cl);
+ 869   void do_nonstatic_fields(FieldClosure* cl); // including inherited fields
+ 870   void do_local_static_fields(void f(fieldDescriptor*, Handle, TRAPS), Handle, TRAPS);
+ 871 
+ 872   void methods_do(void f(Method* method));
+ 873   void array_klasses_do(void f(Klass* k));
+ 874   void array_klasses_do(void f(Klass* k, TRAPS), TRAPS);
+ 875   bool super_types_do(SuperTypeClosure* blk);
+ 876 
+ 877   // Casting from Klass*
+ 878   static InstanceKlass* cast(Klass* k) {
+ 879     assert(k-&gt;is_klass(), "must be");
+ 880     assert(k-&gt;oop_is_instance(), "cast to InstanceKlass");
+ 881     return (InstanceKlass*) k;
+ 882   }
+ 883 
+ 884   InstanceKlass* java_super() const {
+ 885     return (super() == NULL) ? NULL : cast(super());
+ 886   }
+ 887 
+ 888   // Sizing (in words)
+ 889   static int header_size()            { return align_object_offset(sizeof(InstanceKlass)/HeapWordSize); }
+ 890 
+ 891   static int size(int vtable_length, int itable_length,
+ 892                   int nonstatic_oop_map_size,
+ 893                   bool is_interface, bool is_anonymous) {
+ 894     return align_object_size(header_size() +
+ 895            align_object_offset(vtable_length) +
+ 896            align_object_offset(itable_length) +
+ 897            ((is_interface || is_anonymous) ?
+ 898              align_object_offset(nonstatic_oop_map_size) :
+ 899              nonstatic_oop_map_size) +
+ 900            (is_interface ? (int)sizeof(Klass*)/HeapWordSize : 0) +
+ 901            (is_anonymous ? (int)sizeof(Klass*)/HeapWordSize : 0));
+ 902   }
+ 903   int size() const                    { return size(vtable_length(),
+ 904                                                itable_length(),
+ 905                                                nonstatic_oop_map_size(),
+ 906                                                is_interface(),
+ 907                                                is_anonymous());
+ 908   }
+ 909 #if INCLUDE_SERVICES
+ 910   virtual void collect_statistics(KlassSizeStats *sz) const;
+ 911 #endif
+ 912 
+ 913   static int vtable_start_offset()    { return header_size(); }
+ 914   static int vtable_length_offset()   { return offset_of(InstanceKlass, _vtable_len) / HeapWordSize; }
+ 915 
+ 916   intptr_t* start_of_vtable() const        { return ((intptr_t*)this) + vtable_start_offset(); }
+ 917   intptr_t* start_of_itable() const        { return start_of_vtable() + align_object_offset(vtable_length()); }
+ 918   int  itable_offset_in_words() const { return start_of_itable() - (intptr_t*)this; }
+ 919 
+ 920   intptr_t* end_of_itable() const          { return start_of_itable() + itable_length(); }
+ 921 
+ 922   address static_field_addr(int offset);
+ 923 
+ 924   OopMapBlock* start_of_nonstatic_oop_maps() const {
+ 925     return (OopMapBlock*)(start_of_itable() + align_object_offset(itable_length()));
+ 926   }
+ 927 
+ 928   Klass** end_of_nonstatic_oop_maps() const {
+ 929     return (Klass**)(start_of_nonstatic_oop_maps() +
+ 930                      nonstatic_oop_map_count());
+ 931   }
+ 932 
+ 933   Klass** adr_implementor() const {
+ 934     if (is_interface()) {
+ 935       return (Klass**)end_of_nonstatic_oop_maps();
+ 936     } else {
+ 937       return NULL;
+ 938     }
+ 939   };
+ 940 
+ 941   Klass** adr_host_klass() const {
+ 942     if (is_anonymous()) {
+ 943       Klass** adr_impl = adr_implementor();
+ 944       if (adr_impl != NULL) {
+ 945         return adr_impl + 1;
+ 946       } else {
+ 947         return end_of_nonstatic_oop_maps();
+ 948       }
+ 949     } else {
+ 950       return NULL;
+ 951     }
+ 952   }
+ 953 
+ 954   // Use this to return the size of an instance in heap words:
+ 955   int size_helper() const {
+ 956     return layout_helper_to_size_helper(layout_helper());
+ 957   }
+ 958 
+ 959   // This bit is initialized in classFileParser.cpp.
+ 960   // It is false under any of the following conditions:
+ 961   //  - the class is abstract (including any interface)
+ 962   //  - the class has a finalizer (if !RegisterFinalizersAtInit)
+ 963   //  - the class size is larger than FastAllocateSizeLimit
+ 964   //  - the class is java/lang/Class, which cannot be allocated directly
+ 965   bool can_be_fastpath_allocated() const {
+ 966     return !layout_helper_needs_slow_path(layout_helper());
+ 967   }
+ 968 
+ 969   // Java vtable/itable
+ 970   klassVtable* vtable() const;        // return new klassVtable wrapper
+ 971   inline Method* method_at_vtable(int index);
+ 972   klassItable* itable() const;        // return new klassItable wrapper
+ 973   Method* method_at_itable(Klass* holder, int index, TRAPS);
+ 974 
+ 975 #if INCLUDE_JVMTI
+<a name="7" id="anc7"></a><span class="changed"> 976   void adjust_default_methods(Method** old_methods, Method** new_methods,</span>
+<span class="changed"> 977                               int methods_length, bool* trace_name_printed);</span>
+ 978 #endif // INCLUDE_JVMTI
+ 979 
+<a name="8" id="anc8"></a><span class="changed"> 980   // Garbage collection support</span>
+<span class="changed"> 981   // Mark-Sweep GCs</span>
+ 982   void oop_follow_contents(oop obj);
+ 983   int oop_adjust_pointers(oop obj);
+ 984 
+<a name="9" id="anc9"></a><span class="new"> 985   // Parallel Scavenge and Parallel Old GCs</span>
+<span class="new"> 986   PARALLEL_GC_DECLS</span>
+<span class="new"> 987 </span>
+ 988   void clean_implementors_list(BoolObjectClosure* is_alive);
+ 989   void clean_method_data(BoolObjectClosure* is_alive);
+ 990   void clean_dependent_nmethods();
+ 991 
+ 992   // Explicit metaspace deallocation of fields
+ 993   // For RedefineClasses and class file parsing errors, we need to deallocate
+ 994   // instanceKlasses and the metadata they point to.
+ 995   void deallocate_contents(ClassLoaderData* loader_data);
+ 996   static void deallocate_methods(ClassLoaderData* loader_data,
+ 997                                  Array&lt;Method*&gt;* methods);
+ 998   void static deallocate_interfaces(ClassLoaderData* loader_data,
+ 999                                     Klass* super_klass,
+1000                                     Array&lt;Klass*&gt;* local_interfaces,
+1001                                     Array&lt;Klass*&gt;* transitive_interfaces);
+1002 
+1003   // The constant pool is on stack if any of the methods are executing or
+1004   // referenced by handles.
+1005   bool on_stack() const { return _constants-&gt;on_stack(); }
+1006 
+1007   // callbacks for actions during class unloading
+1008   static void notify_unload_class(InstanceKlass* ik);
+1009   static void release_C_heap_structures(InstanceKlass* ik);
+<a name="10" id="anc10"></a>
+
+
+1010 
+1011   // Naming
+1012   const char* signature_name() const;
+1013 
+1014   // Iterators
+1015   int oop_oop_iterate(oop obj, ExtendedOopClosure* blk) {
+1016     return oop_oop_iterate_v(obj, blk);
+1017   }
+1018 
+1019   int oop_oop_iterate_m(oop obj, ExtendedOopClosure* blk, MemRegion mr) {
+1020     return oop_oop_iterate_v_m(obj, blk, mr);
+1021   }
+1022 
+1023 #define InstanceKlass_OOP_OOP_ITERATE_DECL(OopClosureType, nv_suffix)      \
+1024   int  oop_oop_iterate##nv_suffix(oop obj, OopClosureType* blk);           \
+1025   int  oop_oop_iterate##nv_suffix##_m(oop obj, OopClosureType* blk,        \
+1026                                       MemRegion mr);
+1027 
+1028   ALL_OOP_OOP_ITERATE_CLOSURES_1(InstanceKlass_OOP_OOP_ITERATE_DECL)
+1029   ALL_OOP_OOP_ITERATE_CLOSURES_2(InstanceKlass_OOP_OOP_ITERATE_DECL)
+1030 
+1031 #if INCLUDE_ALL_GCS
+1032 #define InstanceKlass_OOP_OOP_ITERATE_BACKWARDS_DECL(OopClosureType, nv_suffix) \
+1033   int  oop_oop_iterate_backwards##nv_suffix(oop obj, OopClosureType* blk);
+1034 
+1035   ALL_OOP_OOP_ITERATE_CLOSURES_1(InstanceKlass_OOP_OOP_ITERATE_BACKWARDS_DECL)
+1036   ALL_OOP_OOP_ITERATE_CLOSURES_2(InstanceKlass_OOP_OOP_ITERATE_BACKWARDS_DECL)
+1037 #endif // INCLUDE_ALL_GCS
+1038 
+1039   u2 idnum_allocated_count() const      { return _idnum_allocated_count; }
+1040 
+1041 public:
+1042   void set_in_error_state() {
+1043     assert(DumpSharedSpaces, "only call this when dumping archive");
+1044     _init_state = initialization_error;
+1045   }
+1046   bool check_sharing_error_state();
+1047 
+1048 private:
+1049   // initialization state
+1050 #ifdef ASSERT
+1051   void set_init_state(ClassState state);
+1052 #else
+1053   void set_init_state(ClassState state) { _init_state = (u1)state; }
+1054 #endif
+1055   void set_rewritten()                  { _misc_flags |= _misc_rewritten; }
+1056   void set_init_thread(Thread *thread)  { _init_thread = thread; }
+1057 
+1058   // The RedefineClasses() API can cause new method idnums to be needed
+1059   // which will cause the caches to grow. Safety requires different
+1060   // cache management logic if the caches can grow instead of just
+1061   // going from NULL to non-NULL.
+1062   bool idnum_can_increment() const      { return has_been_redefined(); }
+1063   jmethodID* methods_jmethod_ids_acquire() const
+1064          { return (jmethodID*)OrderAccess::load_ptr_acquire(&amp;_methods_jmethod_ids); }
+1065   void release_set_methods_jmethod_ids(jmethodID* jmeths)
+1066          { OrderAccess::release_store_ptr(&amp;_methods_jmethod_ids, jmeths); }
+1067 
+1068   // Lock during initialization
+1069 public:
+1070   // Lock for (1) initialization; (2) access to the ConstantPool of this class.
+1071   // Must be one per class and it has to be a VM internal object so java code
+1072   // cannot lock it (like the mirror).
+1073   // It has to be an object not a Mutex because it's held through java calls.
+1074   oop init_lock() const;
+1075 private:
+1076   void fence_and_clear_init_lock();
+1077 
+1078   // Static methods that are used to implement member methods where an exposed this pointer
+1079   // is needed due to possible GCs
+1080   static bool link_class_impl                           (instanceKlassHandle this_oop, bool throw_verifyerror, TRAPS);
+1081   static bool verify_code                               (instanceKlassHandle this_oop, bool throw_verifyerror, TRAPS);
+1082   static void initialize_impl                           (instanceKlassHandle this_oop, TRAPS);
+1083   static void initialize_super_interfaces               (instanceKlassHandle this_oop, TRAPS);
+1084   static void eager_initialize_impl                     (instanceKlassHandle this_oop);
+1085   static void set_initialization_state_and_notify_impl  (instanceKlassHandle this_oop, ClassState state, TRAPS);
+1086   static void call_class_initializer_impl               (instanceKlassHandle this_oop, TRAPS);
+1087   static Klass* array_klass_impl                      (instanceKlassHandle this_oop, bool or_null, int n, TRAPS);
+1088   static void do_local_static_fields_impl               (instanceKlassHandle this_oop, void f(fieldDescriptor* fd, Handle, TRAPS), Handle, TRAPS);
+1089   /* jni_id_for_impl for jfieldID only */
+1090   static JNIid* jni_id_for_impl                         (instanceKlassHandle this_oop, int offset);
+1091 
+1092   // Returns the array class for the n'th dimension
+1093   Klass* array_klass_impl(bool or_null, int n, TRAPS);
+1094 
+1095   // Returns the array class with this class as element type
+1096   Klass* array_klass_impl(bool or_null, TRAPS);
+1097 
+1098   // find a local method (returns NULL if not found)
+1099   Method* find_method_impl(Symbol* name, Symbol* signature, bool skipping_overpass) const;
+1100   static Method* find_method_impl(Array&lt;Method*&gt;* methods, Symbol* name, Symbol* signature, bool skipping_overpass, bool skipping_static);
+1101 
+1102   // Free CHeap allocated fields.
+1103   void release_C_heap_structures();
+1104 public:
+1105   // CDS support - remove and restore oops from metadata. Oops are not shared.
+1106   virtual void remove_unshareable_info();
+1107   virtual void restore_unshareable_info(ClassLoaderData* loader_data, Handle protection_domain, TRAPS);
+1108 
+1109   // jvm support
+1110   jint compute_modifier_flags(TRAPS) const;
+1111 
+1112   // JSR-292 support
+1113   MemberNameTable* member_names() { return _member_names; }
+1114   void set_member_names(MemberNameTable* member_names) { _member_names = member_names; }
+1115   bool add_member_name(Handle member_name);
+1116 
+1117 public:
+1118   // JVMTI support
+1119   jint jvmti_class_status() const;
+1120 
+1121  public:
+1122   // Printing
+1123 #ifndef PRODUCT
+1124   void print_on(outputStream* st) const;
+1125 #endif
+1126   void print_value_on(outputStream* st) const;
+1127 
+1128   void oop_print_value_on(oop obj, outputStream* st);
+1129 
+1130 #ifndef PRODUCT
+1131   void oop_print_on      (oop obj, outputStream* st);
+1132 
+1133   void print_dependent_nmethods(bool verbose = false);
+1134   bool is_dependent_nmethod(nmethod* nm);
+1135 #endif
+1136 
+1137   const char* internal_name() const;
+1138 
+1139   // Verification
+1140   void verify_on(outputStream* st);
+1141 
+1142   void oop_verify_on(oop obj, outputStream* st);
+1143 };
+1144 
+1145 inline Method* InstanceKlass::method_at_vtable(int index)  {
+1146 #ifndef PRODUCT
+1147   assert(index &gt;= 0, "valid vtable index");
+1148   if (DebugVtables) {
+1149     verify_vtable_index(index);
+1150   }
+1151 #endif
+1152   vtableEntry* ve = (vtableEntry*)start_of_vtable();
+1153   return ve[index].method();
+1154 }
+1155 
+1156 // for adding methods
+1157 // UNSET_IDNUM return means no more ids available
+1158 inline u2 InstanceKlass::next_method_idnum() {
+1159   if (_idnum_allocated_count == ConstMethod::MAX_IDNUM) {
+1160     return ConstMethod::UNSET_IDNUM; // no more ids available
+1161   } else {
+1162     return _idnum_allocated_count++;
+1163   }
+1164 }
+1165 
+1166 
+1167 /* JNIid class for jfieldIDs only */
+1168 class JNIid: public CHeapObj&lt;mtClass&gt; {
+1169   friend class VMStructs;
+1170  private:
+1171   Klass*             _holder;
+1172   JNIid*             _next;
+1173   int                _offset;
+1174 #ifdef ASSERT
+1175   bool               _is_static_field_id;
+1176 #endif
+1177 
+1178  public:
+1179   // Accessors
+1180   Klass* holder() const           { return _holder; }
+1181   int offset() const              { return _offset; }
+1182   JNIid* next()                   { return _next; }
+1183   // Constructor
+1184   JNIid(Klass* holder, int offset, JNIid* next);
+1185   // Identifier lookup
+1186   JNIid* find(int offset);
+1187 
+1188   bool find_local_field(fieldDescriptor* fd) {
+1189     return InstanceKlass::cast(holder())-&gt;find_local_field_from_offset(offset(), true, fd);
+1190   }
+1191 
+1192   static void deallocate(JNIid* id);
+1193   // Debugging
+1194 #ifdef ASSERT
+1195   bool is_static_field_id() const { return _is_static_field_id; }
+1196   void set_is_static_field_id()   { _is_static_field_id = true; }
+1197 #endif
+1198   void verify(Klass* holder);
+1199 };
+1200 
+1201 
+1202 // If breakpoints are more numerous than just JVMTI breakpoints,
+1203 // consider compressing this data structure.
+1204 // It is currently a simple linked list defined in method.hpp.
+1205 
+1206 class BreakpointInfo;
+1207 
+1208 
+1209 // A collection point for interesting information about the previous
+1210 // version(s) of an InstanceKlass.  A GrowableArray of PreviousVersionNodes
+1211 // is attached to the InstanceKlass as needed. See PreviousVersionWalker below.
+1212 class PreviousVersionNode : public CHeapObj&lt;mtClass&gt; {
+1213  private:
+1214   ConstantPool*    _prev_constant_pool;
+1215 
+1216   // If the previous version of the InstanceKlass doesn't have any
+1217   // EMCP methods, then _prev_EMCP_methods will be NULL. If all the
+1218   // EMCP methods have been collected, then _prev_EMCP_methods can
+1219   // have a length of zero.
+1220   GrowableArray&lt;Method*&gt;* _prev_EMCP_methods;
+1221 
+1222 public:
+1223   PreviousVersionNode(ConstantPool* prev_constant_pool,
+1224                       GrowableArray&lt;Method*&gt;* prev_EMCP_methods);
+1225   ~PreviousVersionNode();
+1226   ConstantPool* prev_constant_pool() const {
+1227     return _prev_constant_pool;
+1228   }
+1229   GrowableArray&lt;Method*&gt;* prev_EMCP_methods() const {
+1230     return _prev_EMCP_methods;
+1231   }
+1232 };
+1233 
+1234 
+1235 // Helper object for walking previous versions.
+1236 class PreviousVersionWalker : public StackObj {
+1237  private:
+1238   Thread*                               _thread;
+1239   GrowableArray&lt;PreviousVersionNode *&gt;* _previous_versions;
+1240   int                                   _current_index;
+1241 
+1242   // A pointer to the current node object so we can handle the deletes.
+1243   PreviousVersionNode*                  _current_p;
+1244 
+1245   // The constant pool handle keeps all the methods in this class from being
+1246   // deallocated from the metaspace during class unloading.
+1247   constantPoolHandle                    _current_constant_pool_handle;
+1248 
+1249  public:
+1250   PreviousVersionWalker(Thread* thread, InstanceKlass *ik);
+1251 
+1252   // Return the interesting information for the next previous version
+1253   // of the klass. Returns NULL if there are no more previous versions.
+1254   PreviousVersionNode* next_previous_version();
+1255 };
+1256 
+1257 
+1258 //
+1259 // nmethodBucket is used to record dependent nmethods for
+1260 // deoptimization.  nmethod dependencies are actually &lt;klass, method&gt;
+1261 // pairs but we really only care about the klass part for purposes of
+1262 // finding nmethods which might need to be deoptimized.  Instead of
+1263 // recording the method, a count of how many times a particular nmethod
+1264 // was recorded is kept.  This ensures that any recording errors are
+1265 // noticed since an nmethod should be removed as many times are it's
+1266 // added.
+1267 //
+1268 class nmethodBucket: public CHeapObj&lt;mtClass&gt; {
+1269   friend class VMStructs;
+1270  private:
+1271   nmethod*       _nmethod;
+1272   int            _count;
+1273   nmethodBucket* _next;
+1274 
+1275  public:
+1276   nmethodBucket(nmethod* nmethod, nmethodBucket* next) {
+1277     _nmethod = nmethod;
+1278     _next = next;
+1279     _count = 1;
+1280   }
+1281   int count()                             { return _count; }
+1282   int increment()                         { _count += 1; return _count; }
+1283   int decrement();
+1284   nmethodBucket* next()                   { return _next; }
+1285   void set_next(nmethodBucket* b)         { _next = b; }
+1286   nmethod* get_nmethod()                  { return _nmethod; }
+1287 };
+1288 
+1289 // An iterator that's used to access the inner classes indices in the
+1290 // InstanceKlass::_inner_classes array.
+1291 class InnerClassesIterator : public StackObj {
+1292  private:
+1293   Array&lt;jushort&gt;* _inner_classes;
+1294   int _length;
+1295   int _idx;
+1296  public:
+1297 
+1298   InnerClassesIterator(instanceKlassHandle k) {
+1299     _inner_classes = k-&gt;inner_classes();
+1300     if (k-&gt;inner_classes() != NULL) {
+1301       _length = _inner_classes-&gt;length();
+1302       // The inner class array's length should be the multiple of
+1303       // inner_class_next_offset if it only contains the InnerClasses
+1304       // attribute data, or it should be
+1305       // n*inner_class_next_offset+enclosing_method_attribute_size
+1306       // if it also contains the EnclosingMethod data.
+1307       assert((_length % InstanceKlass::inner_class_next_offset == 0 ||
+1308               _length % InstanceKlass::inner_class_next_offset == InstanceKlass::enclosing_method_attribute_size),
+1309              "just checking");
+1310       // Remove the enclosing_method portion if exists.
+1311       if (_length % InstanceKlass::inner_class_next_offset == InstanceKlass::enclosing_method_attribute_size) {
+1312         _length -= InstanceKlass::enclosing_method_attribute_size;
+1313       }
+1314     } else {
+1315       _length = 0;
+1316     }
+1317     _idx = 0;
+1318   }
+1319 
+1320   int length() const {
+1321     return _length;
+1322   }
+1323 
+1324   void next() {
+1325     _idx += InstanceKlass::inner_class_next_offset;
+1326   }
+1327 
+1328   bool done() const {
+1329     return (_idx &gt;= _length);
+1330   }
+1331 
+1332   u2 inner_class_info_index() const {
+1333     return _inner_classes-&gt;at(
+1334                _idx + InstanceKlass::inner_class_inner_class_info_offset);
+1335   }
+1336 
+1337   void set_inner_class_info_index(u2 index) {
+1338     _inner_classes-&gt;at_put(
+1339                _idx + InstanceKlass::inner_class_inner_class_info_offset, index);
+1340   }
+1341 
+1342   u2 outer_class_info_index() const {
+1343     return _inner_classes-&gt;at(
+1344                _idx + InstanceKlass::inner_class_outer_class_info_offset);
+1345   }
+1346 
+1347   void set_outer_class_info_index(u2 index) {
+1348     _inner_classes-&gt;at_put(
+1349                _idx + InstanceKlass::inner_class_outer_class_info_offset, index);
+1350   }
+1351 
+1352   u2 inner_name_index() const {
+1353     return _inner_classes-&gt;at(
+1354                _idx + InstanceKlass::inner_class_inner_name_offset);
+1355   }
+1356 
+1357   void set_inner_name_index(u2 index) {
+1358     _inner_classes-&gt;at_put(
+1359                _idx + InstanceKlass::inner_class_inner_name_offset, index);
+1360   }
+1361 
+1362   u2 inner_access_flags() const {
+1363     return _inner_classes-&gt;at(
+1364                _idx + InstanceKlass::inner_class_access_flags_offset);
+1365   }
+1366 };
+1367 
+1368 #endif // SHARE_VM_OOPS_INSTANCEKLASS_HPP
+<a name="11" id="anc11"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="11" type="hidden" /></form></body></html>

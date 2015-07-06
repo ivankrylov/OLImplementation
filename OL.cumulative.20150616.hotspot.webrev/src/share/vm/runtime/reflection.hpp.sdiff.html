@@ -1,0 +1,165 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/runtime </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/runtime/reflection.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 121   // Create a java.lang.reflect.Parameter object based on a
+ 122   // MethodParameterElement
+ 123   static oop new_parameter(Handle method, int index, Symbol* sym,
+ 124                            int flags, TRAPS);
+ 125 
+ 126 private:
+ 127   // method resolution for invoke
+ 128   static methodHandle resolve_interface_call(instanceKlassHandle klass, methodHandle method, KlassHandle recv_klass, Handle receiver, TRAPS);
+ 129   // Method call (shared by invoke_method and invoke_constructor)
+ 130   static oop  invoke(instanceKlassHandle klass, methodHandle method, Handle receiver, bool override, objArrayHandle ptypes, BasicType rtype, objArrayHandle args, bool is_method_invoke, TRAPS);
+ 131 
+ 132   // Narrowing of basic types. Used to create correct jvalues for
+ 133   // boolean, byte, char and short return return values from interpreter
+ 134   // which are returned as ints. Throws IllegalArgumentException.
+ 135   static void narrow(jvalue* value, BasicType narrow_type, TRAPS);
+ 136 
+ 137   // Conversion
+ 138   static BasicType basic_type_mirror_to_basic_type(oop basic_type_mirror, TRAPS);
+ 139 
+ 140 public:
+<span class="changed"> 141   // Method invokation through java.lang.reflect.Method</span>
+<span class="changed"> 142   static oop      invoke_method(oop method_mirror, Handle receiver, objArrayHandle args, TRAPS);</span>
+<span class="changed"> 143   // Method invokation through java.lang.reflect.Constructor</span>
+<span class="changed"> 144   static oop      invoke_constructor(oop method_mirror, objArrayHandle args, TRAPS);</span>
+<span class="changed"> 145 </span>
+
+
+
+
+
+
+
+ 146 };
+ 147 
+ 148 #endif // SHARE_VM_RUNTIME_REFLECTION_HPP
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 121   // Create a java.lang.reflect.Parameter object based on a
+ 122   // MethodParameterElement
+ 123   static oop new_parameter(Handle method, int index, Symbol* sym,
+ 124                            int flags, TRAPS);
+ 125 
+ 126 private:
+ 127   // method resolution for invoke
+ 128   static methodHandle resolve_interface_call(instanceKlassHandle klass, methodHandle method, KlassHandle recv_klass, Handle receiver, TRAPS);
+ 129   // Method call (shared by invoke_method and invoke_constructor)
+ 130   static oop  invoke(instanceKlassHandle klass, methodHandle method, Handle receiver, bool override, objArrayHandle ptypes, BasicType rtype, objArrayHandle args, bool is_method_invoke, TRAPS);
+ 131 
+ 132   // Narrowing of basic types. Used to create correct jvalues for
+ 133   // boolean, byte, char and short return return values from interpreter
+ 134   // which are returned as ints. Throws IllegalArgumentException.
+ 135   static void narrow(jvalue* value, BasicType narrow_type, TRAPS);
+ 136 
+ 137   // Conversion
+ 138   static BasicType basic_type_mirror_to_basic_type(oop basic_type_mirror, TRAPS);
+ 139 
+ 140 public:
+<span class="changed"> 141   // Method invocation through java.lang.reflect.Method</span>
+<span class="changed"> 142   static oop invoke_method(oop method_mirror, Handle receiver,</span>
+<span class="changed"> 143       objArrayHandle method_args, TRAPS);</span>
+<span class="changed"> 144   // Allocation of a new object, its initialization, and invocation of its</span>
+<span class="changed"> 145   // constructor through java.lang.reflect.Constructor</span>
+<span class="changed"> 146   static oop invoke_constructor(oop ctor_mirror, objArrayHandle ctor_args,</span>
+<span class="changed"> 147       TRAPS);</span>
+<span class="changed"> 148   // Initialization of an already allocated object and invocation of its</span>
+<span class="changed"> 149   // constructor through java.lang.reflect.Constructor</span>
+<span class="changed"> 150   static oop invoke_constructor_in_place(address obj_addr,</span>
+<span class="changed"> 151       bool is_contained, bool is_container, oop ctor_mirror,</span>
+<span class="changed"> 152       objArrayHandle ctor_args, TRAPS);</span>
+ 153 };
+ 154 
+ 155 #endif // SHARE_VM_RUNTIME_REFLECTION_HPP
+</pre></td>
+</tr></table>
+</body></html>

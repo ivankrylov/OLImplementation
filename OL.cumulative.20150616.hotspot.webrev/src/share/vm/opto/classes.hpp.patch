@@ -1,0 +1,18 @@
+--- old/src/share/vm/opto/classes.hpp	2015-06-16 10:25:47.126369883 -0700
++++ new/src/share/vm/opto/classes.hpp	2015-06-16 10:25:47.050371722 -0700
+@@ -53,6 +53,7 @@
+ macro(CallLeafNoFP)
+ macro(CallRuntime)
+ macro(CallStaticJava)
++macro(CastDerived)
+ macro(CastII)
+ macro(CastX2P)
+ macro(CastP2X)
+@@ -199,7 +200,6 @@
+ macro(Opaque1)
+ macro(Opaque2)
+ macro(Opaque3)
+-macro(ProfileBoolean)
+ macro(OrI)
+ macro(OrL)
+ macro(OverflowAddI)

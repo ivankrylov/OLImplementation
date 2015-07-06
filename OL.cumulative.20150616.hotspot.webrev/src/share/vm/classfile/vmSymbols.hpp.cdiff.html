@@ -1,0 +1,201 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Cdiff src/share/vm/classfile/vmSymbols.hpp</title>
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/classfile/vmSymbols.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+<hr /><span class="oldmarker">*** 242,251 ****</span>
+<span class="newmarker">--- 242,252 ----</span>
+    template(override_name,                             "override")                                 \
+    template(parameterTypes_name,                       "parameterTypes")                           \
+    template(returnType_name,                           "returnType")                               \
+    template(signature_name,                            "signature")                                \
+    template(slot_name,                                 "slot")                                     \
+<span class="new">+   template(selectAlternative_name,                    "selectAlternative")                        \</span>
+                                                                                                    \
+    /* Support for annotations (JDK 1.5 and above) */                                               \
+                                                                                                    \
+    template(annotations_name,                          "annotations")                              \
+    template(index_name,                                "index")                                    \
+<hr /><span class="oldmarker">*** 293,302 ****</span>
+<span class="newmarker">--- 294,304 ----</span>
+    template(setTargetNormal_name,                      "setTargetNormal")                          \
+    template(setTargetVolatile_name,                    "setTargetVolatile")                        \
+    template(setTarget_signature,                       "(Ljava/lang/invoke/MethodHandle;)V")       \
+    NOT_LP64(  do_alias(intptr_signature,               int_signature)  )                           \
+    LP64_ONLY( do_alias(intptr_signature,               long_signature) )                           \
+<span class="new">+   template(selectAlternative_signature, "(ZLjava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodHandle;)Ljava/lang/invoke/MethodHandle;") \</span>
+                                                                        \
+    /* common method and field names */                                                             \
+    template(object_initializer_name,                   "&lt;init&gt;")                                   \
+    template(class_initializer_name,                    "&lt;clinit&gt;")                                 \
+    template(println_name,                              "println")                                  \
+<hr /><span class="oldmarker">*** 473,482 ****</span>
+<span class="newmarker">--- 475,485 ----</span>
+    template(thread_void_signature,                     "(Ljava/lang/Thread;)V")                                    \
+    template(threadgroup_runnable_void_signature,       "(Ljava/lang/ThreadGroup;Ljava/lang/Runnable;)V")           \
+    template(threadgroup_string_void_signature,         "(Ljava/lang/ThreadGroup;Ljava/lang/String;)V")             \
+    template(string_class_signature,                    "(Ljava/lang/String;)Ljava/lang/Class;")                    \
+    template(object_object_object_signature,            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;") \
+<span class="new">+   template(object_long_object_signature,              "(Ljava/lang/Object;J)Ljava/lang/Object;")                  \</span>
+    template(string_string_string_signature,            "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;") \
+    template(string_string_signature,                   "(Ljava/lang/String;)Ljava/lang/String;")                   \
+    template(classloader_string_long_signature,         "(Ljava/lang/ClassLoader;Ljava/lang/String;)J")             \
+    template(byte_array_void_signature,                 "([B)V")                                                    \
+    template(char_array_void_signature,                 "([C)V")                                                    \
+<hr /><span class="oldmarker">*** 587,596 ****</span>
+<span class="newmarker">--- 590,608 ----</span>
+    template(serializePropertiesToByteArray_signature,   "()[B")                                                    \
+    template(serializeAgentPropertiesToByteArray_name,   "serializeAgentPropertiesToByteArray")                     \
+    template(classRedefinedCount_name,                   "classRedefinedCount")                                     \
+    template(classLoader_name,                           "classLoader")                                             \
+                                                                                                                    \
+<span class="new">+   /* ObjectLayout support */                                                                                      \</span>
+<span class="new">+   template(org_ObjectLayout_AbstractStructuredArray,   "org/ObjectLayout/AbstractStructuredArray")                \</span>
+<span class="new">+   template(existenceIndicatesIntrinsic_name,           "existenceIndicatesIntrinsic")                             \</span>
+<span class="new">+   template(bodySize_name,                              "bodySize")                                                \</span>
+<span class="new">+   template(length_name,                                "length")                                                  \</span>
+<span class="new">+   template(elementSize_name,                           "elementSize")                                             \</span>
+<span class="new">+   template(paddingSize_name,                           "paddingSize")                                             \</span>
+<span class="new">+   template(elementClass_name,                          "elementClass")                                            \</span>
+<span class="new">+                                                                                                                   \</span>
+    /* trace signatures */                                                                                          \
+    TRACE_TEMPLATES(template)                                                                                       \
+                                                                                                                    \
+    /*end*/
+  
+<hr /><span class="oldmarker">*** 864,881 ****</span>
+     do_alias(    storeFence_signature,                             void_method_signature)                                \
+    do_intrinsic(_fullFence,                sun_misc_Unsafe,        fullFence_name, fullFence_signature,           F_RN)  \
+     do_name(     fullFence_name,                                  "fullFence")                                           \
+     do_alias(    fullFence_signature,                              void_method_signature)                                \
+                                                                                                                          \
+<span class="changed">!   /* Custom branch frequencies profiling support for JSR292 */                                                          \</span>
+<span class="changed">!   do_class(java_lang_invoke_MethodHandleImpl,               "java/lang/invoke/MethodHandleImpl")                        \</span>
+<span class="changed">!   do_intrinsic(_profileBoolean, java_lang_invoke_MethodHandleImpl, profileBoolean_name, profileBoolean_signature,    F_S)  \</span>
+<span class="changed">!    do_name(     profileBoolean_name,                               "profileBoolean")                                     \</span>
+<span class="changed">!    do_signature(profileBoolean_signature,                           "(Z[I)Z")                                            \</span>
+                                                                                                                          \
+    /* unsafe memory references (there are a lot of them...) */                                                           \
+<span class="changed">!   do_signature(getObject_signature,       "(Ljava/lang/Object;J)Ljava/lang/Object;")                                    \</span>
+    do_signature(putObject_signature,       "(Ljava/lang/Object;JLjava/lang/Object;)V")                                   \
+    do_signature(getBoolean_signature,      "(Ljava/lang/Object;J)Z")                                                     \
+    do_signature(putBoolean_signature,      "(Ljava/lang/Object;JZ)V")                                                    \
+    do_signature(getByte_signature,         "(Ljava/lang/Object;J)B")                                                     \
+    do_signature(putByte_signature,         "(Ljava/lang/Object;JB)V")                                                    \
+<span class="newmarker">--- 876,908 ----</span>
+     do_alias(    storeFence_signature,                             void_method_signature)                                \
+    do_intrinsic(_fullFence,                sun_misc_Unsafe,        fullFence_name, fullFence_signature,           F_RN)  \
+     do_name(     fullFence_name,                                  "fullFence")                                           \
+     do_alias(    fullFence_signature,                              void_method_signature)                                \
+                                                                                                                          \
+<span class="changed">!   /* ObjectLayout intrinsics */                                                                                         \</span>
+<span class="changed">!    do_signature(class_long_long_long_signature,                  "(Ljava/lang/Class;JJ)J")                              \</span>
+<span class="changed">!   do_intrinsic(_getInstanceSize,                                  sun_misc_Unsafe, getInstanceSize_name, class_long_signature, F_RN) \</span>
+<span class="changed">!    do_name(     getInstanceSize_name,                            "getInstanceSize")                                     \</span>
+<span class="changed">!   do_intrinsic(_getInstanceFootprintWhenContained,                sun_misc_Unsafe, getInstanceFootprintWhenContained_name, class_long_signature, F_RN) \</span>
+<span class="changed">!    do_name(     getInstanceFootprintWhenContained_name,          "getInstanceFootprintWhenContained")                   \</span>
+<span class="changed">!   do_intrinsic(_getContainingObjectFootprint,                     sun_misc_Unsafe, getContainingObjectFootprint_name, class_long_long_long_signature, F_RN) \</span>
+<span class="changed">!    do_name(     getContainingObjectFootprint_name,               "getContainingObjectFootprint")                        \</span>
+<span class="changed">!   do_intrinsic(_getContainingObjectFootprintWhenContained,        sun_misc_Unsafe, getContainingObjectFootprintWhenContained_name, class_long_long_long_signature, F_RN) \</span>
+<span class="changed">!    do_name(     getContainingObjectFootprintWhenContained_name,  "getContainingObjectFootprintWhenContained")           \</span>
+<span class="changed">!   do_intrinsic(_getPrePaddingInObjectFootprint,                   sun_misc_Unsafe, getPrePaddingInObjectFootprint_name, long_long_signature, F_RN) \</span>
+<span class="changed">!    do_name(     getPrePaddingInObjectFootprint_name,             "getPrePaddingInObjectFootprint")                      \</span>
+<span class="changed">!   do_intrinsic(_allocateHeapForElementArrayClass,                 sun_misc_Unsafe, allocateHeapForElementArrayClass_name, allocateHeapForElementArrayClass_signature, F_RN) \</span>
+<span class="changed">!    do_name(     allocateHeapForElementArrayClass_name,           "allocateHeapForElementArrayClass")                    \</span>
+<span class="changed">!    do_signature(allocateHeapForElementArrayClass_signature,      "(Ljava/lang/Class;[J[Ljava/lang/Class;)Ljava/lang/Object;") \</span>
+<span class="changed">!   do_intrinsic(_constructObjectAtOffset,                          sun_misc_Unsafe, constructObjectAtOffset_name, constructObjectAtOffset_signature, F_RN) \</span>
+<span class="changed">!    do_name(     constructObjectAtOffset_name,                    "constructObjectAtOffset")                             \</span>
+<span class="changed">!    do_signature(constructObjectAtOffset_signature,               "(Ljava/lang/Object;JJZZJLjava/lang/reflect/Constructor;[Ljava/lang/Object;)V") \</span>
+<span class="changed">!   do_intrinsic(_deriveContainedObjectAtOffset,                    sun_misc_Unsafe, deriveContainedObjectAtOffset_name, object_long_object_signature, F_RN) \</span>
+<span class="changed">!    do_name(     deriveContainedObjectAtOffset_name,              "deriveContainedObjectAtOffset")                       \</span>
+                                                                                                                          \
+    /* unsafe memory references (there are a lot of them...) */                                                           \
+<span class="changed">!   do_alias(    getObject_signature,        object_long_object_signature)                                                \</span>
+    do_signature(putObject_signature,       "(Ljava/lang/Object;JLjava/lang/Object;)V")                                   \
+    do_signature(getBoolean_signature,      "(Ljava/lang/Object;J)Z")                                                     \
+    do_signature(putBoolean_signature,      "(Ljava/lang/Object;JZ)V")                                                    \
+    do_signature(getByte_signature,         "(Ljava/lang/Object;J)B")                                                     \
+    do_signature(putByte_signature,         "(Ljava/lang/Object;JB)V")                                                    \
+</pre></body></html>
+

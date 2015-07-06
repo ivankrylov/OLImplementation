@@ -1,0 +1,267 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/opto </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/opto/classes.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+  36 macro(Allocate)
+  37 macro(AllocateArray)
+  38 macro(AndI)
+  39 macro(AndL)
+  40 macro(AryEq)
+  41 macro(AtanD)
+  42 macro(Binary)
+  43 macro(Bool)
+  44 macro(BoxLock)
+  45 macro(ReverseBytesI)
+  46 macro(ReverseBytesL)
+  47 macro(ReverseBytesUS)
+  48 macro(ReverseBytesS)
+  49 macro(CProj)
+  50 macro(CallDynamicJava)
+  51 macro(CallJava)
+  52 macro(CallLeaf)
+  53 macro(CallLeafNoFP)
+  54 macro(CallRuntime)
+  55 macro(CallStaticJava)
+
+  56 macro(CastII)
+  57 macro(CastX2P)
+  58 macro(CastP2X)
+  59 macro(CastPP)
+  60 macro(Catch)
+  61 macro(CatchProj)
+  62 macro(CheckCastPP)
+  63 macro(ClearArray)
+  64 macro(ConstraintCast)
+  65 macro(CMoveD)
+  66 macro(CMoveF)
+  67 macro(CMoveI)
+  68 macro(CMoveL)
+  69 macro(CMoveP)
+  70 macro(CMoveN)
+  71 macro(CmpN)
+  72 macro(CmpD)
+  73 macro(CmpD3)
+  74 macro(CmpF)
+  75 macro(CmpF3)
+
+</pre><hr></hr><pre>
+ 182 macro(ModD)
+ 183 macro(ModF)
+ 184 macro(ModI)
+ 185 macro(ModL)
+ 186 macro(MoveI2F)
+ 187 macro(MoveF2I)
+ 188 macro(MoveL2D)
+ 189 macro(MoveD2L)
+ 190 macro(MulD)
+ 191 macro(MulF)
+ 192 macro(MulHiL)
+ 193 macro(MulI)
+ 194 macro(MulL)
+ 195 macro(Multi)
+ 196 macro(NegD)
+ 197 macro(NegF)
+ 198 macro(NeverBranch)
+ 199 macro(Opaque1)
+ 200 macro(Opaque2)
+ 201 macro(Opaque3)
+<span class="removed"> 202 macro(ProfileBoolean)</span>
+ 203 macro(OrI)
+ 204 macro(OrL)
+ 205 macro(OverflowAddI)
+ 206 macro(OverflowSubI)
+ 207 macro(OverflowMulI)
+ 208 macro(OverflowAddL)
+ 209 macro(OverflowSubL)
+ 210 macro(OverflowMulL)
+ 211 macro(PCTable)
+ 212 macro(Parm)
+ 213 macro(PartialSubtypeCheck)
+ 214 macro(Phi)
+ 215 macro(PopCountI)
+ 216 macro(PopCountL)
+ 217 macro(PowD)
+ 218 macro(PrefetchAllocation)
+ 219 macro(PrefetchRead)
+ 220 macro(PrefetchWrite)
+ 221 macro(Proj)
+ 222 macro(RShiftI)
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+  36 macro(Allocate)
+  37 macro(AllocateArray)
+  38 macro(AndI)
+  39 macro(AndL)
+  40 macro(AryEq)
+  41 macro(AtanD)
+  42 macro(Binary)
+  43 macro(Bool)
+  44 macro(BoxLock)
+  45 macro(ReverseBytesI)
+  46 macro(ReverseBytesL)
+  47 macro(ReverseBytesUS)
+  48 macro(ReverseBytesS)
+  49 macro(CProj)
+  50 macro(CallDynamicJava)
+  51 macro(CallJava)
+  52 macro(CallLeaf)
+  53 macro(CallLeafNoFP)
+  54 macro(CallRuntime)
+  55 macro(CallStaticJava)
+<span class="new">  56 macro(CastDerived)</span>
+  57 macro(CastII)
+  58 macro(CastX2P)
+  59 macro(CastP2X)
+  60 macro(CastPP)
+  61 macro(Catch)
+  62 macro(CatchProj)
+  63 macro(CheckCastPP)
+  64 macro(ClearArray)
+  65 macro(ConstraintCast)
+  66 macro(CMoveD)
+  67 macro(CMoveF)
+  68 macro(CMoveI)
+  69 macro(CMoveL)
+  70 macro(CMoveP)
+  71 macro(CMoveN)
+  72 macro(CmpN)
+  73 macro(CmpD)
+  74 macro(CmpD3)
+  75 macro(CmpF)
+  76 macro(CmpF3)
+
+</pre><hr></hr><pre>
+ 183 macro(ModD)
+ 184 macro(ModF)
+ 185 macro(ModI)
+ 186 macro(ModL)
+ 187 macro(MoveI2F)
+ 188 macro(MoveF2I)
+ 189 macro(MoveL2D)
+ 190 macro(MoveD2L)
+ 191 macro(MulD)
+ 192 macro(MulF)
+ 193 macro(MulHiL)
+ 194 macro(MulI)
+ 195 macro(MulL)
+ 196 macro(Multi)
+ 197 macro(NegD)
+ 198 macro(NegF)
+ 199 macro(NeverBranch)
+ 200 macro(Opaque1)
+ 201 macro(Opaque2)
+ 202 macro(Opaque3)
+
+ 203 macro(OrI)
+ 204 macro(OrL)
+ 205 macro(OverflowAddI)
+ 206 macro(OverflowSubI)
+ 207 macro(OverflowMulI)
+ 208 macro(OverflowAddL)
+ 209 macro(OverflowSubL)
+ 210 macro(OverflowMulL)
+ 211 macro(PCTable)
+ 212 macro(Parm)
+ 213 macro(PartialSubtypeCheck)
+ 214 macro(Phi)
+ 215 macro(PopCountI)
+ 216 macro(PopCountL)
+ 217 macro(PowD)
+ 218 macro(PrefetchAllocation)
+ 219 macro(PrefetchRead)
+ 220 macro(PrefetchWrite)
+ 221 macro(Proj)
+ 222 macro(RShiftI)
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

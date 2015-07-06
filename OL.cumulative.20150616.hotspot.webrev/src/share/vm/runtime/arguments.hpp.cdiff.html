@@ -1,0 +1,138 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Cdiff src/share/vm/runtime/arguments.hpp</title>
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/runtime/arguments.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+<hr /><span class="oldmarker">*** 340,349 ****</span>
+<span class="newmarker">--- 340,350 ----</span>
+    static void set_use_compressed_oops();
+    static void set_use_compressed_klass_ptrs();
+    static void select_gc();
+    static void set_ergonomics_flags();
+    static void set_shared_spaces_flags();
+<span class="new">+   static void set_object_layout_flags();</span>
+    // limits the given memory size by the maximum amount of memory this process is
+    // currently allowed to allocate or reserve.
+    static julong limit_by_allocatable_memory(julong size);
+    // Setup heap size
+    static void set_heap_size();
+<hr /><span class="oldmarker">*** 464,474 ****</span>
+    // Verifies that the given value will fit as a MaxHeapFreeRatio. If not, an error
+    // message is returned in the provided buffer.
+    static bool verify_MaxHeapFreeRatio(FormatBuffer&lt;80&gt;&amp; err_msg, uintx max_heap_free_ratio);
+  
+    // Check for consistency in the selection of the garbage collector.
+<span class="changed">!   static bool check_gc_consistency();        // Check user-selected gc</span>
+    static void check_deprecated_gcs();
+    static void check_deprecated_gc_flags();
+    // Check consistecy or otherwise of VM argument settings
+    static bool check_vm_args_consistency();
+    // Check stack pages settings
+<span class="newmarker">--- 465,476 ----</span>
+    // Verifies that the given value will fit as a MaxHeapFreeRatio. If not, an error
+    // message is returned in the provided buffer.
+    static bool verify_MaxHeapFreeRatio(FormatBuffer&lt;80&gt;&amp; err_msg, uintx max_heap_free_ratio);
+  
+    // Check for consistency in the selection of the garbage collector.
+<span class="changed">!   static bool check_gc_consistency_user();        // Check user-selected gc</span>
+<span class="changed">!   static inline bool check_gc_consistency_ergo(); // Check ergonomic-selected gc</span>
+    static void check_deprecated_gcs();
+    static void check_deprecated_gc_flags();
+    // Check consistecy or otherwise of VM argument settings
+    static bool check_vm_args_consistency();
+    // Check stack pages settings
+<hr /><span class="oldmarker">*** 612,617 ****</span>
+<span class="newmarker">--- 614,623 ----</span>
+  bool Arguments::gc_selected() {
+    return UseConcMarkSweepGC || UseG1GC || UseParallelGC || UseParallelOldGC ||
+      UseParNewGC || UseSerialGC;
+  }
+  
+<span class="new">+ bool Arguments::check_gc_consistency_ergo() {</span>
+<span class="new">+   return check_gc_consistency_user();</span>
+<span class="new">+ }</span>
+<span class="new">+ </span>
+  #endif // SHARE_VM_RUNTIME_ARGUMENTS_HPP
+</pre></body></html>
+

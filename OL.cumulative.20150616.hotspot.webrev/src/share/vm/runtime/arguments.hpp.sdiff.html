@@ -1,0 +1,323 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/runtime </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/runtime/arguments.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 325   static bool _ClipInlining;
+ 326   static bool _CIDynamicCompilePriority;
+ 327 
+ 328   // Tiered
+ 329   static void set_tiered_flags();
+ 330   static int  get_min_number_of_compiler_threads();
+ 331   // CMS/ParNew garbage collectors
+ 332   static void set_parnew_gc_flags();
+ 333   static void set_cms_and_parnew_gc_flags();
+ 334   // UseParallel[Old]GC
+ 335   static void set_parallel_gc_flags();
+ 336   // Garbage-First (UseG1GC)
+ 337   static void set_g1_gc_flags();
+ 338   // GC ergonomics
+ 339   static void set_conservative_max_heap_alignment();
+ 340   static void set_use_compressed_oops();
+ 341   static void set_use_compressed_klass_ptrs();
+ 342   static void select_gc();
+ 343   static void set_ergonomics_flags();
+ 344   static void set_shared_spaces_flags();
+
+ 345   // limits the given memory size by the maximum amount of memory this process is
+ 346   // currently allowed to allocate or reserve.
+ 347   static julong limit_by_allocatable_memory(julong size);
+ 348   // Setup heap size
+ 349   static void set_heap_size();
+ 350   // Based on automatic selection criteria, should the
+ 351   // low pause collector be used.
+ 352   static bool should_auto_select_low_pause_collector();
+ 353 
+ 354   // Bytecode rewriting
+ 355   static void set_bytecode_flags();
+ 356 
+ 357   // Invocation API hooks
+ 358   static abort_hook_t     _abort_hook;
+ 359   static exit_hook_t      _exit_hook;
+ 360   static vfprintf_hook_t  _vfprintf_hook;
+ 361 
+ 362   // System properties
+ 363   static bool add_property(const char* prop);
+ 364 
+
+</pre><hr></hr><pre>
+ 449   // Parses the arguments, first phase
+ 450   static jint parse(const JavaVMInitArgs* args);
+ 451   // Apply ergonomics
+ 452   static jint apply_ergo();
+ 453   // Adjusts the arguments after the OS have adjusted the arguments
+ 454   static jint adjust_after_os();
+ 455 
+ 456   static void set_gc_specific_flags();
+ 457   static inline bool gc_selected(); // whether a gc has been selected
+ 458   static void select_gc_ergonomically();
+ 459 
+ 460   // Verifies that the given value will fit as a MinHeapFreeRatio. If not, an error
+ 461   // message is returned in the provided buffer.
+ 462   static bool verify_MinHeapFreeRatio(FormatBuffer&lt;80&gt;&amp; err_msg, uintx min_heap_free_ratio);
+ 463 
+ 464   // Verifies that the given value will fit as a MaxHeapFreeRatio. If not, an error
+ 465   // message is returned in the provided buffer.
+ 466   static bool verify_MaxHeapFreeRatio(FormatBuffer&lt;80&gt;&amp; err_msg, uintx max_heap_free_ratio);
+ 467 
+ 468   // Check for consistency in the selection of the garbage collector.
+<span class="changed"> 469   static bool check_gc_consistency();        // Check user-selected gc</span>
+
+ 470   static void check_deprecated_gcs();
+ 471   static void check_deprecated_gc_flags();
+ 472   // Check consistecy or otherwise of VM argument settings
+ 473   static bool check_vm_args_consistency();
+ 474   // Check stack pages settings
+ 475   static bool check_stack_pages();
+ 476   // Used by os_solaris
+ 477   static bool process_settings_file(const char* file_name, bool should_exist, jboolean ignore_unrecognized);
+ 478 
+ 479   static size_t conservative_max_heap_alignment() { return _conservative_max_heap_alignment; }
+ 480   // Return the maximum size a heap with compressed oops can take
+ 481   static size_t max_heap_for_compressed_oops();
+ 482 
+ 483   // return a char* array containing all options
+ 484   static char** jvm_flags_array()          { return _jvm_flags_array; }
+ 485   static char** jvm_args_array()           { return _jvm_args_array; }
+ 486   static int num_jvm_flags()               { return _num_jvm_flags; }
+ 487   static int num_jvm_args()                { return _num_jvm_args; }
+ 488   // return the arguments passed to the Java application
+ 489   static const char* java_command()        { return _java_command; }
+
+</pre><hr></hr><pre>
+ 595   static char* get_endorsed_dir() { return _java_endorsed_dirs-&gt;value(); }
+ 596   static char* get_sysclasspath() { return _sun_boot_class_path-&gt;value(); }
+ 597   static char* get_meta_index_path() { return _meta_index_path; }
+ 598   static char* get_meta_index_dir()  { return _meta_index_dir;  }
+ 599   static char* get_ext_dirs() { return _java_ext_dirs-&gt;value(); }
+ 600   static char* get_appclasspath() { return _java_class_path-&gt;value(); }
+ 601   static void  fix_appclasspath();
+ 602 
+ 603   // Operation modi
+ 604   static Mode mode()                { return _mode; }
+ 605   static bool is_interpreter_only() { return mode() == _int; }
+ 606 
+ 607 
+ 608   // Utility: copies src into buf, replacing "%%" with "%" and "%p" with pid.
+ 609   static bool copy_expand_pid(const char* src, size_t srclen, char* buf, size_t buflen);
+ 610 };
+ 611 
+ 612 bool Arguments::gc_selected() {
+ 613   return UseConcMarkSweepGC || UseG1GC || UseParallelGC || UseParallelOldGC ||
+ 614     UseParNewGC || UseSerialGC;
+
+
+
+
+ 615 }
+ 616 
+ 617 #endif // SHARE_VM_RUNTIME_ARGUMENTS_HPP
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 325   static bool _ClipInlining;
+ 326   static bool _CIDynamicCompilePriority;
+ 327 
+ 328   // Tiered
+ 329   static void set_tiered_flags();
+ 330   static int  get_min_number_of_compiler_threads();
+ 331   // CMS/ParNew garbage collectors
+ 332   static void set_parnew_gc_flags();
+ 333   static void set_cms_and_parnew_gc_flags();
+ 334   // UseParallel[Old]GC
+ 335   static void set_parallel_gc_flags();
+ 336   // Garbage-First (UseG1GC)
+ 337   static void set_g1_gc_flags();
+ 338   // GC ergonomics
+ 339   static void set_conservative_max_heap_alignment();
+ 340   static void set_use_compressed_oops();
+ 341   static void set_use_compressed_klass_ptrs();
+ 342   static void select_gc();
+ 343   static void set_ergonomics_flags();
+ 344   static void set_shared_spaces_flags();
+<span class="new"> 345   static void set_object_layout_flags();</span>
+ 346   // limits the given memory size by the maximum amount of memory this process is
+ 347   // currently allowed to allocate or reserve.
+ 348   static julong limit_by_allocatable_memory(julong size);
+ 349   // Setup heap size
+ 350   static void set_heap_size();
+ 351   // Based on automatic selection criteria, should the
+ 352   // low pause collector be used.
+ 353   static bool should_auto_select_low_pause_collector();
+ 354 
+ 355   // Bytecode rewriting
+ 356   static void set_bytecode_flags();
+ 357 
+ 358   // Invocation API hooks
+ 359   static abort_hook_t     _abort_hook;
+ 360   static exit_hook_t      _exit_hook;
+ 361   static vfprintf_hook_t  _vfprintf_hook;
+ 362 
+ 363   // System properties
+ 364   static bool add_property(const char* prop);
+ 365 
+
+</pre><hr></hr><pre>
+ 450   // Parses the arguments, first phase
+ 451   static jint parse(const JavaVMInitArgs* args);
+ 452   // Apply ergonomics
+ 453   static jint apply_ergo();
+ 454   // Adjusts the arguments after the OS have adjusted the arguments
+ 455   static jint adjust_after_os();
+ 456 
+ 457   static void set_gc_specific_flags();
+ 458   static inline bool gc_selected(); // whether a gc has been selected
+ 459   static void select_gc_ergonomically();
+ 460 
+ 461   // Verifies that the given value will fit as a MinHeapFreeRatio. If not, an error
+ 462   // message is returned in the provided buffer.
+ 463   static bool verify_MinHeapFreeRatio(FormatBuffer&lt;80&gt;&amp; err_msg, uintx min_heap_free_ratio);
+ 464 
+ 465   // Verifies that the given value will fit as a MaxHeapFreeRatio. If not, an error
+ 466   // message is returned in the provided buffer.
+ 467   static bool verify_MaxHeapFreeRatio(FormatBuffer&lt;80&gt;&amp; err_msg, uintx max_heap_free_ratio);
+ 468 
+ 469   // Check for consistency in the selection of the garbage collector.
+<span class="changed"> 470   static bool check_gc_consistency_user();        // Check user-selected gc</span>
+<span class="changed"> 471   static inline bool check_gc_consistency_ergo(); // Check ergonomic-selected gc</span>
+ 472   static void check_deprecated_gcs();
+ 473   static void check_deprecated_gc_flags();
+ 474   // Check consistecy or otherwise of VM argument settings
+ 475   static bool check_vm_args_consistency();
+ 476   // Check stack pages settings
+ 477   static bool check_stack_pages();
+ 478   // Used by os_solaris
+ 479   static bool process_settings_file(const char* file_name, bool should_exist, jboolean ignore_unrecognized);
+ 480 
+ 481   static size_t conservative_max_heap_alignment() { return _conservative_max_heap_alignment; }
+ 482   // Return the maximum size a heap with compressed oops can take
+ 483   static size_t max_heap_for_compressed_oops();
+ 484 
+ 485   // return a char* array containing all options
+ 486   static char** jvm_flags_array()          { return _jvm_flags_array; }
+ 487   static char** jvm_args_array()           { return _jvm_args_array; }
+ 488   static int num_jvm_flags()               { return _num_jvm_flags; }
+ 489   static int num_jvm_args()                { return _num_jvm_args; }
+ 490   // return the arguments passed to the Java application
+ 491   static const char* java_command()        { return _java_command; }
+
+</pre><hr></hr><pre>
+ 597   static char* get_endorsed_dir() { return _java_endorsed_dirs-&gt;value(); }
+ 598   static char* get_sysclasspath() { return _sun_boot_class_path-&gt;value(); }
+ 599   static char* get_meta_index_path() { return _meta_index_path; }
+ 600   static char* get_meta_index_dir()  { return _meta_index_dir;  }
+ 601   static char* get_ext_dirs() { return _java_ext_dirs-&gt;value(); }
+ 602   static char* get_appclasspath() { return _java_class_path-&gt;value(); }
+ 603   static void  fix_appclasspath();
+ 604 
+ 605   // Operation modi
+ 606   static Mode mode()                { return _mode; }
+ 607   static bool is_interpreter_only() { return mode() == _int; }
+ 608 
+ 609 
+ 610   // Utility: copies src into buf, replacing "%%" with "%" and "%p" with pid.
+ 611   static bool copy_expand_pid(const char* src, size_t srclen, char* buf, size_t buflen);
+ 612 };
+ 613 
+ 614 bool Arguments::gc_selected() {
+ 615   return UseConcMarkSweepGC || UseG1GC || UseParallelGC || UseParallelOldGC ||
+ 616     UseParNewGC || UseSerialGC;
+<span class="new"> 617 }</span>
+<span class="new"> 618 </span>
+<span class="new"> 619 bool Arguments::check_gc_consistency_ergo() {</span>
+<span class="new"> 620   return check_gc_consistency_user();</span>
+ 621 }
+ 622 
+ 623 #endif // SHARE_VM_RUNTIME_ARGUMENTS_HPP
+</pre></td>
+</tr></table>
+</body></html>

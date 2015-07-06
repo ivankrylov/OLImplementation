@@ -1,0 +1,323 @@
+--- old/src/share/vm/oops/oop.inline.hpp	2015-06-16 10:25:46.338388909 -0700
++++ new/src/share/vm/oops/oop.inline.hpp	2015-06-16 10:25:46.258390839 -0700
+@@ -144,7 +144,9 @@
+   }
+ }
+ 
+-inline void   oopDesc::init_mark()                 { set_mark(markOopDesc::prototype_for_object(this)); }
++inline void oopDesc::init_mark() {
++  set_mark(markOopDesc::prototype_for_object(this));
++}
+ 
+ inline bool oopDesc::is_a(Klass* k)        const { return klass()->is_subtype_of(k); }
+ 
+@@ -559,24 +561,6 @@
+   }
+ }
+ 
+-// Used only for markSweep, scavenging
+-inline bool oopDesc::is_gc_marked() const {
+-  return mark()->is_marked();
+-}
+-
+-inline bool oopDesc::is_locked() const {
+-  return mark()->is_locked();
+-}
+-
+-inline bool oopDesc::is_unlocked() const {
+-  return mark()->is_unlocked();
+-}
+-
+-inline bool oopDesc::has_bias_pattern() const {
+-  return mark()->has_bias_pattern();
+-}
+-
+-
+ // used only for asserts
+ inline bool oopDesc::is_oop(bool ignore_mark_word) const {
+   oop obj = (oop) this;
+@@ -598,7 +582,6 @@
+   return !SafepointSynchronize::is_at_safepoint();
+ }
+ 
+-
+ // used only for asserts
+ inline bool oopDesc::is_oop_or_null(bool ignore_mark_word) const {
+   return this == NULL ? true : is_oop(ignore_mark_word);
+@@ -612,63 +595,86 @@
+ }
+ #endif // PRODUCT
+ 
+-inline void oopDesc::follow_contents(void) {
+-  assert (is_gc_marked(), "should be marked");
++inline bool oopDesc::is_locked() const {
++  return mark()->is_locked();
++}
++
++inline bool oopDesc::is_unlocked() const {
++  return mark()->is_unlocked();
++}
++
++inline bool oopDesc::has_bias_pattern() const {
++  return mark()->has_bias_pattern();
++}
++
++inline bool oopDesc::has_displaced_mark() const {
++  return mark()->has_displaced_mark_helper();
++}
++
++inline markOop oopDesc::displaced_mark() const {
++  return mark()->displaced_mark_helper();
++}
++
++inline void oopDesc::set_displaced_mark(markOop m) {
++  mark()->set_displaced_mark_helper(m);
++}
++
++inline bool oopDesc::is_gc_marked() const {
++  return mark()->is_marked();
++}
++
++inline void oopDesc::follow_contents() {
++  assert(is_gc_marked(), "should be marked");
+   klass()->oop_follow_contents(this);
+ }
+ 
+-// Used by scavengers
++inline int oopDesc::adjust_pointers() {
++  debug_only(int check_size = size());
++  int s = klass()->oop_adjust_pointers(this);
++  assert(s == check_size, "should be the same");
++  return s;
++}
+ 
++// Used by scavengers
+ inline bool oopDesc::is_forwarded() const {
+-  // The extra heap check is needed since the obj might be locked, in which case the
+-  // mark would point to a stack location and have the sentinel bit cleared
++  // The extra heap check is needed since the object might be locked, in which
++  // case the mark would point to a stack location and have the sentinel bit
++  // cleared.
+   return mark()->is_marked();
+ }
+ 
+ // Used by scavengers
+ inline void oopDesc::forward_to(oop p) {
+   assert(check_obj_alignment(p),
+-         "forwarding to something not aligned");
++      "forwarding to something not aligned");
+   assert(Universe::heap()->is_in_reserved(p),
+-         "forwarding to something not in heap");
+-  markOop m = markOopDesc::encode_pointer_as_mark(p);
+-  assert(m->decode_pointer() == p, "encoding must be reversable");
++      "forwarding to something not in heap");
++  markOop m = markOopDesc::encode_pointer_as_mark(p, is_contained());
++  assert(m->decode_pointer() == p, "encoding must be reversible");
+   set_mark(m);
+ }
+ 
+ // Used by parallel scavengers
+ inline bool oopDesc::cas_forward_to(oop p, markOop compare) {
+   assert(check_obj_alignment(p),
+-         "forwarding to something not aligned");
++      "forwarding to something not aligned");
+   assert(Universe::heap()->is_in_reserved(p),
+-         "forwarding to something not in heap");
+-  markOop m = markOopDesc::encode_pointer_as_mark(p);
+-  assert(m->decode_pointer() == p, "encoding must be reversable");
++      "forwarding to something not in heap");
++  markOop m = markOopDesc::encode_pointer_as_mark(p,
++      oopDesc::is_contained(compare));
++  assert(m->decode_pointer() == p, "encoding must be reversible");
+   return cas_set_mark(m, compare) == compare;
+ }
+ 
+-// Note that the forwardee is not the same thing as the displaced_mark.
+-// The forwardee is used when copying during scavenge and mark-sweep.
+-// It does need to clear the low two locking- and GC-related bits.
++// Note that the forwardee is not the same thing as the displaced mark.
++// The forwardee is used when copying during Scavenge and Mark-Sweep. It does
++// need to clear the low three locking, GC, and ObjectLayout related bits.
+ inline oop oopDesc::forwardee() const {
+   return (oop) mark()->decode_pointer();
+ }
+ 
+-inline bool oopDesc::has_displaced_mark() const {
+-  return mark()->has_displaced_mark_helper();
+-}
+-
+-inline markOop oopDesc::displaced_mark() const {
+-  return mark()->displaced_mark_helper();
+-}
+-
+-inline void oopDesc::set_displaced_mark(markOop m) {
+-  mark()->set_displaced_mark_helper(m);
+-}
+-
+-// The following method needs to be MT safe.
+ inline uint oopDesc::age() const {
+-  assert(!is_forwarded(), "Attempt to read age from forwarded mark");
++  assert(!is_forwarded(), "attempt to read age from forwarded mark");
+   if (has_displaced_mark()) {
+     return displaced_mark()->age();
+   } else {
+@@ -677,7 +683,7 @@
+ }
+ 
+ inline void oopDesc::incr_age() {
+-  assert(!is_forwarded(), "Attempt to increment age of forwarded mark");
++  assert(!is_forwarded(), "attempt to increment age of forwarded mark");
+   if (has_displaced_mark()) {
+     set_displaced_mark(displaced_mark()->incr_age());
+   } else {
+@@ -685,6 +691,136 @@
+   }
+ }
+ 
++inline bool oopDesc::is_contained() const {
++  return is_contained(mark());
++}
++
++inline bool oopDesc::is_contained(markOop mark) {
++  if (mark->is_marked()) {
++    return mark->is_contained_when_forwarded();
++  } else if (mark->has_displaced_mark_helper()) {
++    return mark->displaced_mark_helper()->is_contained();
++  } else {
++    return mark->is_contained();
++  }
++}
++
++inline void oopDesc::set_contained() {
++  if (is_forwarded()) {
++    set_mark(mark()->set_contained_when_forwarded());
++  } else if (has_displaced_mark()) {
++    set_displaced_mark(displaced_mark()->set_contained());
++  } else {
++    set_mark(mark()->set_contained());
++  }
++}
++
++inline void oopDesc::clear_contained() {
++  if (is_forwarded()) {
++    set_mark(mark()->clear_contained_when_forwarded());
++  } else if (has_displaced_mark()) {
++    set_displaced_mark(displaced_mark()->clear_contained());
++  } else {
++    set_mark(mark()->clear_contained());
++  }
++}
++
++inline bool oopDesc::is_container() const {
++  return is_container(mark(), klass());
++}
++
++inline bool oopDesc::is_container(markOop mark, Klass* klass) {
++  if (mark->is_marked()) {
++    return klass->oop_is_container();
++  } else if (mark->has_displaced_mark_helper()) {
++    return mark->displaced_mark_helper()->is_container();
++  } else {
++    return mark->is_container();
++  }
++}
++
++inline void oopDesc::convert_to_marked() {
++  assert(!is_gc_marked(), "object already marked");
++  markOop new_mark = markOopDesc::prototype()->set_marked();
++  if (is_contained()) {
++    new_mark = new_mark->set_contained_when_forwarded();
++  }
++  set_mark(new_mark);
++}
++
++inline void oopDesc::convert_to_unmarked() {
++  assert(is_gc_marked(), "object already unmarked");
++  markOop new_mark = markOopDesc::prototype_for_object(this);
++  if (is_contained()) {
++    new_mark = new_mark->set_contained();
++  }
++  if (is_container()) {
++    new_mark = new_mark->set_container();
++  }
++  set_mark(new_mark);
++}
++
++inline void oopDesc::restore_mark(markOop saved_value) {
++  assert(!is_gc_marked(), "object must not be marked");
++  assert(!saved_value->is_marked(), "value to be restored must not be marked");
++  bool is_contained = this->is_contained();
++  // The property whether the object is a container cannot change during GC.
++  // Hence, there is no need in updating the corresponding bit in the given
++  // saved markword value.
++  if (saved_value->has_displaced_mark_helper()) {
++    markOop displaced_value = saved_value->displaced_mark_helper();
++    saved_value->set_displaced_mark_helper(is_contained ?
++        displaced_value->set_contained() :
++        displaced_value->clear_contained());
++    set_mark(saved_value);
++  } else {
++    set_mark(is_contained ?
++        saved_value->set_contained() :
++        saved_value->clear_contained());
++  }
++}
++
++inline jlong oopDesc::relative_container_offset() const {
++  assert(is_contained(), "object not contained");
++  return *((jlong*) (((address) this) - sizeof(jlong)));
++}
++
++inline void oopDesc::set_relative_container_offset(jlong offset) {
++  assert(is_contained(), "object not contained");
++  *((jlong*) (((address) this) - sizeof(jlong))) = offset;
++}
++
++inline oop oopDesc::container() const {
++  assert(is_contained(), "object not contained");
++  return (oop) (((address) this) - relative_container_offset());
++}
++
++inline oop oopDesc::outermost_container() {
++  assert(is_contained(), "object not contained");
++  oop container = this;
++  do {
++    container = container->container();
++    assert(container->is_container(), "container broken");
++  } while (container->is_contained());
++  return container;
++}
++
++inline oop oopDesc::outermost_alive_container() {
++  assert(is_gc_marked(), "object not marked");
++  assert(is_contained(), "object not contained");
++  oop result = NULL;
++  oop container = this;
++  do {
++    container = container->container();
++    assert(container->is_container(), "container broken");
++    if (container->is_gc_marked()) {
++      result = container;
++    } else {
++      break;
++    }
++  } while (container->is_contained());
++  return result;
++}
+ 
+ inline intptr_t oopDesc::identity_hash() {
+   // Fast case; if the object is unlocked and the hash value is set, no locking is needed
+@@ -699,13 +835,6 @@
+   }
+ }
+ 
+-inline int oopDesc::adjust_pointers() {
+-  debug_only(int check_size = size());
+-  int s = klass()->oop_adjust_pointers(this);
+-  assert(s == check_size, "should be the same");
+-  return s;
+-}
+-
+ #define OOP_ITERATE_DEFN(OopClosureType, nv_suffix)                        \
+                                                                            \
+ inline int oopDesc::oop_iterate(OopClosureType* blk) {                     \

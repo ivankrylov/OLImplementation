@@ -1,0 +1,287 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Cdiff src/share/vm/runtime/reflection.cpp</title>
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/runtime/reflection.cpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+<hr /><span class="oldmarker">*** 34,44 ****</span>
+  #include "memory/universe.inline.hpp"
+  #include "oops/instanceKlass.hpp"
+  #include "oops/objArrayKlass.hpp"
+  #include "oops/objArrayOop.hpp"
+  #include "prims/jvm.h"
+<span class="removed">- #include "prims/jvmtiExport.hpp"</span>
+  #include "runtime/arguments.hpp"
+  #include "runtime/handles.inline.hpp"
+  #include "runtime/javaCalls.hpp"
+  #include "runtime/reflection.hpp"
+  #include "runtime/reflectionUtils.hpp"
+<span class="newmarker">--- 34,43 ----</span>
+<hr /><span class="oldmarker">*** 941,955 ****</span>
+            method = resolve_interface_call(klass, reflected_method, target_klass, receiver, THREAD);
+            if (HAS_PENDING_EXCEPTION) {
+            // Method resolution threw an exception; wrap it in an InvocationTargetException
+              oop resolution_exception = PENDING_EXCEPTION;
+              CLEAR_PENDING_EXCEPTION;
+<span class="removed">-             // JVMTI has already reported the pending exception</span>
+<span class="removed">-             // JVMTI internal flag reset is needed in order to report InvocationTargetException</span>
+<span class="removed">-             if (THREAD-&gt;is_Java_thread()) {</span>
+<span class="removed">-               JvmtiExport::clear_detected_exception((JavaThread*) THREAD);</span>
+<span class="removed">-             }</span>
+              JavaCallArguments args(Handle(THREAD, resolution_exception));
+              THROW_ARG_0(vmSymbols::java_lang_reflect_InvocationTargetException(),
+                  vmSymbols::throwable_void_signature(),
+                  &amp;args);
+            }
+<span class="newmarker">--- 940,949 ----</span>
+<hr /><span class="oldmarker">*** 1078,1093 ****</span>
+  
+    if (HAS_PENDING_EXCEPTION) {
+      // Method threw an exception; wrap it in an InvocationTargetException
+      oop target_exception = PENDING_EXCEPTION;
+      CLEAR_PENDING_EXCEPTION;
+<span class="removed">-     // JVMTI has already reported the pending exception</span>
+<span class="removed">-     // JVMTI internal flag reset is needed in order to report InvocationTargetException</span>
+<span class="removed">-     if (THREAD-&gt;is_Java_thread()) {</span>
+<span class="removed">-       JvmtiExport::clear_detected_exception((JavaThread*) THREAD);</span>
+<span class="removed">-     }</span>
+<span class="removed">- </span>
+      JavaCallArguments args(Handle(THREAD, target_exception));
+      THROW_ARG_0(vmSymbols::java_lang_reflect_InvocationTargetException(),
+                  vmSymbols::throwable_void_signature(),
+                  &amp;args);
+    } else {
+<span class="newmarker">--- 1072,1081 ----</span>
+<hr /><span class="oldmarker">*** 1125,1139 ****</span>
+  }
+  
+  // This would be nicer if, say, java.lang.reflect.Method was a subclass
+  // of java.lang.reflect.Constructor
+  
+<span class="changed">! oop Reflection::invoke_method(oop method_mirror, Handle receiver, objArrayHandle args, TRAPS) {</span>
+    oop mirror             = java_lang_reflect_Method::clazz(method_mirror);
+    int slot               = java_lang_reflect_Method::slot(method_mirror);
+    bool override          = java_lang_reflect_Method::override(method_mirror) != 0;
+<span class="changed">!   objArrayHandle ptypes(THREAD, objArrayOop(java_lang_reflect_Method::parameter_types(method_mirror)));</span>
+  
+    oop return_type_mirror = java_lang_reflect_Method::return_type(method_mirror);
+    BasicType rtype;
+    if (java_lang_Class::is_primitive(return_type_mirror)) {
+      rtype = basic_type_mirror_to_basic_type(return_type_mirror, CHECK_NULL);
+<span class="newmarker">--- 1113,1129 ----</span>
+  }
+  
+  // This would be nicer if, say, java.lang.reflect.Method was a subclass
+  // of java.lang.reflect.Constructor
+  
+<span class="changed">! oop Reflection::invoke_method(oop method_mirror, Handle receiver,</span>
+<span class="changed">!     objArrayHandle method_args, TRAPS) {</span>
+    oop mirror = java_lang_reflect_Method::clazz(method_mirror);
+    int slot = java_lang_reflect_Method::slot(method_mirror);
+    bool override = java_lang_reflect_Method::override(method_mirror) != 0;
+<span class="changed">!   objArrayHandle ptypes(THREAD,</span>
+<span class="changed">!       objArrayOop(java_lang_reflect_Method::parameter_types(method_mirror)));</span>
+  
+    oop return_type_mirror = java_lang_reflect_Method::return_type(method_mirror);
+    BasicType rtype;
+    if (java_lang_Class::is_primitive(return_type_mirror)) {
+      rtype = basic_type_mirror_to_basic_type(return_type_mirror, CHECK_NULL);
+<hr /><span class="oldmarker">*** 1142,1179 ****</span>
+    }
+  
+    instanceKlassHandle klass(THREAD, java_lang_Class::as_Klass(mirror));
+    Method* m = klass-&gt;method_with_idnum(slot);
+    if (m == NULL) {
+<span class="changed">!     THROW_MSG_0(vmSymbols::java_lang_InternalError(), "invoke");</span>
+    }
+    methodHandle method(THREAD, m);
+  
+<span class="changed">!   return invoke(klass, method, receiver, override, ptypes, rtype, args, true, THREAD);</span>
+  }
+  
+<span class="changed">! </span>
+<span class="changed">! oop Reflection::invoke_constructor(oop constructor_mirror, objArrayHandle args, TRAPS) {</span>
+<span class="changed">!   oop mirror             = java_lang_reflect_Constructor::clazz(constructor_mirror);</span>
+<span class="changed">!   int slot               = java_lang_reflect_Constructor::slot(constructor_mirror);</span>
+<span class="changed">!   bool override          = java_lang_reflect_Constructor::override(constructor_mirror) != 0;</span>
+<span class="changed">!   objArrayHandle ptypes(THREAD, objArrayOop(java_lang_reflect_Constructor::parameter_types(constructor_mirror)));</span>
+  
+    instanceKlassHandle klass(THREAD, java_lang_Class::as_Klass(mirror));
+    Method* m = klass-&gt;method_with_idnum(slot);
+    if (m == NULL) {
+<span class="changed">!     THROW_MSG_0(vmSymbols::java_lang_InternalError(), "invoke");</span>
+    }
+    methodHandle method(THREAD, m);
+<span class="changed">!   assert(method-&gt;name() == vmSymbols::object_initializer_name(), "invalid constructor");</span>
+  
+<span class="changed">!   // Make sure klass gets initialize</span>
+    klass-&gt;initialize(CHECK_NULL);
+  
+    // Create new instance (the receiver)
+<span class="removed">-   klass-&gt;check_valid_for_instantiation(false, CHECK_NULL);</span>
+    Handle receiver = klass-&gt;allocate_instance_handle(CHECK_NULL);
+  
+<span class="changed">!   // Ignore result from call and return receiver</span>
+<span class="changed">!   invoke(klass, method, receiver, override, ptypes, T_VOID, args, false, CHECK_NULL);</span>
+    return receiver();
+  }
+<span class="newmarker">--- 1132,1208 ----</span>
+    }
+  
+    instanceKlassHandle klass(THREAD, java_lang_Class::as_Klass(mirror));
+    Method* m = klass-&gt;method_with_idnum(slot);
+    if (m == NULL) {
+<span class="changed">!     THROW_MSG_NULL(vmSymbols::java_lang_InternalError(), "invoke");</span>
+    }
+    methodHandle method(THREAD, m);
+  
+<span class="changed">!   return invoke(klass, method, receiver, override, ptypes, rtype, method_args,</span>
+<span class="changed">!       true, THREAD);</span>
+  }
+  
+<span class="changed">! oop Reflection::invoke_constructor(oop ctor_mirror, objArrayHandle ctor_args,</span>
+<span class="changed">!     TRAPS) {</span>
+<span class="changed">!   oop mirror = java_lang_reflect_Constructor::clazz(ctor_mirror);</span>
+<span class="changed">!   int slot = java_lang_reflect_Constructor::slot(ctor_mirror);</span>
+<span class="changed">!   bool override = java_lang_reflect_Constructor::override(ctor_mirror) != 0;</span>
+<span class="changed">!   objArrayHandle ptypes(THREAD,</span>
+<span class="changed">!       objArrayOop(java_lang_reflect_Constructor::parameter_types(ctor_mirror)));</span>
+  
+    instanceKlassHandle klass(THREAD, java_lang_Class::as_Klass(mirror));
+    Method* m = klass-&gt;method_with_idnum(slot);
+    if (m == NULL) {
+<span class="changed">!     THROW_MSG_NULL(vmSymbols::java_lang_InternalError(), "invoke");</span>
+    }
+    methodHandle method(THREAD, m);
+<span class="changed">!   assert(method-&gt;name() == vmSymbols::object_initializer_name(),</span>
+<span class="changed">!       "invalid constructor");</span>
+<span class="changed">! </span>
+<span class="changed">!   // Make sure we are not trying to instantiate an abstract klass</span>
+<span class="changed">!   klass-&gt;check_valid_for_instantiation(false, CHECK_NULL);</span>
+  
+<span class="changed">!   // Make sure klass is initialized</span>
+    klass-&gt;initialize(CHECK_NULL);
+  
+    // Create new instance (the receiver)
+    Handle receiver = klass-&gt;allocate_instance_handle(CHECK_NULL);
+  
+<span class="changed">!   invoke(klass, method, receiver, override, ptypes, T_VOID, ctor_args, false,</span>
+<span class="changed">!       CHECK_NULL);</span>
+<span class="changed">!   return receiver();</span>
+<span class="changed">! }</span>
+<span class="changed">! </span>
+<span class="changed">! oop Reflection::invoke_constructor_in_place(address obj_addr,</span>
+<span class="changed">!     bool is_contained, bool is_container, oop ctor_mirror,</span>
+<span class="changed">!     objArrayHandle ctor_args, TRAPS) {</span>
+<span class="changed">!   oop mirror = java_lang_reflect_Constructor::clazz(ctor_mirror);</span>
+<span class="changed">!   int slot = java_lang_reflect_Constructor::slot(ctor_mirror);</span>
+<span class="changed">!   bool override = java_lang_reflect_Constructor::override(ctor_mirror) != 0;</span>
+<span class="changed">!   objArrayHandle ptypes(THREAD,</span>
+<span class="changed">!       objArrayOop(java_lang_reflect_Constructor::parameter_types(ctor_mirror)));</span>
+<span class="changed">! </span>
+<span class="changed">!   instanceKlassHandle klass(THREAD, java_lang_Class::as_Klass(mirror));</span>
+<span class="changed">!   Method* m = klass-&gt;method_with_idnum(slot);</span>
+<span class="changed">!   if (m == NULL) {</span>
+<span class="changed">!     THROW_MSG_NULL(vmSymbols::java_lang_InternalError(), "invoke");</span>
+<span class="changed">!   }</span>
+<span class="changed">!   methodHandle method(THREAD, m);</span>
+<span class="changed">!   assert(method-&gt;name() == vmSymbols::object_initializer_name(),</span>
+<span class="changed">!       "invalid constructor");</span>
+<span class="changed">! </span>
+<span class="changed">!   // Make sure we are not trying to instantiate an abstract klass</span>
+<span class="changed">!   klass-&gt;check_valid_for_instantiation(false, CHECK_NULL);</span>
+<span class="changed">! </span>
+<span class="changed">!   // Make sure klass is initialized</span>
+<span class="changed">!   klass-&gt;initialize(CHECK_NULL);</span>
+<span class="changed">! </span>
+<span class="changed">!   // Create new instance (the receiver) at the given address (in preallocated</span>
+<span class="changed">!   // memory region)</span>
+<span class="changed">!   Handle receiver = klass-&gt;allocate_instance_at_handle(obj_addr, is_contained,</span>
+<span class="changed">!       is_container, CHECK_NULL);</span>
+<span class="changed">! </span>
+<span class="changed">!   invoke(klass, method, receiver, override, ptypes, T_VOID, ctor_args, false,</span>
+<span class="changed">!       CHECK_NULL);</span>
+    return receiver();
+  }
+</pre></body></html>
+

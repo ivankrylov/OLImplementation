@@ -1,0 +1,162 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/gc_implementation/parallelScavenge/psPromotionManager.hpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -79,11 +79,10 @@</span>
+   PSOldPromotionLAB                   _old_lab;
+   bool                                _young_gen_is_full;
+   bool                                _old_gen_is_full;
+ 
+   OopStarTaskQueue                    _claimed_stack_depth;
+<span class="removed">-  OverflowTaskQueue&lt;oop, mtGC&gt;        _claimed_stack_breadth;</span>
+ 
+   bool                                _totally_drain;
+   uint                                _target_stack_size;
+ 
+   uint                                _array_chunk_size;
+</pre><hr /><pre>
+<span class="newmarker">@@ -94,11 +93,10 @@</span>
+   // Accessors
+   static PSOldGen* old_gen()         { return _old_gen; }
+   static MutableSpace* young_space() { return _young_space; }
+ 
+   inline static PSPromotionManager* manager_array(int index);
+<span class="removed">-  template &lt;class T&gt; inline void claim_or_forward_internal_depth(T* p);</span>
+ 
+   // On the task queues we push reference locations as well as
+   // partially-scanned arrays (in the latter case, we push an oop to
+   // the from-space image of the array and the length on the
+   // from-space image indicates how many entries on the array we still
+</pre><hr /><pre>
+<span class="newmarker">@@ -163,32 +161,30 @@</span>
+   static bool steal_depth(int queue_num, int* seed, StarTask&amp; t) {
+     return stack_array_depth()-&gt;steal(queue_num, seed, t);
+   }
+ 
+   PSPromotionManager();
+<span class="new">+  void reset();</span>
+ 
+   // Accessors
+   OopStarTaskQueue* claimed_stack_depth() {
+     return &amp;_claimed_stack_depth;
+   }
+ 
+<span class="removed">-  bool young_gen_is_full()             { return _young_gen_is_full; }</span>
+<span class="removed">-</span>
+<span class="removed">-  bool old_gen_is_full()               { return _old_gen_is_full; }</span>
+<span class="removed">-  void set_old_gen_is_full(bool state) { _old_gen_is_full = state; }</span>
+<span class="removed">-</span>
+   // Promotion methods
+   template&lt;bool promote_immediately&gt; oop copy_to_survivor_space(oop o);
+<span class="removed">-  oop oop_promotion_failed(oop obj, markOop obj_mark);</span>
+ 
+<span class="removed">-  void reset();</span>
+<span class="new">+ private:</span>
+<span class="new">+  inline oop allocate_in_young_gen_slow(size_t size);</span>
+<span class="new">+  inline oop allocate_in_old_gen_slow(size_t size);</span>
+<span class="new">+  oop oop_promotion_failed(oop obj, markOop obj_mark);</span>
+ 
+<span class="new">+ public:</span>
+   void flush_labs();
+   void drain_stacks(bool totally_drain) {
+     drain_stacks_depth(totally_drain);
+   }
+<span class="removed">- public:</span>
+   void drain_stacks_cond_depth() {
+     if (claimed_stack_depth()-&gt;size() &gt; _target_stack_size) {
+       drain_stacks_depth(false);
+     }
+   }
+</pre></body></html>
+

@@ -1,0 +1,31 @@
+--- old/src/cpu/x86/vm/x86_64.ad	2015-06-16 10:25:39.290557318 -0700
++++ new/src/cpu/x86/vm/x86_64.ad	2015-06-16 10:25:39.218559022 -0700
+@@ -6962,6 +6962,28 @@
+   ins_pipe( ialu_reg );
+ %}
+ 
++instruct castDerived_rReg(rRegP dst, rRegL src, rFlagsReg cr)
++%{
++  match(Set dst (CastDerived (AddP dst src)));
++  effect(KILL cr);
++
++  format %{ "addq    $dst, $src\t# cast derived ptr" %}
++  opcode(0x03);
++  ins_encode(REX_reg_reg_wide(dst, src), OpcP, reg_reg(dst, src));
++  ins_pipe(ialu_reg_reg);
++%}
++
++instruct castDerived_rReg_imm(rRegP dst, immL32 src, rFlagsReg cr)
++%{
++  match(Set dst (CastDerived (AddP dst src)));
++  effect(KILL cr);
++
++  format %{ "addq    $dst, $src\t# cast derived ptr" %}
++  opcode(0x81, 0x00); /* /0 id */
++  ins_encode(OpcSErm_wide(dst, src), Con8or32(src));
++  ins_pipe( ialu_reg );
++%}
++
+ // XXX addP mem ops ????
+ 
+ instruct leaP_rReg_imm(rRegP dst, rRegP src0, immL32 src1)

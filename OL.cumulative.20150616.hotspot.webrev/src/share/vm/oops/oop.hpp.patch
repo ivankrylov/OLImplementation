@@ -1,0 +1,154 @@
+--- old/src/share/vm/oops/oop.hpp	2015-06-16 10:25:46.074395281 -0700
++++ new/src/share/vm/oops/oop.hpp	2015-06-16 10:25:45.994397211 -0700
+@@ -77,8 +77,8 @@
+   void    release_set_mark(markOop m);
+   markOop cas_set_mark(markOop new_mark, markOop old_mark);
+ 
+-  // Used only to re-initialize the mark word (e.g., of promoted
+-  // objects during a GC) -- requires a valid klass pointer
++  // Used only to re-initialize the markword (e.g., of promoted
++  // objects during a GC); requires a valid klass pointer
+   void init_mark();
+ 
+   Klass* klass() const;
+@@ -275,11 +275,6 @@
+   void verify_on(outputStream* st);
+   void verify();
+ 
+-  // locking operations
+-  bool is_locked()   const;
+-  bool is_unlocked() const;
+-  bool has_bias_pattern() const;
+-
+   // asserts
+   bool is_oop(bool ignore_mark_word = false) const;
+   bool is_oop_or_null(bool ignore_mark_word = false) const;
+@@ -287,50 +282,92 @@
+   bool is_unlocked_oop() const;
+ #endif
+ 
+-  // garbage collection
++  // Locking operations
++  bool is_locked() const;
++  bool is_unlocked() const;
++  bool has_bias_pattern() const;
++
++  // The mark is forwarded to stack when the object is locked; in this case
++  // it is said that the mark is displaced.
++  bool has_displaced_mark() const;
++  markOop displaced_mark() const;
++  void set_displaced_mark(markOop m);
++
++  // Garbage collection support
+   bool is_gc_marked() const;
+-  // Apply "MarkSweep::mark_and_push" to (the address of) every non-NULL
+-  // reference field in "this".
+-  void follow_contents(void);
++  bool is_scavengable() const;
++
++  // Mark-Sweep GCs
++  // Apply MarkSweep::mark_and_push() to (the address of) every reference
++  // field in this object
++  void follow_contents();
++
++  // Adjust all pointers in this object to point at their forwarded locations
++  // and return the size of this object
++  int adjust_pointers();
+ 
+ #if INCLUDE_ALL_GCS
+-  // Parallel Scavenge
++  // Parallel Scavenge GC
+   void push_contents(PSPromotionManager* pm);
+ 
+-  // Parallel Old
+-  void update_contents(ParCompactionManager* cm);
+-
++  // Parallel Old GC
+   void follow_contents(ParCompactionManager* cm);
++  void update_contents(ParCompactionManager* cm);
+ #endif // INCLUDE_ALL_GCS
+ 
+-  bool is_scavengable() const;
+-
+-  // Forward pointer operations for scavenge
++  // Forwarding pointer operations for Mark-Sweep and Scavenge
+   bool is_forwarded() const;
+-
+   void forward_to(oop p);
+   bool cas_forward_to(oop p, markOop compare);
+-
+ #if INCLUDE_ALL_GCS
+-  // Like "forward_to", but inserts the forwarding pointer atomically.
++  // Like forward_to(), but inserts the forwarding pointer atomically.
+   // Exactly one thread succeeds in inserting the forwarding pointer, and
+-  // this call returns "NULL" for that thread; any other thread has the
+-  // value of the forwarding pointer returned and does not modify "this".
++  // this call returns NULL for that thread; any other thread has the value
++  // of the forwarding pointer returned and does not modify this object.
+   oop forward_to_atomic(oop p);
+ #endif // INCLUDE_ALL_GCS
+-
+   oop forwardee() const;
+ 
+-  // Age of object during scavenge
++  // Age of object used by Scavenge
+   uint age() const;
+   void incr_age();
+ 
+-  // Adjust all pointers in this object to point at it's forwarded location and
+-  // return the size of this oop.  This is used by the MarkSweep collector.
+-  int adjust_pointers();
+-
+-  // mark-sweep support
+-  void follow_body(int begin, int end);
++  // ObjectLayout support
++  // Operations with the flag whether the object is contained
++  bool is_contained() const;
++  static bool is_contained(markOop mark);
++  void set_contained();
++  void clear_contained();
++
++  // Operations with the flag whether the object is a container
++  bool is_container() const;
++  static bool is_container(markOop mark, Klass* klass);
++
++  // Manipulations with the object's mark that preserve the current values of
++  // its "contained" and "container" properties
++  void convert_to_marked();
++  void convert_to_unmarked();
++  void restore_mark(markOop saved_value);
++
++  // Operations with the relative container offset (RCO) object corresponding
++  // to this object (which must be contained). The only mission of the RCO
++  // object is to store the offset of this object from its immediate container.
++  // RCO objects are transparently created by the VM for every contained object
++  // (including contained containers) at the time of their construction. They
++  // look like "prepadding" objects taking several words just before the
++  // corresponding contained objects.
++  jlong relative_container_offset() const;
++  void set_relative_container_offset(jlong offset);
++
++  // Return the immediate container of this object (which must be contained)
++  oop container() const;
++
++  // Return the outermost container of this object (which must be contained)
++  oop outermost_container();
++
++  // Return the outermost GC-marked container of this object (which must be
++  // contained and also GC-marked)
++  oop outermost_alive_container();
+ 
+   // Fast access to barrier set
+   static BarrierSet* bs()            { return _bs; }
+@@ -365,11 +402,6 @@
+   // Alternate hashing code if string table is rehashed
+   unsigned int new_hash(juint seed);
+ 
+-  // marks are forwarded to stack when object is locked
+-  bool     has_displaced_mark() const;
+-  markOop  displaced_mark() const;
+-  void     set_displaced_mark(markOop m);
+-
+   // for code generation
+   static int mark_offset_in_bytes()    { return offset_of(oopDesc, _mark); }
+   static int klass_offset_in_bytes()   { return offset_of(oopDesc, _metadata._klass); }

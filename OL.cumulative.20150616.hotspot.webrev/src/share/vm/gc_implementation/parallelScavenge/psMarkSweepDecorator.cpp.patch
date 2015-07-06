@@ -1,0 +1,192 @@
+--- old/src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp	2015-06-16 10:25:42.018492533 -0700
++++ new/src/share/vm/gc_implementation/parallelScavenge/psMarkSweepDecorator.cpp	2015-06-16 10:25:41.950494153 -0700
+@@ -72,6 +72,60 @@
+   return _destination_decorator;
+ }
+ 
++void PSMarkSweepDecorator::forward_container(address src, address dst, uint nesting_level) {
++  if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++    tty->print_cr("PSMarkSweepDecorator::forward_container: src=0x%p, dst=0x%p, nesting_level=%u",
++        (void*) src, (void*) dst, nesting_level);
++  }
++
++  assert(((oop) src)->is_container(), "src not container");
++
++  jint body_size = org_ObjectLayout_AbstractStructuredArray::bodySize((oop) src);
++  jlong length = org_ObjectLayout_AbstractStructuredArray::length((oop) src);
++  jlong padding_size = org_ObjectLayout_AbstractStructuredArray::paddingSize((oop) src);
++  jlong element_size = org_ObjectLayout_AbstractStructuredArray::elementSize((oop) src);
++
++  markOop mark_before = ((oop) src)->mark();
++  ((oop) src)->forward_to((oop) dst);
++  if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++    tty->print_cr("  Forwarding container 0x%p to 0x%p, nesting_level=%u, mark before=0x%p, mark after=0x%p",
++        (void*) src, (void*) dst, nesting_level, mark_before, ((oop) src)->mark());
++  }
++  assert(((oop) src)->is_gc_marked(), "encoding the pointer should preserve the mark");
++  src += body_size;
++  dst += body_size;
++
++  for (jlong i = 0; i < length; i++) {
++    oop prepadding_obj = (oop) src;
++    assert(!prepadding_obj->is_contained(), "sanity check");
++    assert(!prepadding_obj->is_container(), "sanity check");
++    markOop mark_before = prepadding_obj->mark();
++    prepadding_obj->forward_to((oop) dst);
++    if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++      tty->print_cr("  Forwarding prepadding 0x%p to 0x%p, nesting_level=%u, mark before=0x%p, mark after=0x%p",
++          (void*) src, (void*) dst, nesting_level, mark_before, prepadding_obj->mark());
++    }
++    assert(prepadding_obj->is_gc_marked(), "encoding the pointer should preserve the mark");
++
++    oop element_obj = (oop) (src + padding_size);
++    assert(element_obj->is_contained(), "sanity check");
++    if (element_obj->is_container()) {
++      forward_container(src + padding_size, dst + padding_size, nesting_level + 1);
++    } else {
++      markOop mark_before = element_obj->mark();
++      element_obj->forward_to((oop) (dst + padding_size));
++      if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++        tty->print_cr("  Forwarding element 0x%p to 0x%p, nesting_level=%u, mark before=0x%p, mark after=0x%p",
++            (void*) (src + padding_size), (void*) (dst + padding_size), nesting_level,mark_before, element_obj->mark());
++      }
++      assert(element_obj->is_gc_marked(), "encoding the pointer should preserve the mark");
++    }
++
++    src += element_size;
++    dst += element_size;
++  }
++}
++
+ // FIX ME FIX ME FIX ME FIX ME!!!!!!!!!
+ // The object forwarding code is duplicated. Factor this out!!!!!
+ //
+@@ -125,6 +179,21 @@
+       Prefetch::write(q, interval);
+       size_t size = oop(q)->size();
+ 
++      if (oop(q)->is_contained()) {
++        if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++          tty->print_cr("PSMarkSweepDecorator::precompact: 0x%p belongs to dead container, mark is 0x%p",
++              (void*) q, ((oop) q)->mark());
++        }
++        oop(q)->clear_contained();
++      }
++      if (oop(q)->is_container()) {
++        size = org_ObjectLayout_AbstractStructuredArray::footprint_with_contained_objects((oop) q) >> LogHeapWordSize;
++        if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++          tty->print_cr("PSMarkSweepDecorator::precompact: 0x%p is container of size %ld, mark is 0x%p",
++              (void*) q, size << LogHeapWordSize, ((oop) q)->mark());
++        }
++      }
++
+       size_t compaction_max_size = pointer_delta(compact_end, compact_top);
+ 
+       // This should only happen if a space in the young gen overflows the
+@@ -149,15 +218,28 @@
+       }
+ 
+       // store the forwarding pointer into the mark word
+-      if (q != compact_top) {
+-        oop(q)->forward_to(oop(compact_top));
+-        assert(oop(q)->is_gc_marked(), "encoding the pointer should preserve the mark");
+-      } else {
++//      if (q != compact_top) {
++        if (oop(q)->is_container()) {
++          forward_container((address) q, (address) compact_top, 0);
++        } else {
++          markOop mark_before = ((oop) q)->mark();
++          oop(q)->forward_to(oop(compact_top));
++          assert(oop(q)->is_gc_marked(), "encoding the pointer should preserve the mark");
++          if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++            tty->print_cr("Forwarding (1) object 0x%p to 0x%p, mark before=0x%p, mark after=0x%p",
++                (void*) q, (void*) compact_top,mark_before,  ((oop) q)->mark());
++          }
++        }
++/*      } else {
+         // if the object isn't moving we can just set the mark to the default
+         // mark and handle it specially later on.
+-        oop(q)->init_mark();
+-        assert(oop(q)->forwardee() == NULL, "should be forwarded to NULL");
+-      }
++//        if (oop(q)->is_container()) {
++//          init_marks_in_container(oop(q));
++//        } else {
++          oop(q)->init_mark();
++          assert(oop(q)->forwardee() == NULL, "should be forwarded to NULL");
++//        }
++      }*/
+ 
+       // Update object start array
+       if (start_array) {
+@@ -209,15 +291,24 @@
+           }
+ 
+           // store the forwarding pointer into the mark word
+-          if (q != compact_top) {
+-            oop(q)->forward_to(oop(compact_top));
+-            assert(oop(q)->is_gc_marked(), "encoding the pointer should preserve the mark");
+-          } else {
++//          if (q != compact_top) {
++            if (oop(q)->is_container()) {
++              forward_container((address) q, (address) compact_top, 0);
++            } else {
++              markOop mark_before = ((oop) q)->mark();
++              oop(q)->forward_to(oop(compact_top));
++              assert(oop(q)->is_gc_marked(), "encoding the pointer should preserve the mark");
++              if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++                tty->print_cr("Forwarding (2) object 0x%p to 0x%p, mark before=0x%p, mark after=0x%p",
++                    (void*) q, (void*) compact_top,  mark_before, ((oop) q)->mark());
++              }
++            }
++/*          } else {
+             // if the object isn't moving we can just set the mark to the default
+             // mark and handle it specially later on.
+             oop(q)->init_mark();
+             assert(oop(q)->forwardee() == NULL, "should be forwarded to NULL");
+-          }
++          }*/
+ 
+           // Update object start array
+           if (start_array) {
+@@ -303,6 +394,10 @@
+ 
+     while (q < end) {
+       // point all the oops to the new location
++      if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++        tty->print_cr("PSMarkSweepDecorator::adjust_pointers: Special case 0x%p 0x%p",
++            (void*) q, ((oop) q)->mark());
++      }
+       size_t size = oop(q)->adjust_pointers();
+       q += size;
+     }
+@@ -324,6 +419,10 @@
+     if (oop(q)->is_gc_marked()) {
+       // q is alive
+       // point all the oops to the new location
++      if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++        tty->print_cr("PSMarkSweepDecorator::adjust_pointers: Normal case 0x%p 0x%p",
++            (void*) q, ((oop) q)->mark());
++      }
+       size_t size = oop(q)->adjust_pointers();
+       debug_only(prev_q = q);
+       q += size;
+@@ -392,11 +491,16 @@
+       Prefetch::write(compaction_top, copy_interval);
+ 
+       // copy object and reinit its mark
+-      assert(q != compaction_top, "everything in this pass should be moving");
++      if (TraceObjectLayoutIntrinsics && ObjectLayoutIntrinsicsTraceLevel >= 2) {
++        tty->print_cr("PSMarkSweepDecorator::compact: Copying 0x%p with mark 0x%p",
++            (void*) q,((oop) q)->mark());
++      }
++//      assert(q != compaction_top, "everything in this pass should be moving");
+       Copy::aligned_conjoint_words(q, compaction_top, size);
+-      oop(compaction_top)->init_mark();
+       assert(oop(compaction_top)->klass() != NULL, "should have a class");
+ 
++      ((oop) compaction_top)->convert_to_unmarked();
++
+       debug_only(prev_q = q);
+       q += size;
+     }

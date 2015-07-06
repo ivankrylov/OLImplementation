@@ -1,0 +1,203 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Udiff src/share/vm/runtime/virtualspace.cpp</title>
+
+<style type="text/css" media="screen">
+span.new {
+    color: blue;
+    font-weight: normal;
+}
+</style>
+
+</head>
+<body id="SUNWwebrev">
+<h2>src/share/vm/runtime/virtualspace.cpp</h2>
+        <a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+        <pre>
+</pre><hr /><pre>
+<span class="newmarker">@@ -50,26 +50,16 @@</span>
+ // Dummy constructor
+ ReservedSpace::ReservedSpace() : _base(NULL), _size(0), _noaccess_prefix(0),
+     _alignment(0), _special(false), _executable(false) {
+ }
+ 
+<span class="removed">-ReservedSpace::ReservedSpace(size_t size, size_t preferred_page_size) {</span>
+<span class="removed">-  bool has_preferred_page_size = preferred_page_size != 0;</span>
+<span class="removed">-  // Want to use large pages where possible and pad with small pages.</span>
+<span class="removed">-  size_t page_size = has_preferred_page_size ? preferred_page_size : os::page_size_for_region_unaligned(size, 1);</span>
+<span class="new">+ReservedSpace::ReservedSpace(size_t size) {</span>
+<span class="new">+  size_t page_size = os::page_size_for_region(size, size, 1);</span>
+   bool large_pages = page_size != (size_t)os::vm_page_size();
+<span class="removed">-  size_t alignment;</span>
+<span class="removed">-  if (large_pages &amp;&amp; has_preferred_page_size) {</span>
+<span class="removed">-    alignment = MAX2(page_size, (size_t)os::vm_allocation_granularity());</span>
+<span class="removed">-    // ReservedSpace initialization requires size to be aligned to the given</span>
+<span class="removed">-    // alignment. Align the size up.</span>
+<span class="removed">-    size = align_size_up(size, alignment);</span>
+<span class="removed">-  } else {</span>
+     // Don't force the alignment to be large page aligned,
+     // since that will waste memory.
+<span class="removed">-    alignment = os::vm_allocation_granularity();</span>
+<span class="removed">-  }</span>
+<span class="new">+  size_t alignment = os::vm_allocation_granularity();</span>
+   initialize(size, alignment, large_pages, NULL, 0, false);
+ }
+ 
+ ReservedSpace::ReservedSpace(size_t size, size_t alignment,
+                              bool large,
+</pre><hr /><pre>
+<span class="newmarker">@@ -226,14 +216,16 @@</span>
+ 
+   // Assert that if noaccess_prefix is used, it is the same as alignment.
+   assert(noaccess_prefix == 0 ||
+          noaccess_prefix == _alignment, "noaccess prefix wrong");
+ 
+<span class="removed">-  assert(markOopDesc::encode_pointer_as_mark(_base)-&gt;decode_pointer() == _base,</span>
+<span class="removed">-         "area must be distinguisable from marks for mark-sweep");</span>
+<span class="removed">-  assert(markOopDesc::encode_pointer_as_mark(&amp;_base[size])-&gt;decode_pointer() == &amp;_base[size],</span>
+<span class="removed">-         "area must be distinguisable from marks for mark-sweep");</span>
+<span class="new">+  assert(markOopDesc::encode_pointer_as_mark(_base,</span>
+<span class="new">+      /* is_contained = */ true)-&gt;decode_pointer() == _base,</span>
+<span class="new">+      "encoding space start address as mark is not reversible");</span>
+<span class="new">+  assert(markOopDesc::encode_pointer_as_mark(&amp;_base[size],</span>
+<span class="new">+      /* is_contained = */ true)-&gt;decode_pointer() == &amp;_base[size],</span>
+<span class="new">+      "encoding space end address as mark is not reversible");</span>
+ }
+ 
+ 
+ ReservedSpace::ReservedSpace(char* base, size_t size, size_t alignment,
+                              bool special, bool executable) {
+</pre><hr /><pre>
+<span class="newmarker">@@ -380,11 +372,11 @@</span>
+   _executable             = false;
+ }
+ 
+ 
+ bool VirtualSpace::initialize(ReservedSpace rs, size_t committed_size) {
+<span class="removed">-  const size_t max_commit_granularity = os::page_size_for_region_unaligned(rs.size(), 1);</span>
+<span class="new">+  const size_t max_commit_granularity = os::page_size_for_region(rs.size(), rs.size(), 1);</span>
+   return initialize_with_granularity(rs, committed_size, max_commit_granularity);
+ }
+ 
+ bool VirtualSpace::initialize_with_granularity(ReservedSpace rs, size_t committed_size, size_t max_commit_granularity) {
+   if(!rs.is_reserved()) return false;  // allocation failed.
+</pre><hr /><pre>
+<span class="newmarker">@@ -638,11 +630,23 @@</span>
+       _upper_high += upper_needs;
+     }
+   }
+ 
+   if (pre_touch || AlwaysPreTouch) {
+<span class="removed">-    os::pretouch_memory(previous_high, unaligned_new_high);</span>
+<span class="new">+    int vm_ps = os::vm_page_size();</span>
+<span class="new">+    for (char* curr = previous_high;</span>
+<span class="new">+         curr &lt; unaligned_new_high;</span>
+<span class="new">+         curr += vm_ps) {</span>
+<span class="new">+      // Note the use of a write here; originally we tried just a read, but</span>
+<span class="new">+      // since the value read was unused, the optimizer removed the read.</span>
+<span class="new">+      // If we ever have a concurrent touchahead thread, we'll want to use</span>
+<span class="new">+      // a read, to avoid the potential of overwriting data (if a mutator</span>
+<span class="new">+      // thread beats the touchahead thread to a page).  There are various</span>
+<span class="new">+      // ways of making sure this read is not optimized away: for example,</span>
+<span class="new">+      // generating the code for a read procedure at runtime.</span>
+<span class="new">+      *curr = 0;</span>
+<span class="new">+    }</span>
+   }
+ 
+   _high += bytes;
+   return true;
+ }
+</pre><hr /><pre>
+<span class="newmarker">@@ -1003,11 +1007,11 @@</span>
+     case Reserve:
+       return vs.initialize(rs, 0);
+     case Disable:
+       return vs.initialize_with_granularity(rs, 0, os::vm_page_size());
+     case Commit:
+<span class="removed">-      return vs.initialize_with_granularity(rs, 0, os::page_size_for_region_unaligned(rs.size(), 1));</span>
+<span class="new">+      return vs.initialize_with_granularity(rs, 0, os::page_size_for_region(rs.size(), rs.size(), 1));</span>
+     }
+   }
+ 
+  public:
+   static void test_virtual_space_actual_committed_space(size_t reserve_size, size_t commit_size,
+</pre></body></html>
+

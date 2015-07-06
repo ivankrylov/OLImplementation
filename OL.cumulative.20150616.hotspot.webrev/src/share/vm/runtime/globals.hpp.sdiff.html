@@ -1,0 +1,577 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/runtime </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/runtime/globals.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+ 701                                                                             \
+ 702   notproduct(bool, StressCriticalJNINatives, false,                         \
+ 703           "Exercise register saving code in critical natives")              \
+ 704                                                                             \
+ 705   product(bool, UseSSE42Intrinsics, false,                                  \
+ 706           "SSE4.2 versions of intrinsics")                                  \
+ 707                                                                             \
+ 708   product(bool, UseAESIntrinsics, false,                                    \
+ 709           "Use intrinsics for AES versions of crypto")                      \
+ 710                                                                             \
+ 711   product(bool, UseSHA1Intrinsics, false,                                   \
+ 712           "Use intrinsics for SHA-1 crypto hash function")                  \
+ 713                                                                             \
+ 714   product(bool, UseSHA256Intrinsics, false,                                 \
+ 715           "Use intrinsics for SHA-224 and SHA-256 crypto hash functions")   \
+ 716                                                                             \
+ 717   product(bool, UseSHA512Intrinsics, false,                                 \
+ 718           "Use intrinsics for SHA-384 and SHA-512 crypto hash functions")   \
+ 719                                                                             \
+ 720   product(bool, UseCRC32Intrinsics, false,                                  \
+<span class="changed"> 721           "use intrinsics for java.util.zip.CRC32")                         \</span>
+
+
+
+
+
+
+
+
+
+ 722                                                                             \
+ 723   develop(bool, TraceCallFixup, false,                                      \
+ 724           "Trace all call fixups")                                          \
+ 725                                                                             \
+ 726   develop(bool, DeoptimizeALot, false,                                      \
+ 727           "Deoptimize at every exit from the runtime system")               \
+ 728                                                                             \
+ 729   notproduct(ccstrlist, DeoptimizeOnlyAt, "",                               \
+ 730           "A comma separated list of bcis to deoptimize at")                \
+ 731                                                                             \
+ 732   product(bool, DeoptimizeRandom, false,                                    \
+ 733           "Deoptimize random frames on random exit from the runtime system")\
+ 734                                                                             \
+ 735   notproduct(bool, ZombieALot, false,                                       \
+ 736           "Create zombies (non-entrant) at exit from the runtime system")   \
+ 737                                                                             \
+ 738   product(bool, UnlinkSymbolsALot, false,                                   \
+ 739           "Unlink unreferenced symbols from the symbol table at safepoints")\
+ 740                                                                             \
+ 741   notproduct(bool, WalkStackALot, false,                                    \
+
+</pre><hr></hr><pre>
+1229   product(bool, PreserveAllAnnotations, false,                              \
+1230           "Preserve RuntimeInvisibleAnnotations as well "                   \
+1231           "as RuntimeVisibleAnnotations")                                   \
+1232                                                                             \
+1233   develop(uintx, PreallocatedOutOfMemoryErrorCount, 4,                      \
+1234           "Number of OutOfMemoryErrors preallocated with backtrace")        \
+1235                                                                             \
+1236   product(bool, LazyBootClassLoader, true,                                  \
+1237           "Enable/disable lazy opening of boot class path entries")         \
+1238                                                                             \
+1239   product(bool, UseXMMForArrayCopy, false,                                  \
+1240           "Use SSE2 MOVQ instruction for Arraycopy")                        \
+1241                                                                             \
+1242   product(intx, FieldsAllocationStyle, 1,                                   \
+1243           "0 - type based with oops first, 1 - with oops last, "            \
+1244           "2 - oops in super and sub classes are together")                 \
+1245                                                                             \
+1246   product(bool, CompactFields, true,                                        \
+1247           "Allocate nonstatic fields in gaps between previous fields")      \
+1248                                                                             \
+<span class="changed">1249   notproduct(bool, PrintFieldLayout, false,                                 \</span>
+1250           "Print field layout for each class")                              \
+1251                                                                             \
+1252   product(intx, ContendedPaddingWidth, 128,                                 \
+1253           "How many bytes to pad the fields/classes marked @Contended with")\
+1254                                                                             \
+1255   product(bool, EnableContended, true,                                      \
+1256           "Enable @Contended annotation support")                           \
+1257                                                                             \
+1258   product(bool, RestrictContended, true,                                    \
+1259           "Restrict @Contended to trusted classes")                         \
+1260                                                                             \
+<span class="changed">1261   product(bool, UseBiasedLocking, true,                                     \</span>
+1262           "Enable biased locking in JVM")                                   \
+1263                                                                             \
+1264   product(intx, BiasedLockingStartupDelay, 4000,                            \
+1265           "Number of milliseconds to wait before enabling biased locking")  \
+1266                                                                             \
+1267   diagnostic(bool, PrintBiasedLockingStatistics, false,                     \
+1268           "Print statistics of biased locking in JVM")                      \
+1269                                                                             \
+1270   product(intx, BiasedLockingBulkRebiasThreshold, 20,                       \
+1271           "Threshold of number of revocations per type to try to "          \
+1272           "rebias all objects in the heap of that type")                    \
+1273                                                                             \
+1274   product(intx, BiasedLockingBulkRevokeThreshold, 40,                       \
+1275           "Threshold of number of revocations per type to permanently "     \
+1276           "revoke biases of all objects in the heap of that type")          \
+1277                                                                             \
+1278   product(intx, BiasedLockingDecayTime, 25000,                              \
+1279           "Decay time (in milliseconds) to re-enable bulk rebiasing of a "  \
+1280           "type after previous bulk rebias")                                \
+1281                                                                             \
+
+</pre><hr></hr><pre>
+1477   product(bool, UseConcMarkSweepGC, false,                                  \
+1478           "Use Concurrent Mark-Sweep GC in the old generation")             \
+1479                                                                             \
+1480   product(bool, ExplicitGCInvokesConcurrent, false,                         \
+1481           "A System.gc() request invokes a concurrent collection; "         \
+1482           "(effective only when UseConcMarkSweepGC)")                       \
+1483                                                                             \
+1484   product(bool, ExplicitGCInvokesConcurrentAndUnloadsClasses, false,        \
+1485           "A System.gc() request invokes a concurrent collection and "      \
+1486           "also unloads classes during such a concurrent gc cycle "         \
+1487           "(effective only when UseConcMarkSweepGC)")                       \
+1488                                                                             \
+1489   product(bool, GCLockerInvokesConcurrent, false,                           \
+1490           "The exit of a JNI critical section necessitating a scavenge, "   \
+1491           "also kicks off a background concurrent collection")              \
+1492                                                                             \
+1493   product(uintx, GCLockerEdenExpansionPercent, 5,                           \
+1494           "How much the GC can expand the eden by while the GC locker "     \
+1495           "is active (as a percentage)")                                    \
+1496                                                                             \
+<span class="changed">1497   diagnostic(uintx, GCLockerRetryAllocationCount, 2,                        \</span>
+1498           "Number of times to retry allocations when "                      \
+1499           "blocked by the GC locker")                                       \
+1500                                                                             \
+1501   develop(bool, UseCMSAdaptiveFreeLists, true,                              \
+1502           "Use adaptive free lists in the CMS generation")                  \
+1503                                                                             \
+1504   develop(bool, UseAsyncConcMarkSweepGC, true,                              \
+1505           "Use Asynchronous Concurrent Mark-Sweep GC in the old generation")\
+1506                                                                             \
+1507   develop(bool, RotateCMSCollectionTypes, false,                            \
+1508           "Rotate the CMS collections among concurrent and STW")            \
+1509                                                                             \
+1510   product(bool, UseCMSBestFit, true,                                        \
+1511           "Use CMS best fit allocation strategy")                           \
+1512                                                                             \
+1513   product(bool, UseCMSCollectionPassing, true,                              \
+1514           "Use passing of collection from background to foreground")        \
+1515                                                                             \
+1516   product(bool, UseParNewGC, false,                                         \
+1517           "Use parallel threads in the new generation")                     \
+
+</pre><hr></hr><pre>
+2031           "Turn on logging for internal VM tests.")                         \
+2032                                                                             \
+2033   product_pd(bool, UseTLAB, "Use thread-local object allocation")           \
+2034                                                                             \
+2035   product_pd(bool, ResizeTLAB,                                              \
+2036           "Dynamically resize TLAB size for threads")                       \
+2037                                                                             \
+2038   product(bool, ZeroTLAB, false,                                            \
+2039           "Zero out the newly created TLAB")                                \
+2040                                                                             \
+2041   product(bool, FastTLABRefill, true,                                       \
+2042           "Use fast TLAB refill code")                                      \
+2043                                                                             \
+2044   product(bool, PrintTLAB, false,                                           \
+2045           "Print various TLAB related information")                         \
+2046                                                                             \
+2047   product(bool, TLABStats, true,                                            \
+2048           "Provide more detailed and expensive TLAB statistics "            \
+2049           "(with PrintTLAB)")                                               \
+2050                                                                             \
+
+
+
+2051   product_pd(bool, NeverActAsServerClassMachine,                            \
+2052           "Never act like a server-class machine")                          \
+2053                                                                             \
+2054   product(bool, AlwaysActAsServerClassMachine, false,                       \
+2055           "Always act like a server-class machine")                         \
+2056                                                                             \
+2057   product_pd(uint64_t, MaxRAM,                                              \
+2058           "Real memory size (in bytes) used to set maximum heap size")      \
+2059                                                                             \
+2060   product(uintx, ErgoHeapSizeLimit, 0,                                      \
+2061           "Maximum ergonomically set heap size (in bytes); zero means use " \
+2062           "MaxRAM / MaxRAMFraction")                                        \
+2063                                                                             \
+2064   product(uintx, MaxRAMFraction, 4,                                         \
+2065           "Maximum fraction (1/n) of real memory used for maximum heap "    \
+2066           "size")                                                           \
+2067                                                                             \
+2068   product(uintx, DefaultMaxRAMFraction, 4,                                  \
+2069           "Maximum fraction (1/n) of real memory used for maximum heap "    \
+2070           "size; deprecated: to be renamed to MaxRAMFraction")              \
+
+</pre><hr></hr><pre>
+3216           "The minimum percentage of Metaspace free after GC to avoid "     \
+3217           "expansion")                                                      \
+3218                                                                             \
+3219   product(uintx, MaxMetaspaceFreeRatio,    70,                              \
+3220           "The maximum percentage of Metaspace free after GC to avoid "     \
+3221           "shrinking")                                                      \
+3222                                                                             \
+3223   product(uintx, MaxMetaspaceExpansion, ScaleForWordSize(4*M),              \
+3224           "The maximum expansion of Metaspace without full GC (in bytes)")  \
+3225                                                                             \
+3226   product(uintx, QueuedAllocationWarningCount, 0,                           \
+3227           "Number of times an allocation that queues behind a GC "          \
+3228           "will retry before printing a warning")                           \
+3229                                                                             \
+3230   diagnostic(uintx, VerifyGCStartAt,   0,                                   \
+3231           "GC invoke count where +VerifyBefore/AfterGC kicks in")           \
+3232                                                                             \
+3233   diagnostic(intx, VerifyGCLevel,     0,                                    \
+3234           "Generation level at which to start +VerifyBefore/AfterGC")       \
+3235                                                                             \
+<span class="changed">3236   product(uintx, MaxTenuringThreshold,    15,                               \</span>
+3237           "Maximum value for tenuring threshold")                           \
+3238                                                                             \
+<span class="changed">3239   product(uintx, InitialTenuringThreshold,    7,                            \</span>
+3240           "Initial value for tenuring threshold")                           \
+3241                                                                             \
+3242   product(uintx, TargetSurvivorRatio,    50,                                \
+3243           "Desired percentage of survivor space used after scavenge")       \
+3244                                                                             \
+3245   product(uintx, MarkSweepDeadRatio,     5,                                 \
+3246           "Percentage (0-100) of the old gen allowed as dead wood. "        \
+3247           "Serial mark sweep treats this as both the minimum and maximum "  \
+3248           "value. "                                                         \
+3249           "CMS uses this value only if it falls back to mark sweep. "       \
+3250           "Par compact uses a variable scale based on the density of the "  \
+3251           "generation and treats this as the maximum value when the heap "  \
+3252           "is either completely full or completely empty.  Par compact "    \
+3253           "also has a smaller default value; see arguments.cpp.")           \
+3254                                                                             \
+3255   product(uintx, MarkSweepAlwaysCompactCount,     4,                        \
+3256           "How often should we fully compact the heap (ignoring the dead "  \
+3257           "space parameters)")                                              \
+3258                                                                             \
+3259   product(intx, PrintCMSStatistics, 0,                                      \
+
+</pre><hr></hr>
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+ 701                                                                             \
+ 702   notproduct(bool, StressCriticalJNINatives, false,                         \
+ 703           "Exercise register saving code in critical natives")              \
+ 704                                                                             \
+ 705   product(bool, UseSSE42Intrinsics, false,                                  \
+ 706           "SSE4.2 versions of intrinsics")                                  \
+ 707                                                                             \
+ 708   product(bool, UseAESIntrinsics, false,                                    \
+ 709           "Use intrinsics for AES versions of crypto")                      \
+ 710                                                                             \
+ 711   product(bool, UseSHA1Intrinsics, false,                                   \
+ 712           "Use intrinsics for SHA-1 crypto hash function")                  \
+ 713                                                                             \
+ 714   product(bool, UseSHA256Intrinsics, false,                                 \
+ 715           "Use intrinsics for SHA-224 and SHA-256 crypto hash functions")   \
+ 716                                                                             \
+ 717   product(bool, UseSHA512Intrinsics, false,                                 \
+ 718           "Use intrinsics for SHA-384 and SHA-512 crypto hash functions")   \
+ 719                                                                             \
+ 720   product(bool, UseCRC32Intrinsics, false,                                  \
+<span class="changed"> 721           "Use intrinsics for java.util.zip.CRC32")                         \</span>
+<span class="changed"> 722                                                                             \</span>
+<span class="changed"> 723   product(bool, UseObjectLayoutIntrinsics, false,                           \</span>
+<span class="changed"> 724           "Use intrinsics enabling optimized ObjectLayout implementation")  \</span>
+<span class="changed"> 725                                                                             \</span>
+<span class="changed"> 726   product(bool, TraceObjectLayoutIntrinsics, false,                         \</span>
+<span class="changed"> 727           "Trace intrinsics specific to ObjectLayout implementation")       \</span>
+<span class="changed"> 728                                                                             \</span>
+<span class="changed"> 729   product(intx, ObjectLayoutIntrinsicsTraceLevel, 0,                        \</span>
+<span class="changed"> 730           "Trace level for ObjectLayout related intrinsics")                \</span>
+ 731                                                                             \
+ 732   develop(bool, TraceCallFixup, false,                                      \
+ 733           "Trace all call fixups")                                          \
+ 734                                                                             \
+ 735   develop(bool, DeoptimizeALot, false,                                      \
+ 736           "Deoptimize at every exit from the runtime system")               \
+ 737                                                                             \
+ 738   notproduct(ccstrlist, DeoptimizeOnlyAt, "",                               \
+ 739           "A comma separated list of bcis to deoptimize at")                \
+ 740                                                                             \
+ 741   product(bool, DeoptimizeRandom, false,                                    \
+ 742           "Deoptimize random frames on random exit from the runtime system")\
+ 743                                                                             \
+ 744   notproduct(bool, ZombieALot, false,                                       \
+ 745           "Create zombies (non-entrant) at exit from the runtime system")   \
+ 746                                                                             \
+ 747   product(bool, UnlinkSymbolsALot, false,                                   \
+ 748           "Unlink unreferenced symbols from the symbol table at safepoints")\
+ 749                                                                             \
+ 750   notproduct(bool, WalkStackALot, false,                                    \
+
+</pre><hr></hr><pre>
+1238   product(bool, PreserveAllAnnotations, false,                              \
+1239           "Preserve RuntimeInvisibleAnnotations as well "                   \
+1240           "as RuntimeVisibleAnnotations")                                   \
+1241                                                                             \
+1242   develop(uintx, PreallocatedOutOfMemoryErrorCount, 4,                      \
+1243           "Number of OutOfMemoryErrors preallocated with backtrace")        \
+1244                                                                             \
+1245   product(bool, LazyBootClassLoader, true,                                  \
+1246           "Enable/disable lazy opening of boot class path entries")         \
+1247                                                                             \
+1248   product(bool, UseXMMForArrayCopy, false,                                  \
+1249           "Use SSE2 MOVQ instruction for Arraycopy")                        \
+1250                                                                             \
+1251   product(intx, FieldsAllocationStyle, 1,                                   \
+1252           "0 - type based with oops first, 1 - with oops last, "            \
+1253           "2 - oops in super and sub classes are together")                 \
+1254                                                                             \
+1255   product(bool, CompactFields, true,                                        \
+1256           "Allocate nonstatic fields in gaps between previous fields")      \
+1257                                                                             \
+<span class="changed">1258   product(bool, PrintFieldLayout, false,                                    \</span>
+1259           "Print field layout for each class")                              \
+1260                                                                             \
+1261   product(intx, ContendedPaddingWidth, 128,                                 \
+1262           "How many bytes to pad the fields/classes marked @Contended with")\
+1263                                                                             \
+1264   product(bool, EnableContended, true,                                      \
+1265           "Enable @Contended annotation support")                           \
+1266                                                                             \
+1267   product(bool, RestrictContended, true,                                    \
+1268           "Restrict @Contended to trusted classes")                         \
+1269                                                                             \
+<span class="changed">1270   product(bool, UseBiasedLocking, false,                                     \</span>
+1271           "Enable biased locking in JVM")                                   \
+1272                                                                             \
+1273   product(intx, BiasedLockingStartupDelay, 4000,                            \
+1274           "Number of milliseconds to wait before enabling biased locking")  \
+1275                                                                             \
+1276   diagnostic(bool, PrintBiasedLockingStatistics, false,                     \
+1277           "Print statistics of biased locking in JVM")                      \
+1278                                                                             \
+1279   product(intx, BiasedLockingBulkRebiasThreshold, 20,                       \
+1280           "Threshold of number of revocations per type to try to "          \
+1281           "rebias all objects in the heap of that type")                    \
+1282                                                                             \
+1283   product(intx, BiasedLockingBulkRevokeThreshold, 40,                       \
+1284           "Threshold of number of revocations per type to permanently "     \
+1285           "revoke biases of all objects in the heap of that type")          \
+1286                                                                             \
+1287   product(intx, BiasedLockingDecayTime, 25000,                              \
+1288           "Decay time (in milliseconds) to re-enable bulk rebiasing of a "  \
+1289           "type after previous bulk rebias")                                \
+1290                                                                             \
+
+</pre><hr></hr><pre>
+1486   product(bool, UseConcMarkSweepGC, false,                                  \
+1487           "Use Concurrent Mark-Sweep GC in the old generation")             \
+1488                                                                             \
+1489   product(bool, ExplicitGCInvokesConcurrent, false,                         \
+1490           "A System.gc() request invokes a concurrent collection; "         \
+1491           "(effective only when UseConcMarkSweepGC)")                       \
+1492                                                                             \
+1493   product(bool, ExplicitGCInvokesConcurrentAndUnloadsClasses, false,        \
+1494           "A System.gc() request invokes a concurrent collection and "      \
+1495           "also unloads classes during such a concurrent gc cycle "         \
+1496           "(effective only when UseConcMarkSweepGC)")                       \
+1497                                                                             \
+1498   product(bool, GCLockerInvokesConcurrent, false,                           \
+1499           "The exit of a JNI critical section necessitating a scavenge, "   \
+1500           "also kicks off a background concurrent collection")              \
+1501                                                                             \
+1502   product(uintx, GCLockerEdenExpansionPercent, 5,                           \
+1503           "How much the GC can expand the eden by while the GC locker "     \
+1504           "is active (as a percentage)")                                    \
+1505                                                                             \
+<span class="changed">1506   diagnostic(intx, GCLockerRetryAllocationCount, 2,                         \</span>
+1507           "Number of times to retry allocations when "                      \
+1508           "blocked by the GC locker")                                       \
+1509                                                                             \
+1510   develop(bool, UseCMSAdaptiveFreeLists, true,                              \
+1511           "Use adaptive free lists in the CMS generation")                  \
+1512                                                                             \
+1513   develop(bool, UseAsyncConcMarkSweepGC, true,                              \
+1514           "Use Asynchronous Concurrent Mark-Sweep GC in the old generation")\
+1515                                                                             \
+1516   develop(bool, RotateCMSCollectionTypes, false,                            \
+1517           "Rotate the CMS collections among concurrent and STW")            \
+1518                                                                             \
+1519   product(bool, UseCMSBestFit, true,                                        \
+1520           "Use CMS best fit allocation strategy")                           \
+1521                                                                             \
+1522   product(bool, UseCMSCollectionPassing, true,                              \
+1523           "Use passing of collection from background to foreground")        \
+1524                                                                             \
+1525   product(bool, UseParNewGC, false,                                         \
+1526           "Use parallel threads in the new generation")                     \
+
+</pre><hr></hr><pre>
+2040           "Turn on logging for internal VM tests.")                         \
+2041                                                                             \
+2042   product_pd(bool, UseTLAB, "Use thread-local object allocation")           \
+2043                                                                             \
+2044   product_pd(bool, ResizeTLAB,                                              \
+2045           "Dynamically resize TLAB size for threads")                       \
+2046                                                                             \
+2047   product(bool, ZeroTLAB, false,                                            \
+2048           "Zero out the newly created TLAB")                                \
+2049                                                                             \
+2050   product(bool, FastTLABRefill, true,                                       \
+2051           "Use fast TLAB refill code")                                      \
+2052                                                                             \
+2053   product(bool, PrintTLAB, false,                                           \
+2054           "Print various TLAB related information")                         \
+2055                                                                             \
+2056   product(bool, TLABStats, true,                                            \
+2057           "Provide more detailed and expensive TLAB statistics "            \
+2058           "(with PrintTLAB)")                                               \
+2059                                                                             \
+<span class="new">2060   EMBEDDED_ONLY(product(bool, LowMemoryProtection, true,                    \</span>
+<span class="new">2061           "Enable LowMemoryProtection"))                                    \</span>
+<span class="new">2062                                                                             \</span>
+2063   product_pd(bool, NeverActAsServerClassMachine,                            \
+2064           "Never act like a server-class machine")                          \
+2065                                                                             \
+2066   product(bool, AlwaysActAsServerClassMachine, false,                       \
+2067           "Always act like a server-class machine")                         \
+2068                                                                             \
+2069   product_pd(uint64_t, MaxRAM,                                              \
+2070           "Real memory size (in bytes) used to set maximum heap size")      \
+2071                                                                             \
+2072   product(uintx, ErgoHeapSizeLimit, 0,                                      \
+2073           "Maximum ergonomically set heap size (in bytes); zero means use " \
+2074           "MaxRAM / MaxRAMFraction")                                        \
+2075                                                                             \
+2076   product(uintx, MaxRAMFraction, 4,                                         \
+2077           "Maximum fraction (1/n) of real memory used for maximum heap "    \
+2078           "size")                                                           \
+2079                                                                             \
+2080   product(uintx, DefaultMaxRAMFraction, 4,                                  \
+2081           "Maximum fraction (1/n) of real memory used for maximum heap "    \
+2082           "size; deprecated: to be renamed to MaxRAMFraction")              \
+
+</pre><hr></hr><pre>
+3228           "The minimum percentage of Metaspace free after GC to avoid "     \
+3229           "expansion")                                                      \
+3230                                                                             \
+3231   product(uintx, MaxMetaspaceFreeRatio,    70,                              \
+3232           "The maximum percentage of Metaspace free after GC to avoid "     \
+3233           "shrinking")                                                      \
+3234                                                                             \
+3235   product(uintx, MaxMetaspaceExpansion, ScaleForWordSize(4*M),              \
+3236           "The maximum expansion of Metaspace without full GC (in bytes)")  \
+3237                                                                             \
+3238   product(uintx, QueuedAllocationWarningCount, 0,                           \
+3239           "Number of times an allocation that queues behind a GC "          \
+3240           "will retry before printing a warning")                           \
+3241                                                                             \
+3242   diagnostic(uintx, VerifyGCStartAt,   0,                                   \
+3243           "GC invoke count where +VerifyBefore/AfterGC kicks in")           \
+3244                                                                             \
+3245   diagnostic(intx, VerifyGCLevel,     0,                                    \
+3246           "Generation level at which to start +VerifyBefore/AfterGC")       \
+3247                                                                             \
+<span class="changed">3248   product(uintx, MaxTenuringThreshold, 3,                                   \</span>
+3249           "Maximum value for tenuring threshold")                           \
+3250                                                                             \
+<span class="changed">3251   product(uintx, InitialTenuringThreshold, 3,                               \</span>
+3252           "Initial value for tenuring threshold")                           \
+3253                                                                             \
+3254   product(uintx, TargetSurvivorRatio,    50,                                \
+3255           "Desired percentage of survivor space used after scavenge")       \
+3256                                                                             \
+3257   product(uintx, MarkSweepDeadRatio,     5,                                 \
+3258           "Percentage (0-100) of the old gen allowed as dead wood. "        \
+3259           "Serial mark sweep treats this as both the minimum and maximum "  \
+3260           "value. "                                                         \
+3261           "CMS uses this value only if it falls back to mark sweep. "       \
+3262           "Par compact uses a variable scale based on the density of the "  \
+3263           "generation and treats this as the maximum value when the heap "  \
+3264           "is either completely full or completely empty.  Par compact "    \
+3265           "also has a smaller default value; see arguments.cpp.")           \
+3266                                                                             \
+3267   product(uintx, MarkSweepAlwaysCompactCount,     4,                        \
+3268           "How often should we fully compact the heap (ignoring the dead "  \
+3269           "space parameters)")                                              \
+3270                                                                             \
+3271   product(intx, PrintCMSStatistics, 0,                                      \
+
+</pre><hr></hr>
+</pre></td>
+</tr></table>
+</body></html>

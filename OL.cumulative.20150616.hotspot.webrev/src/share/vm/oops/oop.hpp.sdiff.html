@@ -1,0 +1,525 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>hotspot Sdiff src/share/vm/oops </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/vm/oops/oop.hpp</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+  60   friend class VMStructs;
+  61  private:
+  62   volatile markOop  _mark;
+  63   union _metadata {
+  64     Klass*      _klass;
+  65     narrowKlass _compressed_klass;
+  66   } _metadata;
+  67 
+  68   // Fast access to barrier set.  Must be initialized.
+  69   static BarrierSet* _bs;
+  70 
+  71  public:
+  72   markOop  mark() const         { return _mark; }
+  73   markOop* mark_addr() const    { return (markOop*) &amp;_mark; }
+  74 
+  75   void set_mark(volatile markOop m)      { _mark = m;   }
+  76 
+  77   void    release_set_mark(markOop m);
+  78   markOop cas_set_mark(markOop new_mark, markOop old_mark);
+  79 
+<span class="changed">  80   // Used only to re-initialize the mark word (e.g., of promoted</span>
+<span class="changed">  81   // objects during a GC) -- requires a valid klass pointer</span>
+  82   void init_mark();
+  83 
+  84   Klass* klass() const;
+  85   Klass* klass_or_null() const volatile;
+  86   Klass** klass_addr();
+  87   narrowKlass* compressed_klass_addr();
+  88 
+  89   void set_klass(Klass* k);
+  90 
+  91   // For klass field compression
+  92   int klass_gap() const;
+  93   void set_klass_gap(int z);
+  94   // For when the klass pointer is being used as a linked list "next" field.
+  95   void set_klass_to_list_ptr(oop k);
+  96   oop list_ptr_from_klass();
+  97 
+  98   // size of object header, aligned to platform wordSize
+  99   static int header_size()          { return sizeof(oopDesc)/HeapWordSize; }
+ 100 
+ 101   // Returns whether this is an instance of k or an instance of a subclass of k
+
+</pre><hr></hr><pre>
+ 258   void release_address_field_put(int offset, address contents);
+ 259 
+ 260   // printing functions for VM debugging
+ 261   void print_on(outputStream* st) const;         // First level print
+ 262   void print_value_on(outputStream* st) const;   // Second level print.
+ 263   void print_address_on(outputStream* st) const; // Address printing
+ 264 
+ 265   // printing on default output stream
+ 266   void print();
+ 267   void print_value();
+ 268   void print_address();
+ 269 
+ 270   // return the print strings
+ 271   char* print_string();
+ 272   char* print_value_string();
+ 273 
+ 274   // verification operations
+ 275   void verify_on(outputStream* st);
+ 276   void verify();
+ 277 
+<span class="removed"> 278   // locking operations</span>
+<span class="removed"> 279   bool is_locked()   const;</span>
+<span class="removed"> 280   bool is_unlocked() const;</span>
+<span class="removed"> 281   bool has_bias_pattern() const;</span>
+<span class="removed"> 282 </span>
+ 283   // asserts
+ 284   bool is_oop(bool ignore_mark_word = false) const;
+ 285   bool is_oop_or_null(bool ignore_mark_word = false) const;
+ 286 #ifndef PRODUCT
+ 287   bool is_unlocked_oop() const;
+ 288 #endif
+ 289 
+<span class="changed"> 290   // garbage collection</span>
+
+
+
+
+
+
+
+
+
+
+
+ 291   bool is_gc_marked() const;
+<span class="changed"> 292   // Apply "MarkSweep::mark_and_push" to (the address of) every non-NULL</span>
+<span class="changed"> 293   // reference field in "this".</span>
+<span class="changed"> 294   void follow_contents(void);</span>
+
+
+
+
+
+
+
+ 295 
+ 296 #if INCLUDE_ALL_GCS
+<span class="changed"> 297   // Parallel Scavenge</span>
+ 298   void push_contents(PSPromotionManager* pm);
+ 299 
+<span class="changed"> 300   // Parallel Old</span>
+<span class="changed"> 301   void update_contents(ParCompactionManager* cm);</span>
+<span class="changed"> 302 </span>
+ 303   void follow_contents(ParCompactionManager* cm);
+
+ 304 #endif // INCLUDE_ALL_GCS
+ 305 
+<span class="changed"> 306   bool is_scavengable() const;</span>
+<span class="changed"> 307 </span>
+<span class="changed"> 308   // Forward pointer operations for scavenge</span>
+ 309   bool is_forwarded() const;
+<span class="removed"> 310 </span>
+ 311   void forward_to(oop p);
+ 312   bool cas_forward_to(oop p, markOop compare);
+<span class="removed"> 313 </span>
+ 314 #if INCLUDE_ALL_GCS
+<span class="changed"> 315   // Like "forward_to", but inserts the forwarding pointer atomically.</span>
+ 316   // Exactly one thread succeeds in inserting the forwarding pointer, and
+<span class="changed"> 317   // this call returns "NULL" for that thread; any other thread has the</span>
+<span class="changed"> 318   // value of the forwarding pointer returned and does not modify "this".</span>
+ 319   oop forward_to_atomic(oop p);
+ 320 #endif // INCLUDE_ALL_GCS
+<span class="removed"> 321 </span>
+ 322   oop forwardee() const;
+ 323 
+<span class="changed"> 324   // Age of object during scavenge</span>
+ 325   uint age() const;
+ 326   void incr_age();
+ 327 
+<span class="changed"> 328   // Adjust all pointers in this object to point at it's forwarded location and</span>
+<span class="changed"> 329   // return the size of this oop.  This is used by the MarkSweep collector.</span>
+<span class="changed"> 330   int adjust_pointers();</span>
+<span class="changed"> 331 </span>
+<span class="changed"> 332   // mark-sweep support</span>
+<span class="changed"> 333   void follow_body(int begin, int end);</span>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 334 
+ 335   // Fast access to barrier set
+ 336   static BarrierSet* bs()            { return _bs; }
+ 337   static void set_bs(BarrierSet* bs) { _bs = bs; }
+ 338 
+ 339   // iterators, returns size of object
+ 340 #define OOP_ITERATE_DECL(OopClosureType, nv_suffix)                      \
+ 341   int oop_iterate(OopClosureType* blk);                                  \
+ 342   int oop_iterate(OopClosureType* blk, MemRegion mr);  // Only in mr.
+ 343 
+ 344   ALL_OOP_OOP_ITERATE_CLOSURES_1(OOP_ITERATE_DECL)
+ 345   ALL_OOP_OOP_ITERATE_CLOSURES_2(OOP_ITERATE_DECL)
+ 346 
+ 347 #if INCLUDE_ALL_GCS
+ 348 
+ 349 #define OOP_ITERATE_BACKWARDS_DECL(OopClosureType, nv_suffix)            \
+ 350   int oop_iterate_backwards(OopClosureType* blk);
+ 351 
+ 352   ALL_OOP_OOP_ITERATE_CLOSURES_1(OOP_ITERATE_BACKWARDS_DECL)
+ 353   ALL_OOP_OOP_ITERATE_CLOSURES_2(OOP_ITERATE_BACKWARDS_DECL)
+ 354 #endif
+ 355 
+ 356   int oop_iterate_no_header(OopClosure* bk);
+ 357   int oop_iterate_no_header(OopClosure* bk, MemRegion mr);
+ 358 
+ 359   // identity hash; returns the identity hash key (computes it if necessary)
+ 360   // NOTE with the introduction of UseBiasedLocking that identity_hash() might reach a
+ 361   // safepoint if called on a biased object. Calling code must be aware of that.
+ 362   intptr_t identity_hash();
+ 363   intptr_t slow_identity_hash();
+ 364 
+ 365   // Alternate hashing code if string table is rehashed
+ 366   unsigned int new_hash(juint seed);
+<span class="removed"> 367 </span>
+<span class="removed"> 368   // marks are forwarded to stack when object is locked</span>
+<span class="removed"> 369   bool     has_displaced_mark() const;</span>
+<span class="removed"> 370   markOop  displaced_mark() const;</span>
+<span class="removed"> 371   void     set_displaced_mark(markOop m);</span>
+ 372 
+ 373   // for code generation
+ 374   static int mark_offset_in_bytes()    { return offset_of(oopDesc, _mark); }
+ 375   static int klass_offset_in_bytes()   { return offset_of(oopDesc, _metadata._klass); }
+ 376   static int klass_gap_offset_in_bytes();
+ 377 };
+ 378 
+ 379 #endif // SHARE_VM_OOPS_OOP_HPP
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+  60   friend class VMStructs;
+  61  private:
+  62   volatile markOop  _mark;
+  63   union _metadata {
+  64     Klass*      _klass;
+  65     narrowKlass _compressed_klass;
+  66   } _metadata;
+  67 
+  68   // Fast access to barrier set.  Must be initialized.
+  69   static BarrierSet* _bs;
+  70 
+  71  public:
+  72   markOop  mark() const         { return _mark; }
+  73   markOop* mark_addr() const    { return (markOop*) &amp;_mark; }
+  74 
+  75   void set_mark(volatile markOop m)      { _mark = m;   }
+  76 
+  77   void    release_set_mark(markOop m);
+  78   markOop cas_set_mark(markOop new_mark, markOop old_mark);
+  79 
+<span class="changed">  80   // Used only to re-initialize the markword (e.g., of promoted</span>
+<span class="changed">  81   // objects during a GC); requires a valid klass pointer</span>
+  82   void init_mark();
+  83 
+  84   Klass* klass() const;
+  85   Klass* klass_or_null() const volatile;
+  86   Klass** klass_addr();
+  87   narrowKlass* compressed_klass_addr();
+  88 
+  89   void set_klass(Klass* k);
+  90 
+  91   // For klass field compression
+  92   int klass_gap() const;
+  93   void set_klass_gap(int z);
+  94   // For when the klass pointer is being used as a linked list "next" field.
+  95   void set_klass_to_list_ptr(oop k);
+  96   oop list_ptr_from_klass();
+  97 
+  98   // size of object header, aligned to platform wordSize
+  99   static int header_size()          { return sizeof(oopDesc)/HeapWordSize; }
+ 100 
+ 101   // Returns whether this is an instance of k or an instance of a subclass of k
+
+</pre><hr></hr><pre>
+ 258   void release_address_field_put(int offset, address contents);
+ 259 
+ 260   // printing functions for VM debugging
+ 261   void print_on(outputStream* st) const;         // First level print
+ 262   void print_value_on(outputStream* st) const;   // Second level print.
+ 263   void print_address_on(outputStream* st) const; // Address printing
+ 264 
+ 265   // printing on default output stream
+ 266   void print();
+ 267   void print_value();
+ 268   void print_address();
+ 269 
+ 270   // return the print strings
+ 271   char* print_string();
+ 272   char* print_value_string();
+ 273 
+ 274   // verification operations
+ 275   void verify_on(outputStream* st);
+ 276   void verify();
+ 277 
+
+
+
+
+
+ 278   // asserts
+ 279   bool is_oop(bool ignore_mark_word = false) const;
+ 280   bool is_oop_or_null(bool ignore_mark_word = false) const;
+ 281 #ifndef PRODUCT
+ 282   bool is_unlocked_oop() const;
+ 283 #endif
+ 284 
+<span class="changed"> 285   // Locking operations</span>
+<span class="changed"> 286   bool is_locked() const;</span>
+<span class="changed"> 287   bool is_unlocked() const;</span>
+<span class="changed"> 288   bool has_bias_pattern() const;</span>
+<span class="changed"> 289 </span>
+<span class="changed"> 290   // The mark is forwarded to stack when the object is locked; in this case</span>
+<span class="changed"> 291   // it is said that the mark is displaced.</span>
+<span class="changed"> 292   bool has_displaced_mark() const;</span>
+<span class="changed"> 293   markOop displaced_mark() const;</span>
+<span class="changed"> 294   void set_displaced_mark(markOop m);</span>
+<span class="changed"> 295 </span>
+<span class="changed"> 296   // Garbage collection support</span>
+ 297   bool is_gc_marked() const;
+<span class="changed"> 298   bool is_scavengable() const;</span>
+<span class="changed"> 299 </span>
+<span class="changed"> 300   // Mark-Sweep GCs</span>
+<span class="changed"> 301   // Apply MarkSweep::mark_and_push() to (the address of) every reference</span>
+<span class="changed"> 302   // field in this object</span>
+<span class="changed"> 303   void follow_contents();</span>
+<span class="changed"> 304 </span>
+<span class="changed"> 305   // Adjust all pointers in this object to point at their forwarded locations</span>
+<span class="changed"> 306   // and return the size of this object</span>
+<span class="changed"> 307   int adjust_pointers();</span>
+ 308 
+ 309 #if INCLUDE_ALL_GCS
+<span class="changed"> 310   // Parallel Scavenge GC</span>
+ 311   void push_contents(PSPromotionManager* pm);
+ 312 
+<span class="changed"> 313   // Parallel Old GC</span>
+
+
+ 314   void follow_contents(ParCompactionManager* cm);
+<span class="new"> 315   void update_contents(ParCompactionManager* cm);</span>
+ 316 #endif // INCLUDE_ALL_GCS
+ 317 
+<span class="changed"> 318   // Forwarding pointer operations for Mark-Sweep and Scavenge</span>
+
+
+ 319   bool is_forwarded() const;
+
+ 320   void forward_to(oop p);
+ 321   bool cas_forward_to(oop p, markOop compare);
+
+ 322 #if INCLUDE_ALL_GCS
+<span class="changed"> 323   // Like forward_to(), but inserts the forwarding pointer atomically.</span>
+ 324   // Exactly one thread succeeds in inserting the forwarding pointer, and
+<span class="changed"> 325   // this call returns NULL for that thread; any other thread has the value</span>
+<span class="changed"> 326   // of the forwarding pointer returned and does not modify this object.</span>
+ 327   oop forward_to_atomic(oop p);
+ 328 #endif // INCLUDE_ALL_GCS
+
+ 329   oop forwardee() const;
+ 330 
+<span class="changed"> 331   // Age of object used by Scavenge</span>
+ 332   uint age() const;
+ 333   void incr_age();
+ 334 
+<span class="changed"> 335   // ObjectLayout support</span>
+<span class="changed"> 336   // Operations with the flag whether the object is contained</span>
+<span class="changed"> 337   bool is_contained() const;</span>
+<span class="changed"> 338   static bool is_contained(markOop mark);</span>
+<span class="changed"> 339   void set_contained();</span>
+<span class="changed"> 340   void clear_contained();</span>
+<span class="changed"> 341 </span>
+<span class="changed"> 342   // Operations with the flag whether the object is a container</span>
+<span class="changed"> 343   bool is_container() const;</span>
+<span class="changed"> 344   static bool is_container(markOop mark, Klass* klass);</span>
+<span class="changed"> 345 </span>
+<span class="changed"> 346   // Manipulations with the object's mark that preserve the current values of</span>
+<span class="changed"> 347   // its "contained" and "container" properties</span>
+<span class="changed"> 348   void convert_to_marked();</span>
+<span class="changed"> 349   void convert_to_unmarked();</span>
+<span class="changed"> 350   void restore_mark(markOop saved_value);</span>
+<span class="changed"> 351 </span>
+<span class="changed"> 352   // Operations with the relative container offset (RCO) object corresponding</span>
+<span class="changed"> 353   // to this object (which must be contained). The only mission of the RCO</span>
+<span class="changed"> 354   // object is to store the offset of this object from its immediate container.</span>
+<span class="changed"> 355   // RCO objects are transparently created by the VM for every contained object</span>
+<span class="changed"> 356   // (including contained containers) at the time of their construction. They</span>
+<span class="changed"> 357   // look like "prepadding" objects taking several words just before the</span>
+<span class="changed"> 358   // corresponding contained objects.</span>
+<span class="changed"> 359   jlong relative_container_offset() const;</span>
+<span class="changed"> 360   void set_relative_container_offset(jlong offset);</span>
+<span class="changed"> 361 </span>
+<span class="changed"> 362   // Return the immediate container of this object (which must be contained)</span>
+<span class="changed"> 363   oop container() const;</span>
+<span class="changed"> 364 </span>
+<span class="changed"> 365   // Return the outermost container of this object (which must be contained)</span>
+<span class="changed"> 366   oop outermost_container();</span>
+<span class="changed"> 367 </span>
+<span class="changed"> 368   // Return the outermost GC-marked container of this object (which must be</span>
+<span class="changed"> 369   // contained and also GC-marked)</span>
+<span class="changed"> 370   oop outermost_alive_container();</span>
+ 371 
+ 372   // Fast access to barrier set
+ 373   static BarrierSet* bs()            { return _bs; }
+ 374   static void set_bs(BarrierSet* bs) { _bs = bs; }
+ 375 
+ 376   // iterators, returns size of object
+ 377 #define OOP_ITERATE_DECL(OopClosureType, nv_suffix)                      \
+ 378   int oop_iterate(OopClosureType* blk);                                  \
+ 379   int oop_iterate(OopClosureType* blk, MemRegion mr);  // Only in mr.
+ 380 
+ 381   ALL_OOP_OOP_ITERATE_CLOSURES_1(OOP_ITERATE_DECL)
+ 382   ALL_OOP_OOP_ITERATE_CLOSURES_2(OOP_ITERATE_DECL)
+ 383 
+ 384 #if INCLUDE_ALL_GCS
+ 385 
+ 386 #define OOP_ITERATE_BACKWARDS_DECL(OopClosureType, nv_suffix)            \
+ 387   int oop_iterate_backwards(OopClosureType* blk);
+ 388 
+ 389   ALL_OOP_OOP_ITERATE_CLOSURES_1(OOP_ITERATE_BACKWARDS_DECL)
+ 390   ALL_OOP_OOP_ITERATE_CLOSURES_2(OOP_ITERATE_BACKWARDS_DECL)
+ 391 #endif
+ 392 
+ 393   int oop_iterate_no_header(OopClosure* bk);
+ 394   int oop_iterate_no_header(OopClosure* bk, MemRegion mr);
+ 395 
+ 396   // identity hash; returns the identity hash key (computes it if necessary)
+ 397   // NOTE with the introduction of UseBiasedLocking that identity_hash() might reach a
+ 398   // safepoint if called on a biased object. Calling code must be aware of that.
+ 399   intptr_t identity_hash();
+ 400   intptr_t slow_identity_hash();
+ 401 
+ 402   // Alternate hashing code if string table is rehashed
+ 403   unsigned int new_hash(juint seed);
+
+
+
+
+
+ 404 
+ 405   // for code generation
+ 406   static int mark_offset_in_bytes()    { return offset_of(oopDesc, _mark); }
+ 407   static int klass_offset_in_bytes()   { return offset_of(oopDesc, _metadata._klass); }
+ 408   static int klass_gap_offset_in_bytes();
+ 409 };
+ 410 
+ 411 #endif // SHARE_VM_OOPS_OOP_HPP
+</pre></td>
+</tr></table>
+</body></html>

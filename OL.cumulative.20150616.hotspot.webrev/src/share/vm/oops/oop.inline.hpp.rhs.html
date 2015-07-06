@@ -1,0 +1,1083 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+    <script type="text/javascript" src="../../../../ancnav.js"></script>
+    </head>
+    <body id="SUNWwebrev" onkeypress="keypress(event);">
+    <a name="0"></a>
+    <pre></pre><hr></hr>
+<pre>
+   1 /*
+   2  * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+   3  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+   4  *
+   5  * This code is free software; you can redistribute it and/or modify it
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.
+   8  *
+   9  * This code is distributed in the hope that it will be useful, but WITHOUT
+  10  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  11  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  12  * version 2 for more details (a copy is included in the LICENSE file that
+  13  * accompanied this code).
+  14  *
+  15  * You should have received a copy of the GNU General Public License version
+  16  * 2 along with this work; if not, write to the Free Software Foundation,
+  17  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  18  *
+  19  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  20  * or visit www.oracle.com if you need additional information or have any
+  21  * questions.
+  22  *
+  23  */
+  24 
+  25 #ifndef SHARE_VM_OOPS_OOP_INLINE_HPP
+  26 #define SHARE_VM_OOPS_OOP_INLINE_HPP
+  27 
+  28 #include "gc_implementation/shared/ageTable.hpp"
+  29 #include "gc_implementation/shared/markSweep.inline.hpp"
+  30 #include "gc_interface/collectedHeap.inline.hpp"
+  31 #include "memory/barrierSet.inline.hpp"
+  32 #include "memory/cardTableModRefBS.hpp"
+  33 #include "memory/genCollectedHeap.hpp"
+  34 #include "memory/generation.hpp"
+  35 #include "memory/specialized_oop_closures.hpp"
+  36 #include "oops/arrayKlass.hpp"
+  37 #include "oops/arrayOop.hpp"
+  38 #include "oops/klass.inline.hpp"
+  39 #include "oops/markOop.inline.hpp"
+  40 #include "oops/oop.hpp"
+  41 #include "runtime/atomic.inline.hpp"
+  42 #include "runtime/orderAccess.inline.hpp"
+  43 #include "runtime/os.hpp"
+  44 #include "utilities/macros.hpp"
+  45 #ifdef TARGET_ARCH_x86
+  46 # include "bytes_x86.hpp"
+  47 #endif
+  48 #ifdef TARGET_ARCH_sparc
+  49 # include "bytes_sparc.hpp"
+  50 #endif
+  51 #ifdef TARGET_ARCH_zero
+  52 # include "bytes_zero.hpp"
+  53 #endif
+  54 #ifdef TARGET_ARCH_arm
+  55 # include "bytes_arm.hpp"
+  56 #endif
+  57 #ifdef TARGET_ARCH_ppc
+  58 # include "bytes_ppc.hpp"
+  59 #endif
+  60 
+  61 // Implementation of all inlined member functions defined in oop.hpp
+  62 // We need a separate file to avoid circular references
+  63 
+  64 inline void oopDesc::release_set_mark(markOop m) {
+  65   OrderAccess::release_store_ptr(&amp;_mark, m);
+  66 }
+  67 
+  68 inline markOop oopDesc::cas_set_mark(markOop new_mark, markOop old_mark) {
+  69   return (markOop) Atomic::cmpxchg_ptr(new_mark, &amp;_mark, old_mark);
+  70 }
+  71 
+  72 inline Klass* oopDesc::klass() const {
+  73   if (UseCompressedClassPointers) {
+  74     return Klass::decode_klass_not_null(_metadata._compressed_klass);
+  75   } else {
+  76     return _metadata._klass;
+  77   }
+  78 }
+  79 
+  80 inline Klass* oopDesc::klass_or_null() const volatile {
+  81   // can be NULL in CMS
+  82   if (UseCompressedClassPointers) {
+  83     return Klass::decode_klass(_metadata._compressed_klass);
+  84   } else {
+  85     return _metadata._klass;
+  86   }
+  87 }
+  88 
+  89 inline int oopDesc::klass_gap_offset_in_bytes() {
+  90   assert(UseCompressedClassPointers, "only applicable to compressed klass pointers");
+  91   return oopDesc::klass_offset_in_bytes() + sizeof(narrowKlass);
+  92 }
+  93 
+  94 inline Klass** oopDesc::klass_addr() {
+  95   // Only used internally and with CMS and will not work with
+  96   // UseCompressedOops
+  97   assert(!UseCompressedClassPointers, "only supported with uncompressed klass pointers");
+  98   return (Klass**) &amp;_metadata._klass;
+  99 }
+ 100 
+ 101 inline narrowKlass* oopDesc::compressed_klass_addr() {
+ 102   assert(UseCompressedClassPointers, "only called by compressed klass pointers");
+ 103   return &amp;_metadata._compressed_klass;
+ 104 }
+ 105 
+ 106 inline void oopDesc::set_klass(Klass* k) {
+ 107   // since klasses are promoted no store check is needed
+ 108   assert(Universe::is_bootstrapping() || k != NULL, "must be a real Klass*");
+ 109   assert(Universe::is_bootstrapping() || k-&gt;is_klass(), "not a Klass*");
+ 110   if (UseCompressedClassPointers) {
+ 111     *compressed_klass_addr() = Klass::encode_klass_not_null(k);
+ 112   } else {
+ 113     *klass_addr() = k;
+ 114   }
+ 115 }
+ 116 
+ 117 inline int oopDesc::klass_gap() const {
+ 118   return *(int*)(((intptr_t)this) + klass_gap_offset_in_bytes());
+ 119 }
+ 120 
+ 121 inline void oopDesc::set_klass_gap(int v) {
+ 122   if (UseCompressedClassPointers) {
+ 123     *(int*)(((intptr_t)this) + klass_gap_offset_in_bytes()) = v;
+ 124   }
+ 125 }
+ 126 
+ 127 inline void oopDesc::set_klass_to_list_ptr(oop k) {
+ 128   // This is only to be used during GC, for from-space objects, so no
+ 129   // barrier is needed.
+ 130   if (UseCompressedClassPointers) {
+ 131     _metadata._compressed_klass = (narrowKlass)encode_heap_oop(k);  // may be null (parnew overflow handling)
+ 132   } else {
+ 133     _metadata._klass = (Klass*)(address)k;
+ 134   }
+ 135 }
+ 136 
+ 137 inline oop oopDesc::list_ptr_from_klass() {
+ 138   // This is only to be used during GC, for from-space objects.
+ 139   if (UseCompressedClassPointers) {
+ 140     return decode_heap_oop((narrowOop)_metadata._compressed_klass);
+ 141   } else {
+ 142     // Special case for GC
+ 143     return (oop)(address)_metadata._klass;
+ 144   }
+ 145 }
+ 146 
+<a name="1" id="anc1"></a><span class="changed"> 147 inline void oopDesc::init_mark() {</span>
+<span class="changed"> 148   set_mark(markOopDesc::prototype_for_object(this));</span>
+<span class="changed"> 149 }</span>
+ 150 
+ 151 inline bool oopDesc::is_a(Klass* k)        const { return klass()-&gt;is_subtype_of(k); }
+ 152 
+ 153 inline bool oopDesc::is_instance()            const { return klass()-&gt;oop_is_instance(); }
+ 154 inline bool oopDesc::is_instanceClassLoader() const { return klass()-&gt;oop_is_instanceClassLoader(); }
+ 155 inline bool oopDesc::is_instanceMirror()      const { return klass()-&gt;oop_is_instanceMirror(); }
+ 156 inline bool oopDesc::is_instanceRef()         const { return klass()-&gt;oop_is_instanceRef(); }
+ 157 inline bool oopDesc::is_array()               const { return klass()-&gt;oop_is_array(); }
+ 158 inline bool oopDesc::is_objArray()            const { return klass()-&gt;oop_is_objArray(); }
+ 159 inline bool oopDesc::is_typeArray()           const { return klass()-&gt;oop_is_typeArray(); }
+ 160 
+ 161 inline void*     oopDesc::field_base(int offset)        const { return (void*)&amp;((char*)this)[offset]; }
+ 162 
+ 163 template &lt;class T&gt; inline T* oopDesc::obj_field_addr(int offset) const { return (T*)field_base(offset); }
+ 164 inline Metadata** oopDesc::metadata_field_addr(int offset) const { return (Metadata**)field_base(offset); }
+ 165 inline jbyte*    oopDesc::byte_field_addr(int offset)   const { return (jbyte*)   field_base(offset); }
+ 166 inline jchar*    oopDesc::char_field_addr(int offset)   const { return (jchar*)   field_base(offset); }
+ 167 inline jboolean* oopDesc::bool_field_addr(int offset)   const { return (jboolean*)field_base(offset); }
+ 168 inline jint*     oopDesc::int_field_addr(int offset)    const { return (jint*)    field_base(offset); }
+ 169 inline jshort*   oopDesc::short_field_addr(int offset)  const { return (jshort*)  field_base(offset); }
+ 170 inline jlong*    oopDesc::long_field_addr(int offset)   const { return (jlong*)   field_base(offset); }
+ 171 inline jfloat*   oopDesc::float_field_addr(int offset)  const { return (jfloat*)  field_base(offset); }
+ 172 inline jdouble*  oopDesc::double_field_addr(int offset) const { return (jdouble*) field_base(offset); }
+ 173 inline address*  oopDesc::address_field_addr(int offset) const { return (address*) field_base(offset); }
+ 174 
+ 175 
+ 176 // Functions for getting and setting oops within instance objects.
+ 177 // If the oops are compressed, the type passed to these overloaded functions
+ 178 // is narrowOop.  All functions are overloaded so they can be called by
+ 179 // template functions without conditionals (the compiler instantiates via
+ 180 // the right type and inlines the appopriate code).
+ 181 
+ 182 inline bool oopDesc::is_null(oop obj)       { return obj == NULL; }
+ 183 inline bool oopDesc::is_null(narrowOop obj) { return obj == 0; }
+ 184 
+ 185 // Algorithm for encoding and decoding oops from 64 bit pointers to 32 bit
+ 186 // offset from the heap base.  Saving the check for null can save instructions
+ 187 // in inner GC loops so these are separated.
+ 188 
+ 189 inline bool check_obj_alignment(oop obj) {
+ 190   return cast_from_oop&lt;intptr_t&gt;(obj) % MinObjAlignmentInBytes == 0;
+ 191 }
+ 192 
+ 193 inline narrowOop oopDesc::encode_heap_oop_not_null(oop v) {
+ 194   assert(!is_null(v), "oop value can never be zero");
+ 195   assert(check_obj_alignment(v), "Address not aligned");
+ 196   assert(Universe::heap()-&gt;is_in_reserved(v), "Address not in heap");
+ 197   address base = Universe::narrow_oop_base();
+ 198   int    shift = Universe::narrow_oop_shift();
+ 199   uint64_t  pd = (uint64_t)(pointer_delta((void*)v, (void*)base, 1));
+ 200   assert(OopEncodingHeapMax &gt; pd, "change encoding max if new encoding");
+ 201   uint64_t result = pd &gt;&gt; shift;
+ 202   assert((result &amp; CONST64(0xffffffff00000000)) == 0, "narrow oop overflow");
+ 203   assert(decode_heap_oop(result) == v, "reversibility");
+ 204   return (narrowOop)result;
+ 205 }
+ 206 
+ 207 inline narrowOop oopDesc::encode_heap_oop(oop v) {
+ 208   return (is_null(v)) ? (narrowOop)0 : encode_heap_oop_not_null(v);
+ 209 }
+ 210 
+ 211 inline oop oopDesc::decode_heap_oop_not_null(narrowOop v) {
+ 212   assert(!is_null(v), "narrow oop value can never be zero");
+ 213   address base = Universe::narrow_oop_base();
+ 214   int    shift = Universe::narrow_oop_shift();
+ 215   oop result = (oop)(void*)((uintptr_t)base + ((uintptr_t)v &lt;&lt; shift));
+ 216   assert(check_obj_alignment(result), err_msg("address not aligned: " INTPTR_FORMAT, p2i((void*) result)));
+ 217   return result;
+ 218 }
+ 219 
+ 220 inline oop oopDesc::decode_heap_oop(narrowOop v) {
+ 221   return is_null(v) ? (oop)NULL : decode_heap_oop_not_null(v);
+ 222 }
+ 223 
+ 224 inline oop oopDesc::decode_heap_oop_not_null(oop v) { return v; }
+ 225 inline oop oopDesc::decode_heap_oop(oop v)  { return v; }
+ 226 
+ 227 // Load an oop out of the Java heap as is without decoding.
+ 228 // Called by GC to check for null before decoding.
+ 229 inline oop       oopDesc::load_heap_oop(oop* p)          { return *p; }
+ 230 inline narrowOop oopDesc::load_heap_oop(narrowOop* p)    { return *p; }
+ 231 
+ 232 // Load and decode an oop out of the Java heap into a wide oop.
+ 233 inline oop oopDesc::load_decode_heap_oop_not_null(oop* p)       { return *p; }
+ 234 inline oop oopDesc::load_decode_heap_oop_not_null(narrowOop* p) {
+ 235   return decode_heap_oop_not_null(*p);
+ 236 }
+ 237 
+ 238 // Load and decode an oop out of the heap accepting null
+ 239 inline oop oopDesc::load_decode_heap_oop(oop* p) { return *p; }
+ 240 inline oop oopDesc::load_decode_heap_oop(narrowOop* p) {
+ 241   return decode_heap_oop(*p);
+ 242 }
+ 243 
+ 244 // Store already encoded heap oop into the heap.
+ 245 inline void oopDesc::store_heap_oop(oop* p, oop v)                 { *p = v; }
+ 246 inline void oopDesc::store_heap_oop(narrowOop* p, narrowOop v)     { *p = v; }
+ 247 
+ 248 // Encode and store a heap oop.
+ 249 inline void oopDesc::encode_store_heap_oop_not_null(narrowOop* p, oop v) {
+ 250   *p = encode_heap_oop_not_null(v);
+ 251 }
+ 252 inline void oopDesc::encode_store_heap_oop_not_null(oop* p, oop v) { *p = v; }
+ 253 
+ 254 // Encode and store a heap oop allowing for null.
+ 255 inline void oopDesc::encode_store_heap_oop(narrowOop* p, oop v) {
+ 256   *p = encode_heap_oop(v);
+ 257 }
+ 258 inline void oopDesc::encode_store_heap_oop(oop* p, oop v) { *p = v; }
+ 259 
+ 260 // Store heap oop as is for volatile fields.
+ 261 inline void oopDesc::release_store_heap_oop(volatile oop* p, oop v) {
+ 262   OrderAccess::release_store_ptr(p, v);
+ 263 }
+ 264 inline void oopDesc::release_store_heap_oop(volatile narrowOop* p,
+ 265                                             narrowOop v) {
+ 266   OrderAccess::release_store(p, v);
+ 267 }
+ 268 
+ 269 inline void oopDesc::release_encode_store_heap_oop_not_null(
+ 270                                                 volatile narrowOop* p, oop v) {
+ 271   // heap oop is not pointer sized.
+ 272   OrderAccess::release_store(p, encode_heap_oop_not_null(v));
+ 273 }
+ 274 
+ 275 inline void oopDesc::release_encode_store_heap_oop_not_null(
+ 276                                                       volatile oop* p, oop v) {
+ 277   OrderAccess::release_store_ptr(p, v);
+ 278 }
+ 279 
+ 280 inline void oopDesc::release_encode_store_heap_oop(volatile oop* p,
+ 281                                                            oop v) {
+ 282   OrderAccess::release_store_ptr(p, v);
+ 283 }
+ 284 inline void oopDesc::release_encode_store_heap_oop(
+ 285                                                 volatile narrowOop* p, oop v) {
+ 286   OrderAccess::release_store(p, encode_heap_oop(v));
+ 287 }
+ 288 
+ 289 
+ 290 // These functions are only used to exchange oop fields in instances,
+ 291 // not headers.
+ 292 inline oop oopDesc::atomic_exchange_oop(oop exchange_value, volatile HeapWord *dest) {
+ 293   if (UseCompressedOops) {
+ 294     // encode exchange value from oop to T
+ 295     narrowOop val = encode_heap_oop(exchange_value);
+ 296     narrowOop old = (narrowOop)Atomic::xchg(val, (narrowOop*)dest);
+ 297     // decode old from T to oop
+ 298     return decode_heap_oop(old);
+ 299   } else {
+ 300     return (oop)Atomic::xchg_ptr(exchange_value, (oop*)dest);
+ 301   }
+ 302 }
+ 303 
+ 304 // In order to put or get a field out of an instance, must first check
+ 305 // if the field has been compressed and uncompress it.
+ 306 inline oop oopDesc::obj_field(int offset) const {
+ 307   return UseCompressedOops ?
+ 308     load_decode_heap_oop(obj_field_addr&lt;narrowOop&gt;(offset)) :
+ 309     load_decode_heap_oop(obj_field_addr&lt;oop&gt;(offset));
+ 310 }
+ 311 inline volatile oop oopDesc::obj_field_volatile(int offset) const {
+ 312   volatile oop value = obj_field(offset);
+ 313   OrderAccess::acquire();
+ 314   return value;
+ 315 }
+ 316 inline void oopDesc::obj_field_put(int offset, oop value) {
+ 317   UseCompressedOops ? oop_store(obj_field_addr&lt;narrowOop&gt;(offset), value) :
+ 318                       oop_store(obj_field_addr&lt;oop&gt;(offset),       value);
+ 319 }
+ 320 
+ 321 inline Metadata* oopDesc::metadata_field(int offset) const {
+ 322   return *metadata_field_addr(offset);
+ 323 }
+ 324 
+ 325 inline void oopDesc::metadata_field_put(int offset, Metadata* value) {
+ 326   *metadata_field_addr(offset) = value;
+ 327 }
+ 328 
+ 329 inline void oopDesc::obj_field_put_raw(int offset, oop value) {
+ 330   UseCompressedOops ?
+ 331     encode_store_heap_oop(obj_field_addr&lt;narrowOop&gt;(offset), value) :
+ 332     encode_store_heap_oop(obj_field_addr&lt;oop&gt;(offset),       value);
+ 333 }
+ 334 inline void oopDesc::obj_field_put_volatile(int offset, oop value) {
+ 335   OrderAccess::release();
+ 336   obj_field_put(offset, value);
+ 337   OrderAccess::fence();
+ 338 }
+ 339 
+ 340 inline jbyte oopDesc::byte_field(int offset) const                  { return (jbyte) *byte_field_addr(offset);    }
+ 341 inline void oopDesc::byte_field_put(int offset, jbyte contents)     { *byte_field_addr(offset) = (jint) contents; }
+ 342 
+ 343 inline jboolean oopDesc::bool_field(int offset) const               { return (jboolean) *bool_field_addr(offset); }
+ 344 inline void oopDesc::bool_field_put(int offset, jboolean contents)  { *bool_field_addr(offset) = (jint) contents; }
+ 345 
+ 346 inline jchar oopDesc::char_field(int offset) const                  { return (jchar) *char_field_addr(offset);    }
+ 347 inline void oopDesc::char_field_put(int offset, jchar contents)     { *char_field_addr(offset) = (jint) contents; }
+ 348 
+ 349 inline jint oopDesc::int_field(int offset) const                    { return *int_field_addr(offset);        }
+ 350 inline void oopDesc::int_field_put(int offset, jint contents)       { *int_field_addr(offset) = contents;    }
+ 351 
+ 352 inline jshort oopDesc::short_field(int offset) const                { return (jshort) *short_field_addr(offset);  }
+ 353 inline void oopDesc::short_field_put(int offset, jshort contents)   { *short_field_addr(offset) = (jint) contents;}
+ 354 
+ 355 inline jlong oopDesc::long_field(int offset) const                  { return *long_field_addr(offset);       }
+ 356 inline void oopDesc::long_field_put(int offset, jlong contents)     { *long_field_addr(offset) = contents;   }
+ 357 
+ 358 inline jfloat oopDesc::float_field(int offset) const                { return *float_field_addr(offset);      }
+ 359 inline void oopDesc::float_field_put(int offset, jfloat contents)   { *float_field_addr(offset) = contents;  }
+ 360 
+ 361 inline jdouble oopDesc::double_field(int offset) const              { return *double_field_addr(offset);     }
+ 362 inline void oopDesc::double_field_put(int offset, jdouble contents) { *double_field_addr(offset) = contents; }
+ 363 
+ 364 inline address oopDesc::address_field(int offset) const              { return *address_field_addr(offset);     }
+ 365 inline void oopDesc::address_field_put(int offset, address contents) { *address_field_addr(offset) = contents; }
+ 366 
+ 367 inline oop oopDesc::obj_field_acquire(int offset) const {
+ 368   return UseCompressedOops ?
+ 369              decode_heap_oop((narrowOop)
+ 370                OrderAccess::load_acquire(obj_field_addr&lt;narrowOop&gt;(offset)))
+ 371            : decode_heap_oop((oop)
+ 372                OrderAccess::load_ptr_acquire(obj_field_addr&lt;oop&gt;(offset)));
+ 373 }
+ 374 inline void oopDesc::release_obj_field_put(int offset, oop value) {
+ 375   UseCompressedOops ?
+ 376     oop_store((volatile narrowOop*)obj_field_addr&lt;narrowOop&gt;(offset), value) :
+ 377     oop_store((volatile oop*)      obj_field_addr&lt;oop&gt;(offset),       value);
+ 378 }
+ 379 
+ 380 inline jbyte oopDesc::byte_field_acquire(int offset) const                  { return OrderAccess::load_acquire(byte_field_addr(offset));     }
+ 381 inline void oopDesc::release_byte_field_put(int offset, jbyte contents)     { OrderAccess::release_store(byte_field_addr(offset), contents); }
+ 382 
+ 383 inline jboolean oopDesc::bool_field_acquire(int offset) const               { return OrderAccess::load_acquire(bool_field_addr(offset));     }
+ 384 inline void oopDesc::release_bool_field_put(int offset, jboolean contents)  { OrderAccess::release_store(bool_field_addr(offset), contents); }
+ 385 
+ 386 inline jchar oopDesc::char_field_acquire(int offset) const                  { return OrderAccess::load_acquire(char_field_addr(offset));     }
+ 387 inline void oopDesc::release_char_field_put(int offset, jchar contents)     { OrderAccess::release_store(char_field_addr(offset), contents); }
+ 388 
+ 389 inline jint oopDesc::int_field_acquire(int offset) const                    { return OrderAccess::load_acquire(int_field_addr(offset));      }
+ 390 inline void oopDesc::release_int_field_put(int offset, jint contents)       { OrderAccess::release_store(int_field_addr(offset), contents);  }
+ 391 
+ 392 inline jshort oopDesc::short_field_acquire(int offset) const                { return (jshort)OrderAccess::load_acquire(short_field_addr(offset)); }
+ 393 inline void oopDesc::release_short_field_put(int offset, jshort contents)   { OrderAccess::release_store(short_field_addr(offset), contents);     }
+ 394 
+ 395 inline jlong oopDesc::long_field_acquire(int offset) const                  { return OrderAccess::load_acquire(long_field_addr(offset));       }
+ 396 inline void oopDesc::release_long_field_put(int offset, jlong contents)     { OrderAccess::release_store(long_field_addr(offset), contents);   }
+ 397 
+ 398 inline jfloat oopDesc::float_field_acquire(int offset) const                { return OrderAccess::load_acquire(float_field_addr(offset));      }
+ 399 inline void oopDesc::release_float_field_put(int offset, jfloat contents)   { OrderAccess::release_store(float_field_addr(offset), contents);  }
+ 400 
+ 401 inline jdouble oopDesc::double_field_acquire(int offset) const              { return OrderAccess::load_acquire(double_field_addr(offset));     }
+ 402 inline void oopDesc::release_double_field_put(int offset, jdouble contents) { OrderAccess::release_store(double_field_addr(offset), contents); }
+ 403 
+ 404 inline address oopDesc::address_field_acquire(int offset) const             { return (address) OrderAccess::load_ptr_acquire(address_field_addr(offset)); }
+ 405 inline void oopDesc::release_address_field_put(int offset, address contents) { OrderAccess::release_store_ptr(address_field_addr(offset), contents); }
+ 406 
+ 407 inline int oopDesc::size_given_klass(Klass* klass)  {
+ 408   int lh = klass-&gt;layout_helper();
+ 409   int s;
+ 410 
+ 411   // lh is now a value computed at class initialization that may hint
+ 412   // at the size.  For instances, this is positive and equal to the
+ 413   // size.  For arrays, this is negative and provides log2 of the
+ 414   // array element size.  For other oops, it is zero and thus requires
+ 415   // a virtual call.
+ 416   //
+ 417   // We go to all this trouble because the size computation is at the
+ 418   // heart of phase 2 of mark-compaction, and called for every object,
+ 419   // alive or dead.  So the speed here is equal in importance to the
+ 420   // speed of allocation.
+ 421 
+ 422   if (lh &gt; Klass::_lh_neutral_value) {
+ 423     if (!Klass::layout_helper_needs_slow_path(lh)) {
+ 424       s = lh &gt;&gt; LogHeapWordSize;  // deliver size scaled by wordSize
+ 425     } else {
+ 426       s = klass-&gt;oop_size(this);
+ 427     }
+ 428   } else if (lh &lt;= Klass::_lh_neutral_value) {
+ 429     // The most common case is instances; fall through if so.
+ 430     if (lh &lt; Klass::_lh_neutral_value) {
+ 431       // Second most common case is arrays.  We have to fetch the
+ 432       // length of the array, shift (multiply) it appropriately,
+ 433       // up to wordSize, add the header, and align to object size.
+ 434       size_t size_in_bytes;
+ 435 #ifdef _M_IA64
+ 436       // The Windows Itanium Aug 2002 SDK hoists this load above
+ 437       // the check for s &lt; 0.  An oop at the end of the heap will
+ 438       // cause an access violation if this load is performed on a non
+ 439       // array oop.  Making the reference volatile prohibits this.
+ 440       // (%%% please explain by what magic the length is actually fetched!)
+ 441       volatile int *array_length;
+ 442       array_length = (volatile int *)( (intptr_t)this +
+ 443                           arrayOopDesc::length_offset_in_bytes() );
+ 444       assert(array_length &gt; 0, "Integer arithmetic problem somewhere");
+ 445       // Put into size_t to avoid overflow.
+ 446       size_in_bytes = (size_t) array_length;
+ 447       size_in_bytes = size_in_bytes &lt;&lt; Klass::layout_helper_log2_element_size(lh);
+ 448 #else
+ 449       size_t array_length = (size_t) ((arrayOop)this)-&gt;length();
+ 450       size_in_bytes = array_length &lt;&lt; Klass::layout_helper_log2_element_size(lh);
+ 451 #endif
+ 452       size_in_bytes += Klass::layout_helper_header_size(lh);
+ 453 
+ 454       // This code could be simplified, but by keeping array_header_in_bytes
+ 455       // in units of bytes and doing it this way we can round up just once,
+ 456       // skipping the intermediate round to HeapWordSize.  Cast the result
+ 457       // of round_to to size_t to guarantee unsigned division == right shift.
+ 458       s = (int)((size_t)round_to(size_in_bytes, MinObjAlignmentInBytes) /
+ 459         HeapWordSize);
+ 460 
+ 461       // UseParNewGC, UseParallelGC and UseG1GC can change the length field
+ 462       // of an "old copy" of an object array in the young gen so it indicates
+ 463       // the grey portion of an already copied array. This will cause the first
+ 464       // disjunct below to fail if the two comparands are computed across such
+ 465       // a concurrent change.
+ 466       // UseParNewGC also runs with promotion labs (which look like int
+ 467       // filler arrays) which are subject to changing their declared size
+ 468       // when finally retiring a PLAB; this also can cause the first disjunct
+ 469       // to fail for another worker thread that is concurrently walking the block
+ 470       // offset table. Both these invariant failures are benign for their
+ 471       // current uses; we relax the assertion checking to cover these two cases below:
+ 472       //     is_objArray() &amp;&amp; is_forwarded()   // covers first scenario above
+ 473       //  || is_typeArray()                    // covers second scenario above
+ 474       // If and when UseParallelGC uses the same obj array oop stealing/chunking
+ 475       // technique, we will need to suitably modify the assertion.
+ 476       assert((s == klass-&gt;oop_size(this)) ||
+ 477              (Universe::heap()-&gt;is_gc_active() &amp;&amp;
+ 478               ((is_typeArray() &amp;&amp; UseParNewGC) ||
+ 479                (is_objArray()  &amp;&amp; is_forwarded() &amp;&amp; (UseParNewGC || UseParallelGC || UseG1GC)))),
+ 480              "wrong array object size");
+ 481     } else {
+ 482       // Must be zero, so bite the bullet and take the virtual call.
+ 483       s = klass-&gt;oop_size(this);
+ 484     }
+ 485   }
+ 486 
+ 487   assert(s % MinObjAlignment == 0, "alignment check");
+ 488   assert(s &gt; 0, "Bad size calculated");
+ 489   return s;
+ 490 }
+ 491 
+ 492 
+ 493 inline int oopDesc::size()  {
+ 494   return size_given_klass(klass());
+ 495 }
+ 496 
+ 497 inline void update_barrier_set(void* p, oop v, bool release = false) {
+ 498   assert(oopDesc::bs() != NULL, "Uninitialized bs in oop!");
+ 499   oopDesc::bs()-&gt;write_ref_field(p, v, release);
+ 500 }
+ 501 
+ 502 template &lt;class T&gt; inline void update_barrier_set_pre(T* p, oop v) {
+ 503   oopDesc::bs()-&gt;write_ref_field_pre(p, v);
+ 504 }
+ 505 
+ 506 template &lt;class T&gt; inline void oop_store(T* p, oop v) {
+ 507   if (always_do_update_barrier) {
+ 508     oop_store((volatile T*)p, v);
+ 509   } else {
+ 510     update_barrier_set_pre(p, v);
+ 511     oopDesc::encode_store_heap_oop(p, v);
+ 512     // always_do_update_barrier == false =&gt;
+ 513     // Either we are at a safepoint (in GC) or CMS is not used. In both
+ 514     // cases it's unnecessary to mark the card as dirty with release sematics.
+ 515     update_barrier_set((void*)p, v, false /* release */);  // cast away type
+ 516   }
+ 517 }
+ 518 
+ 519 template &lt;class T&gt; inline void oop_store(volatile T* p, oop v) {
+ 520   update_barrier_set_pre((T*)p, v);   // cast away volatile
+ 521   // Used by release_obj_field_put, so use release_store_ptr.
+ 522   oopDesc::release_encode_store_heap_oop(p, v);
+ 523   // When using CMS we must mark the card corresponding to p as dirty
+ 524   // with release sematics to prevent that CMS sees the dirty card but
+ 525   // not the new value v at p due to reordering of the two
+ 526   // stores. Note that CMS has a concurrent precleaning phase, where
+ 527   // it reads the card table while the Java threads are running.
+ 528   update_barrier_set((void*)p, v, true /* release */);    // cast away type
+ 529 }
+ 530 
+ 531 // Should replace *addr = oop assignments where addr type depends on UseCompressedOops
+ 532 // (without having to remember the function name this calls).
+ 533 inline void oop_store_raw(HeapWord* addr, oop value) {
+ 534   if (UseCompressedOops) {
+ 535     oopDesc::encode_store_heap_oop((narrowOop*)addr, value);
+ 536   } else {
+ 537     oopDesc::encode_store_heap_oop((oop*)addr, value);
+ 538   }
+ 539 }
+ 540 
+ 541 inline oop oopDesc::atomic_compare_exchange_oop(oop exchange_value,
+ 542                                                 volatile HeapWord *dest,
+ 543                                                 oop compare_value,
+ 544                                                 bool prebarrier) {
+ 545   if (UseCompressedOops) {
+ 546     if (prebarrier) {
+ 547       update_barrier_set_pre((narrowOop*)dest, exchange_value);
+ 548     }
+ 549     // encode exchange and compare value from oop to T
+ 550     narrowOop val = encode_heap_oop(exchange_value);
+ 551     narrowOop cmp = encode_heap_oop(compare_value);
+ 552 
+ 553     narrowOop old = (narrowOop) Atomic::cmpxchg(val, (narrowOop*)dest, cmp);
+ 554     // decode old from T to oop
+ 555     return decode_heap_oop(old);
+ 556   } else {
+ 557     if (prebarrier) {
+ 558       update_barrier_set_pre((oop*)dest, exchange_value);
+ 559     }
+ 560     return (oop)Atomic::cmpxchg_ptr(exchange_value, (oop*)dest, compare_value);
+ 561   }
+ 562 }
+ 563 
+<a name="2" id="anc2"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 564 // used only for asserts
+ 565 inline bool oopDesc::is_oop(bool ignore_mark_word) const {
+ 566   oop obj = (oop) this;
+ 567   if (!check_obj_alignment(obj)) return false;
+ 568   if (!Universe::heap()-&gt;is_in_reserved(obj)) return false;
+ 569   // obj is aligned and accessible in heap
+ 570   if (Universe::heap()-&gt;is_in_reserved(obj-&gt;klass_or_null())) return false;
+ 571 
+ 572   // Header verification: the mark is typically non-NULL. If we're
+ 573   // at a safepoint, it must not be null.
+ 574   // Outside of a safepoint, the header could be changing (for example,
+ 575   // another thread could be inflating a lock on this object).
+ 576   if (ignore_mark_word) {
+ 577     return true;
+ 578   }
+ 579   if (mark() != NULL) {
+ 580     return true;
+ 581   }
+ 582   return !SafepointSynchronize::is_at_safepoint();
+ 583 }
+ 584 
+<a name="3" id="anc3"></a>
+ 585 // used only for asserts
+ 586 inline bool oopDesc::is_oop_or_null(bool ignore_mark_word) const {
+ 587   return this == NULL ? true : is_oop(ignore_mark_word);
+ 588 }
+ 589 
+ 590 #ifndef PRODUCT
+ 591 // used only for asserts
+ 592 inline bool oopDesc::is_unlocked_oop() const {
+ 593   if (!Universe::heap()-&gt;is_in_reserved(this)) return false;
+ 594   return mark()-&gt;is_unlocked();
+ 595 }
+ 596 #endif // PRODUCT
+ 597 
+<a name="4" id="anc4"></a><span class="changed"> 598 inline bool oopDesc::is_locked() const {</span>
+<span class="changed"> 599   return mark()-&gt;is_locked();</span>
+<span class="changed"> 600 }</span>
+<span class="changed"> 601 </span>
+<span class="changed"> 602 inline bool oopDesc::is_unlocked() const {</span>
+<span class="changed"> 603   return mark()-&gt;is_unlocked();</span>
+<span class="changed"> 604 }</span>
+<span class="changed"> 605 </span>
+<span class="changed"> 606 inline bool oopDesc::has_bias_pattern() const {</span>
+<span class="changed"> 607   return mark()-&gt;has_bias_pattern();</span>
+<span class="changed"> 608 }</span>
+<span class="changed"> 609 </span>
+<span class="changed"> 610 inline bool oopDesc::has_displaced_mark() const {</span>
+<span class="changed"> 611   return mark()-&gt;has_displaced_mark_helper();</span>
+<span class="changed"> 612 }</span>
+<span class="changed"> 613 </span>
+<span class="changed"> 614 inline markOop oopDesc::displaced_mark() const {</span>
+<span class="changed"> 615   return mark()-&gt;displaced_mark_helper();</span>
+<span class="changed"> 616 }</span>
+<span class="changed"> 617 </span>
+<span class="changed"> 618 inline void oopDesc::set_displaced_mark(markOop m) {</span>
+<span class="changed"> 619   mark()-&gt;set_displaced_mark_helper(m);</span>
+<span class="changed"> 620 }</span>
+<span class="changed"> 621 </span>
+<span class="changed"> 622 inline bool oopDesc::is_gc_marked() const {</span>
+<span class="changed"> 623   return mark()-&gt;is_marked();</span>
+<span class="changed"> 624 }</span>
+<span class="changed"> 625 </span>
+<span class="changed"> 626 inline void oopDesc::follow_contents() {</span>
+<span class="changed"> 627   assert(is_gc_marked(), "should be marked");</span>
+ 628   klass()-&gt;oop_follow_contents(this);
+ 629 }
+ 630 
+<a name="5" id="anc5"></a><span class="changed"> 631 inline int oopDesc::adjust_pointers() {</span>
+<span class="changed"> 632   debug_only(int check_size = size());</span>
+<span class="changed"> 633   int s = klass()-&gt;oop_adjust_pointers(this);</span>
+<span class="changed"> 634   assert(s == check_size, "should be the same");</span>
+<span class="changed"> 635   return s;</span>
+<span class="changed"> 636 }</span>
+ 637 
+<a name="6" id="anc6"></a><span class="new"> 638 // Used by scavengers</span>
+ 639 inline bool oopDesc::is_forwarded() const {
+<a name="7" id="anc7"></a><span class="changed"> 640   // The extra heap check is needed since the object might be locked, in which</span>
+<span class="changed"> 641   // case the mark would point to a stack location and have the sentinel bit</span>
+<span class="changed"> 642   // cleared.</span>
+ 643   return mark()-&gt;is_marked();
+ 644 }
+ 645 
+ 646 // Used by scavengers
+ 647 inline void oopDesc::forward_to(oop p) {
+ 648   assert(check_obj_alignment(p),
+ 649       "forwarding to something not aligned");
+ 650   assert(Universe::heap()-&gt;is_in_reserved(p),
+ 651       "forwarding to something not in heap");
+<a name="8" id="anc8"></a><span class="changed"> 652   markOop m = markOopDesc::encode_pointer_as_mark(p, is_contained());</span>
+<span class="changed"> 653   assert(m-&gt;decode_pointer() == p, "encoding must be reversible");</span>
+ 654   set_mark(m);
+ 655 }
+ 656 
+ 657 // Used by parallel scavengers
+ 658 inline bool oopDesc::cas_forward_to(oop p, markOop compare) {
+ 659   assert(check_obj_alignment(p),
+ 660       "forwarding to something not aligned");
+ 661   assert(Universe::heap()-&gt;is_in_reserved(p),
+ 662       "forwarding to something not in heap");
+<a name="9" id="anc9"></a><span class="changed"> 663   markOop m = markOopDesc::encode_pointer_as_mark(p,</span>
+<span class="changed"> 664       oopDesc::is_contained(compare));</span>
+<span class="changed"> 665   assert(m-&gt;decode_pointer() == p, "encoding must be reversible");</span>
+ 666   return cas_set_mark(m, compare) == compare;
+ 667 }
+ 668 
+<a name="10" id="anc10"></a><span class="changed"> 669 // Note that the forwardee is not the same thing as the displaced mark.</span>
+<span class="changed"> 670 // The forwardee is used when copying during Scavenge and Mark-Sweep. It does</span>
+<span class="changed"> 671 // need to clear the low three locking, GC, and ObjectLayout related bits.</span>
+ 672 inline oop oopDesc::forwardee() const {
+ 673   return (oop) mark()-&gt;decode_pointer();
+ 674 }
+ 675 
+<a name="11" id="anc11"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+ 676 inline uint oopDesc::age() const {
+<a name="12" id="anc12"></a><span class="changed"> 677   assert(!is_forwarded(), "attempt to read age from forwarded mark");</span>
+ 678   if (has_displaced_mark()) {
+ 679     return displaced_mark()-&gt;age();
+ 680   } else {
+ 681     return mark()-&gt;age();
+ 682   }
+ 683 }
+ 684 
+ 685 inline void oopDesc::incr_age() {
+<a name="13" id="anc13"></a><span class="changed"> 686   assert(!is_forwarded(), "attempt to increment age of forwarded mark");</span>
+ 687   if (has_displaced_mark()) {
+ 688     set_displaced_mark(displaced_mark()-&gt;incr_age());
+ 689   } else {
+ 690     set_mark(mark()-&gt;incr_age());
+ 691   }
+ 692 }
+ 693 
+<a name="14" id="anc14"></a><span class="new"> 694 inline bool oopDesc::is_contained() const {</span>
+<span class="new"> 695   return is_contained(mark());</span>
+<span class="new"> 696 }</span>
+<span class="new"> 697 </span>
+<span class="new"> 698 inline bool oopDesc::is_contained(markOop mark) {</span>
+<span class="new"> 699   if (mark-&gt;is_marked()) {</span>
+<span class="new"> 700     return mark-&gt;is_contained_when_forwarded();</span>
+<span class="new"> 701   } else if (mark-&gt;has_displaced_mark_helper()) {</span>
+<span class="new"> 702     return mark-&gt;displaced_mark_helper()-&gt;is_contained();</span>
+<span class="new"> 703   } else {</span>
+<span class="new"> 704     return mark-&gt;is_contained();</span>
+<span class="new"> 705   }</span>
+<span class="new"> 706 }</span>
+<span class="new"> 707 </span>
+<span class="new"> 708 inline void oopDesc::set_contained() {</span>
+<span class="new"> 709   if (is_forwarded()) {</span>
+<span class="new"> 710     set_mark(mark()-&gt;set_contained_when_forwarded());</span>
+<span class="new"> 711   } else if (has_displaced_mark()) {</span>
+<span class="new"> 712     set_displaced_mark(displaced_mark()-&gt;set_contained());</span>
+<span class="new"> 713   } else {</span>
+<span class="new"> 714     set_mark(mark()-&gt;set_contained());</span>
+<span class="new"> 715   }</span>
+<span class="new"> 716 }</span>
+<span class="new"> 717 </span>
+<span class="new"> 718 inline void oopDesc::clear_contained() {</span>
+<span class="new"> 719   if (is_forwarded()) {</span>
+<span class="new"> 720     set_mark(mark()-&gt;clear_contained_when_forwarded());</span>
+<span class="new"> 721   } else if (has_displaced_mark()) {</span>
+<span class="new"> 722     set_displaced_mark(displaced_mark()-&gt;clear_contained());</span>
+<span class="new"> 723   } else {</span>
+<span class="new"> 724     set_mark(mark()-&gt;clear_contained());</span>
+<span class="new"> 725   }</span>
+<span class="new"> 726 }</span>
+<span class="new"> 727 </span>
+<span class="new"> 728 inline bool oopDesc::is_container() const {</span>
+<span class="new"> 729   return is_container(mark(), klass());</span>
+<span class="new"> 730 }</span>
+<span class="new"> 731 </span>
+<span class="new"> 732 inline bool oopDesc::is_container(markOop mark, Klass* klass) {</span>
+<span class="new"> 733   if (mark-&gt;is_marked()) {</span>
+<span class="new"> 734     return klass-&gt;oop_is_container();</span>
+<span class="new"> 735   } else if (mark-&gt;has_displaced_mark_helper()) {</span>
+<span class="new"> 736     return mark-&gt;displaced_mark_helper()-&gt;is_container();</span>
+<span class="new"> 737   } else {</span>
+<span class="new"> 738     return mark-&gt;is_container();</span>
+<span class="new"> 739   }</span>
+<span class="new"> 740 }</span>
+<span class="new"> 741 </span>
+<span class="new"> 742 inline void oopDesc::convert_to_marked() {</span>
+<span class="new"> 743   assert(!is_gc_marked(), "object already marked");</span>
+<span class="new"> 744   markOop new_mark = markOopDesc::prototype()-&gt;set_marked();</span>
+<span class="new"> 745   if (is_contained()) {</span>
+<span class="new"> 746     new_mark = new_mark-&gt;set_contained_when_forwarded();</span>
+<span class="new"> 747   }</span>
+<span class="new"> 748   set_mark(new_mark);</span>
+<span class="new"> 749 }</span>
+<span class="new"> 750 </span>
+<span class="new"> 751 inline void oopDesc::convert_to_unmarked() {</span>
+<span class="new"> 752   assert(is_gc_marked(), "object already unmarked");</span>
+<span class="new"> 753   markOop new_mark = markOopDesc::prototype_for_object(this);</span>
+<span class="new"> 754   if (is_contained()) {</span>
+<span class="new"> 755     new_mark = new_mark-&gt;set_contained();</span>
+<span class="new"> 756   }</span>
+<span class="new"> 757   if (is_container()) {</span>
+<span class="new"> 758     new_mark = new_mark-&gt;set_container();</span>
+<span class="new"> 759   }</span>
+<span class="new"> 760   set_mark(new_mark);</span>
+<span class="new"> 761 }</span>
+<span class="new"> 762 </span>
+<span class="new"> 763 inline void oopDesc::restore_mark(markOop saved_value) {</span>
+<span class="new"> 764   assert(!is_gc_marked(), "object must not be marked");</span>
+<span class="new"> 765   assert(!saved_value-&gt;is_marked(), "value to be restored must not be marked");</span>
+<span class="new"> 766   bool is_contained = this-&gt;is_contained();</span>
+<span class="new"> 767   // The property whether the object is a container cannot change during GC.</span>
+<span class="new"> 768   // Hence, there is no need in updating the corresponding bit in the given</span>
+<span class="new"> 769   // saved markword value.</span>
+<span class="new"> 770   if (saved_value-&gt;has_displaced_mark_helper()) {</span>
+<span class="new"> 771     markOop displaced_value = saved_value-&gt;displaced_mark_helper();</span>
+<span class="new"> 772     saved_value-&gt;set_displaced_mark_helper(is_contained ?</span>
+<span class="new"> 773         displaced_value-&gt;set_contained() :</span>
+<span class="new"> 774         displaced_value-&gt;clear_contained());</span>
+<span class="new"> 775     set_mark(saved_value);</span>
+<span class="new"> 776   } else {</span>
+<span class="new"> 777     set_mark(is_contained ?</span>
+<span class="new"> 778         saved_value-&gt;set_contained() :</span>
+<span class="new"> 779         saved_value-&gt;clear_contained());</span>
+<span class="new"> 780   }</span>
+<span class="new"> 781 }</span>
+<span class="new"> 782 </span>
+<span class="new"> 783 inline jlong oopDesc::relative_container_offset() const {</span>
+<span class="new"> 784   assert(is_contained(), "object not contained");</span>
+<span class="new"> 785   return *((jlong*) (((address) this) - sizeof(jlong)));</span>
+<span class="new"> 786 }</span>
+<span class="new"> 787 </span>
+<span class="new"> 788 inline void oopDesc::set_relative_container_offset(jlong offset) {</span>
+<span class="new"> 789   assert(is_contained(), "object not contained");</span>
+<span class="new"> 790   *((jlong*) (((address) this) - sizeof(jlong))) = offset;</span>
+<span class="new"> 791 }</span>
+<span class="new"> 792 </span>
+<span class="new"> 793 inline oop oopDesc::container() const {</span>
+<span class="new"> 794   assert(is_contained(), "object not contained");</span>
+<span class="new"> 795   return (oop) (((address) this) - relative_container_offset());</span>
+<span class="new"> 796 }</span>
+<span class="new"> 797 </span>
+<span class="new"> 798 inline oop oopDesc::outermost_container() {</span>
+<span class="new"> 799   assert(is_contained(), "object not contained");</span>
+<span class="new"> 800   oop container = this;</span>
+<span class="new"> 801   do {</span>
+<span class="new"> 802     container = container-&gt;container();</span>
+<span class="new"> 803     assert(container-&gt;is_container(), "container broken");</span>
+<span class="new"> 804   } while (container-&gt;is_contained());</span>
+<span class="new"> 805   return container;</span>
+<span class="new"> 806 }</span>
+<span class="new"> 807 </span>
+<span class="new"> 808 inline oop oopDesc::outermost_alive_container() {</span>
+<span class="new"> 809   assert(is_gc_marked(), "object not marked");</span>
+<span class="new"> 810   assert(is_contained(), "object not contained");</span>
+<span class="new"> 811   oop result = NULL;</span>
+<span class="new"> 812   oop container = this;</span>
+<span class="new"> 813   do {</span>
+<span class="new"> 814     container = container-&gt;container();</span>
+<span class="new"> 815     assert(container-&gt;is_container(), "container broken");</span>
+<span class="new"> 816     if (container-&gt;is_gc_marked()) {</span>
+<span class="new"> 817       result = container;</span>
+<span class="new"> 818     } else {</span>
+<span class="new"> 819       break;</span>
+<span class="new"> 820     }</span>
+<span class="new"> 821   } while (container-&gt;is_contained());</span>
+<span class="new"> 822   return result;</span>
+<span class="new"> 823 }</span>
+ 824 
+ 825 inline intptr_t oopDesc::identity_hash() {
+ 826   // Fast case; if the object is unlocked and the hash value is set, no locking is needed
+ 827   // Note: The mark must be read into local variable to avoid concurrent updates.
+ 828   markOop mrk = mark();
+ 829   if (mrk-&gt;is_unlocked() &amp;&amp; !mrk-&gt;has_no_hash()) {
+ 830     return mrk-&gt;hash();
+ 831   } else if (mrk-&gt;is_marked()) {
+ 832     return mrk-&gt;hash();
+ 833   } else {
+ 834     return slow_identity_hash();
+ 835   }
+<a name="15" id="anc15"></a>
+
+
+
+
+
+
+ 836 }
+ 837 
+ 838 #define OOP_ITERATE_DEFN(OopClosureType, nv_suffix)                        \
+ 839                                                                            \
+ 840 inline int oopDesc::oop_iterate(OopClosureType* blk) {                     \
+ 841   SpecializationStats::record_call();                                      \
+ 842   return klass()-&gt;oop_oop_iterate##nv_suffix(this, blk);               \
+ 843 }                                                                          \
+ 844                                                                            \
+ 845 inline int oopDesc::oop_iterate(OopClosureType* blk, MemRegion mr) {       \
+ 846   SpecializationStats::record_call();                                      \
+ 847   return klass()-&gt;oop_oop_iterate##nv_suffix##_m(this, blk, mr);       \
+ 848 }
+ 849 
+ 850 
+ 851 inline int oopDesc::oop_iterate_no_header(OopClosure* blk) {
+ 852   // The NoHeaderExtendedOopClosure wraps the OopClosure and proxies all
+ 853   // the do_oop calls, but turns off all other features in ExtendedOopClosure.
+ 854   NoHeaderExtendedOopClosure cl(blk);
+ 855   return oop_iterate(&amp;cl);
+ 856 }
+ 857 
+ 858 inline int oopDesc::oop_iterate_no_header(OopClosure* blk, MemRegion mr) {
+ 859   NoHeaderExtendedOopClosure cl(blk);
+ 860   return oop_iterate(&amp;cl, mr);
+ 861 }
+ 862 
+ 863 ALL_OOP_OOP_ITERATE_CLOSURES_1(OOP_ITERATE_DEFN)
+ 864 ALL_OOP_OOP_ITERATE_CLOSURES_2(OOP_ITERATE_DEFN)
+ 865 
+ 866 #if INCLUDE_ALL_GCS
+ 867 #define OOP_ITERATE_BACKWARDS_DEFN(OopClosureType, nv_suffix)              \
+ 868                                                                            \
+ 869 inline int oopDesc::oop_iterate_backwards(OopClosureType* blk) {           \
+ 870   SpecializationStats::record_call();                                      \
+ 871   return klass()-&gt;oop_oop_iterate_backwards##nv_suffix(this, blk);     \
+ 872 }
+ 873 
+ 874 ALL_OOP_OOP_ITERATE_CLOSURES_1(OOP_ITERATE_BACKWARDS_DEFN)
+ 875 ALL_OOP_OOP_ITERATE_CLOSURES_2(OOP_ITERATE_BACKWARDS_DEFN)
+ 876 #endif // INCLUDE_ALL_GCS
+ 877 
+ 878 #endif // SHARE_VM_OOPS_OOP_INLINE_HPP
+<a name="16" id="anc16"></a><b style="font-size: large; color: red">--- EOF ---</b>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre><form name="eof"><input name="value" value="16" type="hidden" /></form></body></html>

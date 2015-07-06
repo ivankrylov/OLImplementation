@@ -1,0 +1,511 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head><meta charset="utf-8">
+<meta http-equiv="cache-control" content="no-cache" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="-1" />
+<!--
+   Note to customizers: the body of the webrev is IDed as SUNWwebrev
+   to allow easy overriding by users of webrev via the userContent.css
+   mechanism available in some browsers.
+
+   For example, to have all "removed" information be red instead of
+   brown, set a rule in your userContent.css file like:
+
+       body#SUNWwebrev span.removed { color: red ! important; }
+-->
+<style type="text/css" media="screen">
+body {
+    background-color: #eeeeee;
+}
+hr {
+    border: none 0;
+    border-top: 1px solid #aaa;
+    height: 1px;
+}
+div.summary {
+    font-size: .8em;
+    border-bottom: 1px solid #aaa;
+    padding-left: 1em;
+    padding-right: 1em;
+}
+div.summary h2 {
+    margin-bottom: 0.3em;
+}
+div.summary table th {
+    text-align: right;
+    vertical-align: top;
+    white-space: nowrap;
+}
+span.lineschanged {
+    font-size: 0.7em;
+}
+span.oldmarker {
+    color: red;
+    font-size: large;
+    font-weight: bold;
+}
+span.newmarker {
+    color: green;
+    font-size: large;
+    font-weight: bold;
+}
+span.removed {
+    color: brown;
+}
+span.changed {
+    color: blue;
+}
+span.new {
+    color: blue;
+    font-weight: bold;
+}
+a.print { font-size: x-small; }
+
+</style>
+
+<style type="text/css" media="print">
+pre { font-size: 0.8em; font-family: courier, monospace; }
+span.removed { color: #444; font-style: italic }
+span.changed { font-weight: bold; }
+span.new { font-weight: bold; }
+span.newmarker { font-size: 1.2em; font-weight: bold; }
+span.oldmarker { font-size: 1.2em; font-weight: bold; }
+a.print {display: none}
+hr { border: none 0; border-top: 1px solid #aaa; height: 1px; }
+</style>
+
+<title>jdk Sdiff src/share/classes/sun/misc </title>
+</head><body id="SUNWwebrev">
+<h2>src/share/classes/sun/misc/Unsafe.java</h2>
+<a class="print" href="javascript:print()">Print this page</a>
+<pre></pre>
+
+<table><tr valign="top">
+<td><pre>
+
+</pre><hr></hr><pre>
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.  Oracle designates this
+   8  * particular file as subject to the "Classpath" exception as provided
+   9  * by Oracle in the LICENSE file that accompanied this code.
+  10  *
+  11  * This code is distributed in the hope that it will be useful, but WITHOUT
+  12  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  13  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  14  * version 2 for more details (a copy is included in the LICENSE file that
+  15  * accompanied this code).
+  16  *
+  17  * You should have received a copy of the GNU General Public License version
+  18  * 2 along with this work; if not, write to the Free Software Foundation,
+  19  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  20  *
+  21  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  22  * or visit www.oracle.com if you need additional information or have any
+  23  * questions.
+  24  */
+  25 
+
+
+
+
+
+
+  26 package sun.misc;
+  27 
+<span class="removed">  28 import java.security.*;</span>
+  29 import java.lang.reflect.*;
+
+  30 
+  31 import sun.reflect.CallerSensitive;
+  32 import sun.reflect.Reflection;
+  33 
+<span class="removed">  34 </span>
+  35 /**
+  36  * A collection of methods for performing low-level, unsafe operations.
+  37  * Although the class and all methods are public, use of this class is
+  38  * limited because only trusted code can obtain instances of it.
+  39  *
+  40  * @author John R. Rose
+  41  * @see #getUnsafe
+  42  */
+  43 
+  44 public final class Unsafe {
+  45 
+  46     private static native void registerNatives();
+  47     static {
+  48         registerNatives();
+  49         sun.reflect.Reflection.registerMethodsToFilter(Unsafe.class, "getUnsafe");
+  50     }
+  51 
+  52     private Unsafe() {}
+  53 
+  54     private static final Unsafe theUnsafe = new Unsafe();
+
+</pre><hr></hr><pre>
+ 829      * &lt;ul&gt;
+ 830      * &lt;li&gt;Integer, Long, Float, Double: the corresponding wrapper object type from java.lang
+ 831      * &lt;li&gt;Utf8: a string (must have suitable syntax if used as signature or name)
+ 832      * &lt;li&gt;Class: any java.lang.Class object
+ 833      * &lt;li&gt;String: any object (not just a java.lang.String)
+ 834      * &lt;li&gt;InterfaceMethodRef: (NYI) a method handle to invoke on that call site's arguments
+ 835      * &lt;/ul&gt;
+ 836      * @params hostClass context for linkage, access control, protection domain, and class loader
+ 837      * @params data      bytes of a class file
+ 838      * @params cpPatches where non-null entries exist, they replace corresponding CP entries in data
+ 839      */
+ 840     public native Class&lt;?&gt; defineAnonymousClass(Class&lt;?&gt; hostClass, byte[] data, Object[] cpPatches);
+ 841 
+ 842 
+ 843     /** Allocate an instance but do not run any constructor.
+ 844         Initializes the class if it has not yet been. */
+ 845     public native Object allocateInstance(Class&lt;?&gt; cls)
+ 846         throws InstantiationException;
+ 847 
+ 848     /** Lock the object.  It must get unlocked via {@link #monitorExit}. */
+<span class="removed"> 849     @Deprecated</span>
+ 850     public native void monitorEnter(Object o);
+ 851 
+ 852     /**
+ 853      * Unlock the object.  It must have been locked via {@link
+ 854      * #monitorEnter}.
+ 855      */
+<span class="removed"> 856     @Deprecated</span>
+ 857     public native void monitorExit(Object o);
+ 858 
+ 859     /**
+ 860      * Tries to lock the object.  Returns true or false to indicate
+ 861      * whether the lock succeeded.  If it did, the object must be
+ 862      * unlocked via {@link #monitorExit}.
+ 863      */
+<span class="removed"> 864     @Deprecated</span>
+ 865     public native boolean tryMonitorEnter(Object o);
+ 866 
+ 867     /** Throw the exception without telling the verifier. */
+ 868     public native void throwException(Throwable ee);
+ 869 
+ 870 
+ 871     /**
+ 872      * Atomically update Java variable to &lt;tt&gt;x&lt;/tt&gt; if it is currently
+ 873      * holding &lt;tt&gt;expected&lt;/tt&gt;.
+ 874      * @return &lt;tt&gt;true&lt;/tt&gt; if successful
+ 875      */
+ 876     public final native boolean compareAndSwapObject(Object o, long offset,
+ 877                                                      Object expected,
+ 878                                                      Object x);
+ 879 
+ 880     /**
+ 881      * Atomically update Java variable to &lt;tt&gt;x&lt;/tt&gt; if it is currently
+ 882      * holding &lt;tt&gt;expected&lt;/tt&gt;.
+ 883      * @return &lt;tt&gt;true&lt;/tt&gt; if successful
+ 884      */
+
+</pre><hr></hr><pre>
+1125      * with loads or stores after the fence.
+1126      * @since 1.8
+1127      */
+1128     public native void storeFence();
+1129 
+1130     /**
+1131      * Ensures lack of reordering of loads or stores before the fence
+1132      * with loads or stores after the fence.
+1133      * @since 1.8
+1134      */
+1135     public native void fullFence();
+1136 
+1137     /**
+1138      * Throws IllegalAccessError; for use by the VM.
+1139      * @since 1.8
+1140      */
+1141     private static void throwIllegalAccessError() {
+1142        throw new IllegalAccessError();
+1143     }
+1144 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1145 }
+</pre></td><td><pre>
+
+</pre><hr></hr><pre>
+   6  * under the terms of the GNU General Public License version 2 only, as
+   7  * published by the Free Software Foundation.  Oracle designates this
+   8  * particular file as subject to the "Classpath" exception as provided
+   9  * by Oracle in the LICENSE file that accompanied this code.
+  10  *
+  11  * This code is distributed in the hope that it will be useful, but WITHOUT
+  12  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  13  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+  14  * version 2 for more details (a copy is included in the LICENSE file that
+  15  * accompanied this code).
+  16  *
+  17  * You should have received a copy of the GNU General Public License version
+  18  * 2 along with this work; if not, write to the Free Software Foundation,
+  19  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+  20  *
+  21  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+  22  * or visit www.oracle.com if you need additional information or have any
+  23  * questions.
+  24  */
+  25 
+<span class="new">  26 /*</span>
+<span class="new">  27  * This file has been modified by Azul Systems, Inc. in 2014. These</span>
+<span class="new">  28  * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made</span>
+<span class="new">  29  * available on the same license terms set forth above.</span>
+<span class="new">  30  */</span>
+<span class="new">  31 </span>
+  32 package sun.misc;
+  33 
+
+  34 import java.lang.reflect.*;
+<span class="new">  35 import java.security.*;</span>
+  36 
+  37 import sun.reflect.CallerSensitive;
+  38 import sun.reflect.Reflection;
+  39 
+
+  40 /**
+  41  * A collection of methods for performing low-level, unsafe operations.
+  42  * Although the class and all methods are public, use of this class is
+  43  * limited because only trusted code can obtain instances of it.
+  44  *
+  45  * @author John R. Rose
+  46  * @see #getUnsafe
+  47  */
+  48 
+  49 public final class Unsafe {
+  50 
+  51     private static native void registerNatives();
+  52     static {
+  53         registerNatives();
+  54         sun.reflect.Reflection.registerMethodsToFilter(Unsafe.class, "getUnsafe");
+  55     }
+  56 
+  57     private Unsafe() {}
+  58 
+  59     private static final Unsafe theUnsafe = new Unsafe();
+
+</pre><hr></hr><pre>
+ 834      * &lt;ul&gt;
+ 835      * &lt;li&gt;Integer, Long, Float, Double: the corresponding wrapper object type from java.lang
+ 836      * &lt;li&gt;Utf8: a string (must have suitable syntax if used as signature or name)
+ 837      * &lt;li&gt;Class: any java.lang.Class object
+ 838      * &lt;li&gt;String: any object (not just a java.lang.String)
+ 839      * &lt;li&gt;InterfaceMethodRef: (NYI) a method handle to invoke on that call site's arguments
+ 840      * &lt;/ul&gt;
+ 841      * @params hostClass context for linkage, access control, protection domain, and class loader
+ 842      * @params data      bytes of a class file
+ 843      * @params cpPatches where non-null entries exist, they replace corresponding CP entries in data
+ 844      */
+ 845     public native Class&lt;?&gt; defineAnonymousClass(Class&lt;?&gt; hostClass, byte[] data, Object[] cpPatches);
+ 846 
+ 847 
+ 848     /** Allocate an instance but do not run any constructor.
+ 849         Initializes the class if it has not yet been. */
+ 850     public native Object allocateInstance(Class&lt;?&gt; cls)
+ 851         throws InstantiationException;
+ 852 
+ 853     /** Lock the object.  It must get unlocked via {@link #monitorExit}. */
+
+ 854     public native void monitorEnter(Object o);
+ 855 
+ 856     /**
+ 857      * Unlock the object.  It must have been locked via {@link
+ 858      * #monitorEnter}.
+ 859      */
+
+ 860     public native void monitorExit(Object o);
+ 861 
+ 862     /**
+ 863      * Tries to lock the object.  Returns true or false to indicate
+ 864      * whether the lock succeeded.  If it did, the object must be
+ 865      * unlocked via {@link #monitorExit}.
+ 866      */
+
+ 867     public native boolean tryMonitorEnter(Object o);
+ 868 
+ 869     /** Throw the exception without telling the verifier. */
+ 870     public native void throwException(Throwable ee);
+ 871 
+ 872 
+ 873     /**
+ 874      * Atomically update Java variable to &lt;tt&gt;x&lt;/tt&gt; if it is currently
+ 875      * holding &lt;tt&gt;expected&lt;/tt&gt;.
+ 876      * @return &lt;tt&gt;true&lt;/tt&gt; if successful
+ 877      */
+ 878     public final native boolean compareAndSwapObject(Object o, long offset,
+ 879                                                      Object expected,
+ 880                                                      Object x);
+ 881 
+ 882     /**
+ 883      * Atomically update Java variable to &lt;tt&gt;x&lt;/tt&gt; if it is currently
+ 884      * holding &lt;tt&gt;expected&lt;/tt&gt;.
+ 885      * @return &lt;tt&gt;true&lt;/tt&gt; if successful
+ 886      */
+
+</pre><hr></hr><pre>
+1127      * with loads or stores after the fence.
+1128      * @since 1.8
+1129      */
+1130     public native void storeFence();
+1131 
+1132     /**
+1133      * Ensures lack of reordering of loads or stores before the fence
+1134      * with loads or stores after the fence.
+1135      * @since 1.8
+1136      */
+1137     public native void fullFence();
+1138 
+1139     /**
+1140      * Throws IllegalAccessError; for use by the VM.
+1141      * @since 1.8
+1142      */
+1143     private static void throwIllegalAccessError() {
+1144        throw new IllegalAccessError();
+1145     }
+1146 
+<span class="new">1147     /**</span>
+<span class="new">1148      * Return the size of a JVM-level object representing an instance</span>
+<span class="new">1149      * of the given class.</span>
+<span class="new">1150      */</span>
+<span class="new">1151     public native long getInstanceSize(Class instanceClass);</span>
+<span class="new">1152 </span>
+<span class="new">1153     /**</span>
+<span class="new">1154      * Return the footprint of a JVM-level representation of an instance</span>
+<span class="new">1155      * of the given class when it is located inside a container (includes</span>
+<span class="new">1156      * an object representing the instance itself, prepadding before</span>
+<span class="new">1157      * the object, and padding after the object, whatever is applicable).</span>
+<span class="new">1158      */</span>
+<span class="new">1159     public native long getInstanceFootprintWhenContained(Class instanceClass);</span>
+<span class="new">1160 </span>
+<span class="new">1161     /**</span>
+<span class="new">1162      * Return the footprint of a JVM-level representation of a container</span>
+<span class="new">1163      * (includes an object representing an instance of the given container</span>
+<span class="new">1164      * class and representations of the given number of contained elements,</span>
+<span class="new">1165      * each having the given size).</span>
+<span class="new">1166      */</span>
+<span class="new">1167     public native long getContainingObjectFootprint(Class containerClass,</span>
+<span class="new">1168             long containedElementSize, long numberOfElements);</span>
+<span class="new">1169 </span>
+<span class="new">1170     /**</span>
+<span class="new">1171      * Return the footprint of a JVM-level representation of a container</span>
+<span class="new">1172      * when it is located inside another container (includes a representation</span>
+<span class="new">1173      * of the inner container having the given parameters, prepadding before</span>
+<span class="new">1174      * the container, and padding after the container, whatever is applicable).</span>
+<span class="new">1175      */</span>
+<span class="new">1176     public native long getContainingObjectFootprintWhenContained(</span>
+<span class="new">1177             Class containerClass, long containedElementSize,</span>
+<span class="new">1178             long numberOfElements);</span>
+<span class="new">1179 </span>
+<span class="new">1180     /**</span>
+<span class="new">1181      * Return the size of prepadding in the given object footprint.</span>
+<span class="new">1182      */</span>
+<span class="new">1183     public native long getPrePaddingInObjectFootprint(long objectFootprint);</span>
+<span class="new">1184 </span>
+<span class="new">1185     /**</span>
+<span class="new">1186      * Allocate in the Java heap a memory region for an instance of the given</span>
+<span class="new">1187      * container class and all its contents, which is described by the given</span>
+<span class="new">1188      * specification. The elements of the container should be either plain</span>
+<span class="new">1189      * Java objects or nested containers. The specification consists of two</span>
+<span class="new">1190      * parallel arrays determining counts of the elements and their classes</span>
+<span class="new">1191      * for all nesting levels, starting from the outermost one. The method</span>
+<span class="new">1192      * does not construct any objects. The method returns the reference to</span>
+<span class="new">1193      * the allocated memory region.</span>
+<span class="new">1194      */</span>
+<span class="new">1195     public native Object allocateHeapForElementArrayClass(Class instanceClass,</span>
+<span class="new">1196             long[] elementCounts, Class[] elementClasses);</span>
+<span class="new">1197 </span>
+<span class="new">1198     /**</span>
+<span class="new">1199      * Construct an object starting at the given offset from the beginning</span>
+<span class="new">1200      * of the given containing object, using the supplied constructor and</span>
+<span class="new">1201      * arguments. The object is constructed in place in a previously allocated</span>
+<span class="new">1202      * memory region.</span>
+<span class="new">1203      */</span>
+<span class="new">1204     public native void constructObjectAtOffset(</span>
+<span class="new">1205             Object containingObject, long offset,</span>
+<span class="new">1206             long objectPrePadding, boolean isContained,</span>
+<span class="new">1207             boolean isContainer, long objectFootprint,</span>
+<span class="new">1208             Constructor constructor, Object[] constructorArgs)</span>
+<span class="new">1209             throws InstantiationException, IllegalAccessException,</span>
+<span class="new">1210             InvocationTargetException;</span>
+<span class="new">1211 </span>
+<span class="new">1212     /**</span>
+<span class="new">1213      * Return an object starting at the given offset from the beginning</span>
+<span class="new">1214      * of the given containing object.</span>
+<span class="new">1215      */</span>
+<span class="new">1216     public native Object deriveContainedObjectAtOffset(Object containingObject,</span>
+<span class="new">1217             long offset);</span>
+1218 }
+</pre></td>
+</tr></table>
+</body></html>

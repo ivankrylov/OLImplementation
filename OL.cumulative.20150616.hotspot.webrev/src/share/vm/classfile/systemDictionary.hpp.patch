@@ -1,0 +1,16 @@
+--- old/src/share/vm/classfile/systemDictionary.hpp	2015-06-16 10:25:41.210511772 -0700
++++ new/src/share/vm/classfile/systemDictionary.hpp	2015-06-16 10:25:41.138513486 -0700
+@@ -195,8 +195,11 @@
+   do_klass(Short_klass,                                 java_lang_Short,                           Pre                 ) \
+   do_klass(Integer_klass,                               java_lang_Integer,                         Pre                 ) \
+   do_klass(Long_klass,                                  java_lang_Long,                            Pre                 ) \
+-  /*end*/
+-
++                                                                                                                         \
++  /* ObjectLayout support */                                                                                             \
++  do_klass(AbstractStructuredArray_klass,               org_ObjectLayout_AbstractStructuredArray,  Opt                 ) \
++                                                                                                                         \
++  /* End */
+ 
+ class SystemDictionary : AllStatic {
+   friend class VMStructs;
